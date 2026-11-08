@@ -6,7 +6,7 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.4.0';
+  const VERSION = '0.5.0';
   const DEVICE_KEY = 'oggstudio_device';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
@@ -106,6 +106,100 @@
     return out.filter((a, i) => i === 0 || a.at !== out[i - 1].at || (out[i - 1] = a, false));
   }
 
+  // Game controller. Up/down move the level at the chosen speed while held,
+  // left/right step that speed, buttons start/stop recording, zero the level
+  // and (two motors) pick which motor the controller drives. A binding is a
+  // button {b}, an axis direction {a, d} (analog sticks are proportional) or
+  // a key {k} for controllers in keyboard mode.
+  const GP_SPEEDS = [15, 30, 60, 100, 180, 300];   // % per second while held
+  const GP_SPEED_DEFAULT = 3;
+  const GP_ACTIONS = ['up', 'down', 'left', 'right', 'rec', 'zero', 'motor'];
+  const GP_LABELS = { up: 'Up (level up)', down: 'Down (level down)', left: 'Left (slower)', right: 'Right (faster)', rec: 'Record start/stop', zero: 'Level to 0', motor: 'Switch motor' };
+  const GP_DEFAULT_MAP = {
+    up: [{ b: 12 }, { a: 1, d: -1 }, { k: 'ArrowUp' }],
+    down: [{ b: 13 }, { a: 1, d: 1 }, { k: 'ArrowDown' }],
+    left: [{ b: 14 }, { a: 0, d: -1 }, { k: 'ArrowLeft' }],
+    right: [{ b: 15 }, { a: 0, d: 1 }, { k: 'ArrowRight' }],
+    rec: [{ b: 0 }, { k: 'Enter' }, { k: 'MediaPlayPause' }],
+    zero: [{ b: 1 }, { k: 'Escape' }, { k: 'Backspace' }],
+    motor: [{ b: 3 }],
+  };
+  const GP_MAP_KEY = 'oggstudio_pad_map';
+  const GP_SPEED_KEY = 'oggstudio_pad_speed';
+  const GP_ON_KEY = 'oggstudio_pad_on';
+  const GP_DEAD = 0.25;
+  const GP_POLL_MS = 20;
+
+  // How hard one action is pressed, 0..1.
+  function gpStrength(binds, pad, keys) {
+    let best = 0;
+    for (const bind of binds || []) {
+      let v = 0;
+      if (bind.k !== undefined) v = keys && keys.has(bind.k) ? 1 : 0;
+      else if (!pad) continue;
+      else if (bind.b !== undefined) { const btn = pad.buttons && pad.buttons[bind.b]; v = btn && btn.pressed ? 1 : 0; }
+      else if (bind.a !== undefined) { const raw = ((pad.axes && pad.axes[bind.a]) || 0) * bind.d; v = raw > GP_DEAD ? (raw - GP_DEAD) / (1 - GP_DEAD) : 0; }
+      best = Math.max(best, Math.min(1, v));
+    }
+    return best;
+  }
+
+  function gpRead(map, pad, keys) {
+    const out = {};
+    for (const action of GP_ACTIONS) out[action] = gpStrength(map[action], pad, keys);
+    return out;
+  }
+
+  // New level after dtMs with up/down held (strengths 0..1).
+  function gpStep(level, up, down, speed, dtMs) {
+    return Math.min(100, Math.max(0, level + (up - down) * speed * Math.min(dtMs, 100) / 1000));
+  }
+
+  // While learning: the first pressed button, or an axis pushed well away
+  // from where it rests (rest = axis values seen when learning started).
+  function gpLearnInput(rest, pad) {
+    if (!pad) return null;
+    const buttons = pad.buttons || [];
+    for (let i = 0; i < buttons.length; i++) if (buttons[i] && buttons[i].pressed) return { b: i };
+    const axes = pad.axes || [];
+    for (let i = 0; i < axes.length; i++) {
+      const v = axes[i];
+      if (Math.abs(v - ((rest && rest[i]) || 0)) > 0.6 && Math.abs(v) > 0.5) return { a: i, d: v > 0 ? 1 : -1 };
+    }
+    return null;
+  }
+
+  // Where each axis rests: centred (0), except triggers that sit at -1 or +1.
+  const gpRest = (pad) => [...(pad.axes || [])].map((v) => (Math.abs(v) > 0.9 ? v : 0));
+
+  // Nothing pressed and every axis back near rest.
+  const gpIdle = (rest, pad) => !pad || ([...(pad.buttons || [])].every((b) => !b || !b.pressed)
+    && [...(pad.axes || [])].every((v, i) => Math.abs(v - ((rest && rest[i]) || 0)) < 0.3));
+
+  // Turn learned bindings into a full map: a learned action uses what was
+  // learned plus its default keyboard keys, the rest keep their defaults;
+  // anything learned for one action is dropped from the others.
+  function gpBuildMap(learned) {
+    const key = (b) => JSON.stringify(b);
+    const taken = new Set(Object.values(learned).flat().map(key));
+    const map = {};
+    for (const action of GP_ACTIONS) {
+      const own = learned[action] && learned[action].length ? learned[action] : [];
+      const defaults = GP_DEFAULT_MAP[action].filter((b) => !taken.has(key(b)) && (!own.length || b.k !== undefined));
+      map[action] = [...own, ...defaults];
+    }
+    return map;
+  }
+
+  // Which card section the controller drives: video recording when a video
+  // is loaded in this card, otherwise the Record pads.
+  function gpTargetFor(parts, hasVideo) {
+    if (parts.includes('video') && hasVideo) return 'video';
+    if (parts.includes('record')) return 'record';
+    return null;
+  }
+  let gpOwner = null;   // with several OggStudio cards on screen, only one listens
+
   const duration = (s) => Math.max(
     s.actions.length ? s.actions[s.actions.length - 1].at : 0,
     s.channels && s.channels.V1.actions.length ? s.channels.V1.actions[s.channels.V1.actions.length - 1].at : 0);
@@ -124,6 +218,11 @@
       this._samples = null;
       this._vscript = null;
       this._vurl = null;
+      this._gpKeys = new Set();
+      this._gpPrev = {};
+      this._gpFloat = [null, null];
+      this._gpMotor = 0;
+      this.shadowRoot.addEventListener('pointerdown', () => { gpOwner = this; }, true);
     }
 
     static get variant() { return VARIANTS[TAG]; }
@@ -232,11 +331,24 @@
           button.vrec{flex:0 0 auto;min-height:40px;padding:0 14px;background:#5a2433;border-color:rgba(255,110,130,.5);color:#ffd2da}
           button.vrec.on{background:linear-gradient(110deg,#ff5c7a,#ff8aa0);color:#2a0710}
           .vrecinfo{flex:1;text-align:right;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+          .gp{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;padding:6px 10px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.025)}
+          .gp .check{min-height:36px;font-size:12.5px}
+          .gp .gpstat{flex:1;min-width:140px;font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+          .gp .gpstat b{color:#bef2ff}
+          .gp button{min-height:36px;flex:0 0 auto}
+          .gplearn{flex-basis:100%;font-size:13px;color:#ffcf8a;font-weight:700}
           [hidden],.off{display:none!important}
         </style>
         <ha-card>
           <h2>${esc(this._config.title || this._variant.name)}</h2><div class="sub">${esc(this._variant.sub)} · v${VERSION}</div>
           <label>Device</label><select id="device"></select>
+          <div class="gp" id="gp">
+            <label class="check"><input id="gpon" type="checkbox"> 🎮 Controller</label>
+            <span class="gpstat" id="gpstat"></span>
+            <button id="gplearnbtn" type="button">Learn controls</button>
+            <div class="gplearn" id="gplearn" hidden></div>
+            <div class="row" id="gplearnrow" style="flex-basis:100%" hidden><button id="gpskip" type="button">Skip</button><button id="gpreset" type="button">Use defaults</button><button id="gpcancel" type="button" class="stop">Cancel</button></div>
+          </div>
           <section data-part="record">
             <h3>Record</h3>
             <div class="pads" id="pads">
@@ -321,7 +433,274 @@
       $('speed').addEventListener('change', () => this._hass.callService('select', 'select_option', { entity_id: this._studio.speed, option: $('speed').value }));
       $('load').addEventListener('click', () => this._import());
       this._bindVideo();
+      this._bindGamepad();
       this._update();
+    }
+
+    // ---------------------------------------------------------- game controller
+    _bindGamepad() {
+      const $ = this._el;
+      const parts = this._parts;
+      $('gp').hidden = !(parts.includes('record') || parts.includes('video'));
+      this._gpLearning = null;
+      this._gpStatusHtml = null;
+      const load = (key, fallback) => { try { const v = localStorage.getItem(key); return v === null ? fallback : JSON.parse(v); } catch (_) { return fallback; } };
+      const map = load(GP_MAP_KEY, null);
+      this._gpMap = map && typeof map === 'object' ? gpBuildMap(map) : { ...GP_DEFAULT_MAP };
+      const speed = Number(load(GP_SPEED_KEY, GP_SPEED_DEFAULT));
+      this._gpSpeed = Number.isInteger(speed) && speed >= 0 && speed < GP_SPEEDS.length ? speed : GP_SPEED_DEFAULT;
+      $('gpon').checked = load(GP_ON_KEY, false) === true;
+      $('gpon').addEventListener('change', () => { this._gpSave(GP_ON_KEY, $('gpon').checked); gpOwner = this; this._gpRun(); this._gpStatus(); });
+      $('gplearnbtn').addEventListener('click', () => this._gpLearnStart());
+      $('gpskip').addEventListener('click', () => this._gpLearnNext(null));
+      $('gpreset').addEventListener('click', () => { this._gpSave(GP_MAP_KEY, null); this._gpMap = { ...GP_DEFAULT_MAP }; this._gpLearnEnd('Controller: default controls restored.'); });
+      $('gpcancel').addEventListener('click', () => this._gpLearnEnd(''));
+      this._gpStatus();
+      this._gpRun();
+    }
+
+    connectedCallback() { this._gpAttach(); }
+
+    _gpAttach() {
+      if (this._gpHandlers) return;
+      const typing = (e) => {
+        const t = e.composedPath ? e.composedPath()[0] : e.target;
+        return Boolean(t && (t.isContentEditable || /^(TEXTAREA|SELECT)$/.test(t.tagName) || (t.tagName === 'INPUT' && t.type !== 'checkbox')));
+      };
+      const names = (e) => [e.code, e.key].filter(Boolean);
+      const h = {
+        keydown: (e) => {
+          if (!this._el || typing(e)) return;
+          if (this._gpLearning) {
+            if (e.key === 'Tab') return;
+            e.preventDefault(); e.stopPropagation();
+            if (!e.repeat) this._gpLearnNext({ k: e.code || e.key });
+            return;
+          }
+          if (!this._el('gpon').checked || !this._gpUsable() || !this._gpIsOwner()) return;
+          const n = names(e);
+          if (!GP_ACTIONS.some((a) => (this._gpMap[a] || []).some((b) => b.k !== undefined && n.includes(b.k)))) return;
+          e.preventDefault(); e.stopPropagation();
+          n.forEach((k) => this._gpKeys.add(k));
+          this._gpRun();
+        },
+        keyup: (e) => { names(e).forEach((k) => this._gpKeys.delete(k)); },
+        blur: () => this._gpKeys.clear(),
+        connected: (e) => {
+          if (!this._el || !this._gpUsable()) return;
+          if (!this._el('gpon').checked) { this._el('gpon').checked = true; this._gpSave(GP_ON_KEY, true); }
+          this._toast(`Controller connected: ${e.gamepad && e.gamepad.id ? e.gamepad.id : 'game controller'}`);
+          this._gpRun();
+          this._gpStatus();
+        },
+        disconnected: () => { this._gpFloat = [null, null]; this._gpStatus(); },
+      };
+      window.addEventListener('keydown', h.keydown, true);
+      window.addEventListener('keyup', h.keyup, true);
+      window.addEventListener('blur', h.blur);
+      window.addEventListener('gamepadconnected', h.connected);
+      window.addEventListener('gamepaddisconnected', h.disconnected);
+      this._gpHandlers = h;
+      this._gpRun();
+    }
+
+    _gpDetach() {
+      const h = this._gpHandlers;
+      if (h) {
+        window.removeEventListener('keydown', h.keydown, true);
+        window.removeEventListener('keyup', h.keyup, true);
+        window.removeEventListener('blur', h.blur);
+        window.removeEventListener('gamepadconnected', h.connected);
+        window.removeEventListener('gamepaddisconnected', h.disconnected);
+      }
+      this._gpHandlers = null;
+      clearInterval(this._gpTimer);
+      this._gpTimer = null;
+      this._gpKeys.clear();
+      if (gpOwner === this) gpOwner = null;
+    }
+
+    _gpSave(key, value) {
+      try { if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, JSON.stringify(value)); } catch (_) { /* private mode */ }
+    }
+
+    _gpUsable() { return Boolean(this._el && this.isConnected && !this._el('gp').hidden); }
+
+    _gpIsOwner() {
+      if (gpOwner && gpOwner !== this && gpOwner._gpUsable() && gpOwner._el('gpon').checked) return false;
+      gpOwner = this;
+      return true;
+    }
+
+    _gpPad() {
+      let pads = [];
+      try { pads = navigator.getGamepads ? [...navigator.getGamepads()] : []; this._gpBlocked = false; } catch (_) { this._gpBlocked = true; }
+      return pads.find((p) => p && p.connected) || null;
+    }
+
+    _gpTarget() { return gpTargetFor(this._parts, Boolean(this._vurl)); }
+
+    // Polls the controller every GP_POLL_MS while it is on (or learning).
+    // A timer rather than animation frames: those stall in some web views.
+    _gpRun() {
+      if (this._gpTimer || !this._el || !this.isConnected) return;
+      this._gpLast = performance.now();
+      this._gpTimer = setInterval(() => {
+        if (!this._el || !this.isConnected || (!this._el('gpon').checked && !this._gpLearning)) {
+          clearInterval(this._gpTimer); this._gpTimer = null; this._gpKeys.clear();
+          return;
+        }
+        const now = performance.now();
+        const dt = now - this._gpLast;
+        this._gpLast = now;
+        this._gpTick(dt);
+      }, GP_POLL_MS);
+    }
+
+    _gpTick(dt) {
+      const pad = this._gpPad();
+      this._gpPadId = pad ? pad.id : '';
+      if (this._gpLearning) { this._gpLearnPoll(pad); return; }
+      if (!this._gpUsable() || !this._gpIsOwner()) return;
+      const s = gpRead(this._gpMap, pad, this._gpKeys);
+      const pressed = (a) => s[a] > 0.5 && !(this._gpPrev[a] > 0.5);
+      if (pressed('right')) this._gpSetSpeed(1);
+      if (pressed('left')) this._gpSetSpeed(-1);
+      if (pressed('motor')) this._gpCycleMotor();
+      if (pressed('rec')) this._gpRec();
+      const target = this._gpTarget();
+      if (target && pressed('zero')) {
+        this._gpFloat = [null, null];
+        this._gpApply(target, () => 0);
+      } else if (target && (s.up || s.down)) {
+        const speed = GP_SPEEDS[this._gpSpeed];
+        this._gpApply(target, (v, i) => (this._gpFloat[i] = gpStep(this._gpFloat[i] ?? v, s.up, s.down, speed, dt)));
+      } else {
+        this._gpFloat = [null, null];
+      }
+      this._gpPrev = s;
+      this._gpStatus();
+    }
+
+    _gpMotors() {
+      const dual = Boolean(this._device && this._device.dual);
+      if (!dual) return [0];
+      return this._gpMotor === 2 ? [0, 1] : [this._gpMotor];
+    }
+
+    _gpApply(target, fn) {
+      const motors = this._gpMotors();
+      if (target === 'video') {
+        if (!this._vrec) { this._gpHint('Controller: press record first to record against the video'); return; }
+        // The video tick (every 100 ms) samples and sends the bars.
+        for (const i of motors) { this._hvals[i] = Math.round(Math.min(100, Math.max(0, fn(this._hvals[i], i)))); this._showHBar(i, this._hvals[i]); }
+      } else {
+        for (const i of motors) this._setPad(i, fn(this._vals[i], i));   // the live timer sends it
+      }
+    }
+
+    _gpHint(text) {
+      if (this._gpHinted === text) return;
+      this._gpHinted = text;
+      this._toast(text);
+      clearTimeout(this._gpHintTimer);
+      this._gpHintTimer = setTimeout(() => { this._gpHinted = null; }, 4000);
+    }
+
+    _gpSetSpeed(delta) {
+      this._gpSpeed = Math.min(GP_SPEEDS.length - 1, Math.max(0, this._gpSpeed + delta));
+      this._gpSave(GP_SPEED_KEY, this._gpSpeed);
+    }
+
+    _gpCycleMotor() {
+      if (!(this._device && this._device.dual)) return;
+      this._gpMotor = (this._gpMotor + 1) % 3;
+      this._gpFloat = [null, null];
+    }
+
+    _gpRec() {
+      const $ = this._el;
+      const target = this._gpTarget();
+      if (target === 'video') {
+        this._vrecToggle();
+        const video = $('video');
+        if (this._vrec && video.paused) this._videoGo();
+        else if (!this._vrec && !video.paused) video.pause();
+      } else if (target === 'record') {
+        if ($('rec').disabled) { this._toast('The device is not connected'); return; }
+        if (this._recording) this._stopRecording(); else this._startRecording();
+      }
+    }
+
+    _gpStatus() {
+      if (!this._el) return;
+      const $ = this._el;
+      let html = '';
+      if (this._gpLearning) html = '';
+      else if (!$('gpon').checked) html = 'Up/down = level, left/right = speed, A = record';
+      else {
+        const bits = [`Speed <b>${this._gpSpeed + 1}/${GP_SPEEDS.length}</b> (${GP_SPEEDS[this._gpSpeed]}%/s)`];
+        if (this._device && this._device.dual) bits.push(['Motor 1', 'Motor 2', 'Both motors'][this._gpMotor]);
+        const target = this._gpTarget();
+        bits.push(target === 'video' ? '→ video' : target === 'record' ? '→ pads' : '');
+        if (this._gpPadId) bits.push(esc(this._gpPadId.replace(/\s*\(.*$/, '').slice(0, 28)));
+        else if (this._gpBlocked || !window.isSecureContext) bits.push('no gamepad: this page is not HTTPS, so only keyboard-mode controllers work');
+        else bits.push('press a button on the controller');
+        html = bits.filter(Boolean).join(' · ');
+      }
+      if (this._gpStatusHtml !== html) { this._gpStatusHtml = html; $('gpstat').innerHTML = html; }
+    }
+
+    _gpLearnStart() {
+      const $ = this._el;
+      if (!$('gpon').checked) { $('gpon').checked = true; this._gpSave(GP_ON_KEY, true); }
+      const pad = this._gpPad();
+      this._gpLearning = { step: 0, learned: {}, rest: pad ? gpRest(pad) : null, wait: true };
+      $('gplearn').hidden = false; $('gplearnrow').hidden = false; $('gplearnbtn').hidden = true;
+      this._gpStatus();
+      this._gpLearnShow();
+      this._gpRun();
+    }
+
+    _gpLearnShow() {
+      const L = this._gpLearning;
+      this._el('gplearn').textContent = `Press: ${GP_LABELS[GP_ACTIONS[L.step]]}  (${L.step + 1} of ${GP_ACTIONS.length}, Skip keeps the default)`;
+    }
+
+    _gpLearnPoll(pad) {
+      const L = this._gpLearning;
+      if (pad && !L.rest) L.rest = gpRest(pad);
+      if (L.wait) { if (gpIdle(L.rest, pad)) L.wait = false; return; }
+      const bind = gpLearnInput(L.rest, pad);
+      if (bind) this._gpLearnNext(bind);
+    }
+
+    _gpLearnNext(bind) {
+      const L = this._gpLearning;
+      if (!L) return;
+      const action = GP_ACTIONS[L.step];
+      if (bind) {
+        const same = JSON.stringify(bind);
+        for (const a of Object.keys(L.learned)) L.learned[a] = L.learned[a].filter((b) => JSON.stringify(b) !== same);
+        L.learned[action] = [bind];
+      }
+      L.wait = true;
+      L.step += 1;
+      if (L.step < GP_ACTIONS.length) { this._gpLearnShow(); return; }
+      this._gpSave(GP_MAP_KEY, L.learned);
+      this._gpMap = gpBuildMap(L.learned);
+      this._gpLearnEnd('Controller: controls saved for this browser.');
+    }
+
+    _gpLearnEnd(message) {
+      const $ = this._el;
+      this._gpLearning = null;
+      $('gplearn').hidden = true; $('gplearnrow').hidden = true; $('gplearnbtn').hidden = false;
+      // Treat everything as held so nothing fires until it is released.
+      this._gpPrev = Object.fromEntries(GP_ACTIONS.map((a) => [a, 1]));
+      this._gpKeys.clear();
+      this._toast(message);
+      this._gpStatus();
     }
 
     // ---------------------------------------------------------- video sync
@@ -946,6 +1325,7 @@
 
     disconnectedCallback() {
       clearInterval(this._liveTimer); clearInterval(this._sampleTimer);
+      this._gpDetach();
       if (this._vsyncTimer) this._videoHalt();
       if (this._vurl) { URL.revokeObjectURL(this._vurl); this._vurl = null; }
       if (this._recording || this._live) this._quietStop(this._device);

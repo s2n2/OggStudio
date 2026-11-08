@@ -10,6 +10,8 @@ Record, import, save and replay vibration patterns on devices controlled by
 * **Import** funscripts (single file, or two files for two motors), share
   codes or JSON, then play them without saving or save them.
 * **Share codes**: `ogg1:` + base64 of the gzipped funscript, easy to paste.
+* **Game controller**: record with a Bluetooth gamepad. Up and down set the level,
+  left and right set how fast it moves, and a button starts and stops recording.
 
 Playback runs inside Ogg's own frame loop (Ogg 2.1+), so timing does not
 depend on the dashboard or network.
@@ -62,6 +64,41 @@ the library) or **Download .funscript** (saved with the video's name).
 
 Stroke funscripts made for videos are converted using movement speed, so faster strokes give
 stronger vibration. Choose "Vibration script" for scripts that already describe intensity.
+
+## Game controller
+
+You can record with a small Bluetooth gamepad paired to your phone instead of your finger.
+Tick **🎮 Controller** on the Recorder or Video card. It ticks itself when a controller
+connects; Chrome only reports a controller after you press one of its buttons.
+
+| Control | Default | Does |
+|---|---|---|
+| Up / down | D-pad or left stick, arrow keys | Moves the level up or down at the current speed while held. A stick is proportional: push it half way to move at half speed |
+| Left / right | D-pad or left stick, arrow keys | Steps the speed: 15, 30, 60, 100, 180 or 300 % per second |
+| Record | A (button 0), Enter | Starts or stops recording. With a video loaded, it starts **● Rec** and plays the video; pressing it again stops and pauses |
+| Level to 0 | B (button 1), Esc | Drops straight to 0 |
+| Switch motor | Y (button 3) | Two-motor devices: motor 1, motor 2, or both |
+
+The level stays where you leave it. Recording works as it does with the pads: the device
+follows live and every change is saved in the take.
+
+Generic controllers number their buttons in different ways. Press **Learn controls** and
+press each control when asked; **Skip** keeps the default. The mapping, the speed and the
+on/off setting are remembered per browser. Controllers in keyboard mode, which send arrow
+keys, also work, and so does a keyboard on a computer.
+
+**HTTPS needed for gamepads.** Chrome hides gamepads from pages that are not served over
+HTTPS, so a dashboard opened as `http://192.168.x.x:8123` cannot see them. In that case the
+status line says so. You can fix it by:
+
+* opening Home Assistant through an HTTPS address (Nabu Casa, or your own certificate), or
+* in Chrome on the phone, opening `chrome://flags/#unsafely-treat-insecure-origin-as-secure`,
+  adding your Home Assistant address (for example `http://192.168.1.10:8123`), enabling it
+  and relaunching Chrome, or
+* switching the controller to keyboard mode, which works without HTTPS.
+
+Use Chrome itself rather than the Companion app if the Companion app doesn't see the
+controller.
 
 ## Format
 

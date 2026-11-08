@@ -45,6 +45,53 @@ eval(grab('  const b64 =', '  // Stroke scripts') + grab('  function toIntensity
   assert.strictEqual(sampleAt(many, 55555), 0.5, 'binary search finds the right pair in long scripts');
 }
 
+// Game controller: bindings, held movement at a speed, learning and targets.
+{
+  const btn = (pressed) => ({ pressed, value: pressed ? 1 : 0 });
+  const pad = (pressed = [], axes = [0, 0, 0, 0]) => ({ buttons: Array.from({ length: 17 }, (_, i) => btn(pressed.includes(i))), axes });
+  const keys = new Set();
+  const { GP_DEFAULT_MAP, GP_SPEEDS, GP_ACTIONS, gpRest, gpIdle } = eval(grab('  // Game controller.', '  const duration =') + '; ({ GP_DEFAULT_MAP, GP_SPEEDS, GP_ACTIONS, gpRest, gpIdle })');
+  // Standard D-pad buttons, an analog stick (proportional, with dead zone) and keyboard mode.
+  assert.strictEqual(gpRead(GP_DEFAULT_MAP, pad([12]), keys).up, 1);
+  assert.strictEqual(gpRead(GP_DEFAULT_MAP, pad([0]), keys).rec, 1);
+  assert.strictEqual(gpRead(GP_DEFAULT_MAP, pad([], [0, -1]), keys).up, 1);
+  assert.strictEqual(gpRead(GP_DEFAULT_MAP, pad([], [0, 1]), keys).up, 0);
+  assert.strictEqual(gpRead(GP_DEFAULT_MAP, pad([], [0, -0.2]), keys).up, 0, 'stick drift is ignored');
+  assert.ok(Math.abs(gpRead(GP_DEFAULT_MAP, pad([], [0, -0.625]), keys).up - 0.5) < 1e-9, 'half-way push = half speed');
+  assert.strictEqual(gpRead(GP_DEFAULT_MAP, null, new Set(['ArrowLeft'])).left, 1, 'keyboard-mode controllers work with no gamepad');
+  assert.strictEqual(gpRead(GP_DEFAULT_MAP, null, keys).up, 0);
+  // Held up at 100 %/s for 100 ms = +10; never past 0..100; a stall frame is capped.
+  assert.strictEqual(gpStep(50, 1, 0, 100, 100), 60);
+  assert.strictEqual(gpStep(50, 0, 1, 100, 100), 40);
+  assert.strictEqual(gpStep(95, 1, 0, 300, 100), 100);
+  assert.strictEqual(gpStep(3, 0, 1, 300, 100), 0);
+  assert.strictEqual(gpStep(50, 1, 0, 100, 5000), 60, 'a long frame gap moves at most 100 ms worth');
+  let level = 0;
+  for (let i = 0; i < 60; i++) level = gpStep(level, 1, 0, 60, 1000 / 60);
+  assert.ok(Math.abs(level - 60) < 1e-6, 'small per-frame steps add up (no rounding loss)');
+  assert.ok(GP_SPEEDS.every((s, i) => i === 0 || s > GP_SPEEDS[i - 1]), 'speeds go up');
+  // Learning: first pressed button, or an axis pushed away from rest (triggers rest at -1).
+  assert.deepStrictEqual(gpLearnInput([0, 0], pad([7])), { b: 7 });
+  assert.deepStrictEqual(gpLearnInput([0, 0], pad([], [0, 0, 0, 0, 0, 0, 0, 1])), { a: 7, d: 1 });
+  assert.deepStrictEqual(gpLearnInput([0, 0, -1], pad([], [0, 0, -1])), null, 'a trigger at rest is not a press');
+  assert.deepStrictEqual(gpRest(pad([], [0.05, -1, 0.3])), [0, -1, 0]);
+  assert.ok(gpIdle([0, 0], pad()));
+  assert.ok(!gpIdle([0, 0], pad([2])));
+  assert.ok(!gpIdle([0, 0], pad([], [0, 0.8])));
+  const map = gpBuildMap({ rec: [{ b: 3 }], up: [{ a: 9, d: -1 }] });
+  assert.deepStrictEqual(map.rec, [{ b: 3 }, { k: 'Enter' }, { k: 'MediaPlayPause' }]);
+  assert.deepStrictEqual(map.up, [{ a: 9, d: -1 }, { k: 'ArrowUp' }], 'learned action: what was learned, plus its keyboard keys');
+  assert.deepStrictEqual(map.motor, [], 'a default that clashes with a learned control is dropped');
+  assert.deepStrictEqual(map.down, GP_DEFAULT_MAP.down);
+  assert.deepStrictEqual(Object.keys(map), GP_ACTIONS);
+  // Target: video recording when this card has a video loaded, else the pads.
+  assert.strictEqual(gpTargetFor(['record', 'take', 'library', 'video', 'import'], true), 'video');
+  assert.strictEqual(gpTargetFor(['record', 'take', 'library', 'video', 'import'], false), 'record');
+  assert.strictEqual(gpTargetFor(['video', 'take'], false), null);
+  assert.strictEqual(gpTargetFor(['library', 'take', 'import'], true), null);
+  assert.ok(src.includes('id="gpon"') && src.includes('id="gplearnbtn"'), 'controller bar in the card');
+}
+
 const stroke = [{ at: 0, pos: 0 }, { at: 250, pos: 100 }, { at: 500, pos: 0 }, { at: 1500, pos: 50 }];
 assert.deepStrictEqual(toIntensity(stroke, 'position').map((a) => a.pos), [0, 100, 0, 50]);
 // 100 units in 0.25 s = full speed; 50 units in 1 s = 12.5%.
