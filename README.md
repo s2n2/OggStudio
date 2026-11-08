@@ -29,6 +29,15 @@ position about ten times a second and sends the matching level with `ogg.live`. 
 seeking and changing playback speed stay in sync, and pausing stops the toy. **Sync offset**
 (remembered per browser) sends each moment slightly early to make up for Bluetooth delay.
 
+### Making a script for a video
+
+Under the video there is one bar per motor and a small **● Rec** button. Press Rec, play the
+video and drag the bars left and right. The toy follows your finger, and each level is
+recorded against the video's own time, so the script lines up with that video. You can pause,
+scrub back and record a section again: the newer pass replaces what was there. When you're
+done, press **Use as take** (it replays with the video straight away, and you can save it to
+the library) or **Download .funscript** (saved with the video's name).
+
 Stroke funscripts made for videos are converted using movement speed, so faster strokes give
 stronger vibration. Choose "Vibration script" for scripts that already describe intensity.
 

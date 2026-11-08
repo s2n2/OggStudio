@@ -9,6 +9,17 @@ const grab = (start, end) => src.slice(src.indexOf(start), src.indexOf(end));
 // eslint-disable-next-line no-eval
 eval(grab('  const b64 =', '  // Stroke scripts') + grab('  function toIntensity', '  const duration ='));
 
+// Recording against a video: a later pass replaces earlier ones inside its span.
+{
+  const first = [{ at: 0, pos: 10 }, { at: 1000, pos: 20 }, { at: 2000, pos: 30 }, { at: 3000, pos: 40 }, { at: 4000, pos: 0 }];
+  const redo = [{ at: 1500, pos: 90 }, { at: 2500, pos: 80 }];
+  assert.deepStrictEqual(mergePasses([first, redo]).map((a) => a.at + ':' + a.pos),
+    ['0:10', '1000:20', '1500:90', '2500:80', '3000:40', '4000:0']);
+  // Pass recorded earlier in the video than the first one is just added in order.
+  assert.deepStrictEqual(mergePasses([redo, [{ at: 100, pos: 5 }, { at: 200, pos: 6 }]]).map((a) => a.at), [100, 200, 1500, 2500]);
+  assert.deepStrictEqual(mergePasses([[], first]).length, 5);
+}
+
 // Video sync: level at a video time, linear between actions.
 {
   const acts = [{ at: 1000, pos: 0 }, { at: 2000, pos: 100 }, { at: 3000, pos: 40 }];

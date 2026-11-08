@@ -6,7 +6,7 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.2.1';
+  const VERSION = '0.3.0';
   const DEVICE_KEY = 'oggstudio_device';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
@@ -78,6 +78,19 @@
     while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (actions[mid].at <= ms) lo = mid; else hi = mid; }
     const a = actions[lo], b = actions[hi];
     return b.at === a.at ? b.pos : a.pos + (b.pos - a.pos) * (ms - a.at) / (b.at - a.at);
+  }
+
+  // Merge recording passes made against a video. A later pass replaces
+  // whatever earlier passes recorded inside its time span (punch-in).
+  function mergePasses(passes) {
+    let out = [];
+    for (const pass of passes) {
+      if (!pass.length) continue;
+      const from = pass[0].at, to = pass[pass.length - 1].at;
+      out = out.filter((a) => a.at < from || a.at > to).concat(pass);
+    }
+    out.sort((a, b) => a.at - b.at);
+    return out.filter((a, i) => i === 0 || a.at !== out[i - 1].at || (out[i - 1] = a, false));
   }
 
   const duration = (s) => Math.max(
@@ -186,6 +199,18 @@
           .meter{height:6px;border-radius:3px;background:#18233d;overflow:hidden;margin-top:4px}
           .meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,#2fbfa9,#67e0c8);transition:width .1s linear}
           .meter.m2 i{background:linear-gradient(90deg,#8f7dff,#b49cff)}
+          .hbar{position:relative;height:48px;margin-top:8px;border-radius:12px;border:1px solid #33415f;background:#141d33;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:ew-resize;outline:none}
+          .hbar .fill{position:absolute;top:0;bottom:0;left:0;width:0;background:linear-gradient(90deg,rgba(47,191,169,.55),rgba(103,224,200,.85))}
+          .hbar.m2 .fill{background:linear-gradient(90deg,rgba(143,125,255,.55),rgba(180,156,255,.85))}
+          .hbar.active{border-color:#67e0c8}
+          .hbar.rec{border-color:rgba(255,110,130,.55)}
+          .hbar .lab{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:700;color:#e8edff;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+          .hbar .pct{position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.6)}
+          .vrecrow{display:flex;gap:8px;align-items:center;margin-top:8px}
+          .vrecrow .check{min-height:40px;font-size:12px}
+          button.vrec{flex:0 0 auto;min-height:40px;padding:0 14px;background:#5a2433;border-color:rgba(255,110,130,.5);color:#ffd2da}
+          button.vrec.on{background:linear-gradient(110deg,#ff5c7a,#ff8aa0);color:#2a0710}
+          .vrecinfo{flex:1;text-align:right;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
           [hidden]{display:none!important}
         </style>
         <ha-card>
@@ -221,12 +246,16 @@
             <label>Script type</label>
             <select id="vmode"><option value="speed">Stroke script: movement speed → intensity</option><option value="position">Vibration script: position → intensity</option></select></div>
             <video id="video" controls playsinline preload="metadata" hidden></video>
-            <div class="meter" id="vm1"><i></i></div><div class="meter m2" id="vm2" hidden><i></i></div>
+            <div class="hbar" id="hb1" role="slider" tabindex="0" aria-label="Motor 1 level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill"></div><span class="lab">Motor 1</span><span class="pct">0%</span></div>
+            <div class="hbar m2" id="hb2" role="slider" tabindex="0" aria-label="Motor 2 level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><div class="fill"></div><span class="lab">Motor 2</span><span class="pct">0%</span></div>
+            <div class="vrecrow"><button id="vrec" class="vrec" type="button">● Rec</button><label class="check"><input id="vspring" type="checkbox" checked> Drop to 0 on release</label><span class="vrecinfo" id="vrecinfo"></span></div>
+            <div class="row" id="vrecdone" style="margin-top:6px" hidden><button id="vrecuse">Use as take</button><button id="vrecdl">Download .funscript</button><button id="vrecclear" class="stop">Clear</button></div>
             <div class="vstat" id="vstat"></div>
             <div class="row" style="margin-top:8px"><button id="vgo" class="go">▶ Go</button><button id="vstop" class="stop" style="flex:0 0 96px">■ Stop</button></div>
             <label>Sync offset <span id="voffv"></span></label>
             <input id="voff" type="range" min="-1000" max="1000" step="25" value="150">
             <div class="hint">Positive values send each moment slightly early to make up for Bluetooth delay. Pause, seek and playback speed all stay in sync.</div>
+            <div class="hint">To make a script for this video: press ● Rec, play the video and drag the bars left and right. You can pause, scrub back and record a section again; the newer pass replaces it.</div>
           </section>
           <section>
             <h3>Import</h3>
@@ -285,7 +314,10 @@
       });
       $('vfile').addEventListener('change', () => {
         const file = $('vfile').files[0];
+        this._vname = file ? file.name.replace(/\.[^.]+$/, '') : '';
         this._videoHalt();
+        if (this._vrec) this._vrecToggle();
+        if (this._vrecHas()) this._vrecReset();
         if (this._vurl) URL.revokeObjectURL(this._vurl);
         this._vurl = file ? URL.createObjectURL(file) : null;   // local only, never uploaded
         video.hidden = !file;
@@ -305,6 +337,16 @@
       video.addEventListener('seeked', () => this._videoSend(true));
       video.addEventListener('timeupdate', () => this._videoStatus());
       video.addEventListener('loadedmetadata', () => this._videoStatus());
+      // Recording against the video clock.
+      this._hvals = [0, 0];
+      this._vpasses = [[], []];
+      this._bindHBar($('hb1'), 0);
+      this._bindHBar($('hb2'), 1);
+      video.addEventListener('seeking', () => this._vrecBreak());
+      $('vrec').addEventListener('click', () => this._vrecToggle());
+      $('vrecuse').addEventListener('click', () => this._vrecUse());
+      $('vrecdl').addEventListener('click', () => this._vrecDownload());
+      $('vrecclear').addEventListener('click', () => { if (confirm('Discard this recording?')) this._vrecReset(); });
     }
 
     async _loadVideoScript() {
@@ -334,6 +376,8 @@
 
     _videoLevels() {
       const video = this._el('video');
+      const dual = Boolean(this._device && this._device.dual);
+      if (this._vrec) return dual ? [this._hvals[0] / 100, this._hvals[1] / 100] : [this._hvals[0] / 100];
       const s = this._vscript;
       if (!s) return null;
       const ms = video.currentTime * 1000 + Number(this._el('voff').value || 0);
@@ -350,6 +394,7 @@
       const video = this._el && this._el('video');
       if (!this._vsyncTimer || !video || video.paused) { this._videoStatus(); return; }
       const dev = this._device;
+      if (this._vrec) this._vrecSample();
       const levels = this._videoLevels();
       if (!dev || !levels) return;
       const now = performance.now();
@@ -364,7 +409,7 @@
     }
 
     _videoRun() {
-      if (this._vsyncTimer || !this._vscript) return;
+      if (this._vsyncTimer || !(this._vscript || this._vrec)) return;
       if (this._live) { this._el('live').checked = false; this._setLive(false); }
       this._vlast = null;
       this._vsentAt = 0;
@@ -373,6 +418,7 @@
     }
 
     _videoHalt() {
+      this._vrecBreak();
       if (!this._vsyncTimer) return;
       clearInterval(this._vsyncTimer);
       this._vsyncTimer = null;
@@ -381,11 +427,165 @@
       this._videoStatus([0, 0]);
     }
 
+    _showHBar(index, value) {
+      const bar = this._el('hb' + (index + 1));
+      const v = Math.round(Math.min(100, Math.max(0, value)));
+      bar.querySelector('.fill').style.width = v + '%';
+      bar.querySelector('.pct').textContent = v + '%';
+      bar.setAttribute('aria-valuenow', String(v));
+    }
+
+    _setHBar(index, value) {
+      this._hvals[index] = Math.round(Math.min(100, Math.max(0, value)));
+      this._showHBar(index, this._hvals[index]);
+      if (this._vrec) this._videoSend(false);
+    }
+
+    _bindHBar(bar, index) {
+      let active = false;
+      const fromEvent = (event) => {
+        const rect = bar.getBoundingClientRect();
+        this._setHBar(index, ((event.clientX - rect.left) / rect.width) * 100);
+      };
+      bar.addEventListener('pointerdown', (event) => {
+        if (!this._vrec) { this._toast('Press ● Rec first to record with the bars'); return; }
+        event.preventDefault();
+        active = true;
+        bar.classList.add('active');
+        bar.setPointerCapture?.(event.pointerId);
+        fromEvent(event);
+      });
+      bar.addEventListener('pointermove', (event) => { if (active) fromEvent(event); });
+      const release = () => {
+        if (!active) return;
+        active = false;
+        bar.classList.remove('active');
+        if (this._el('vspring').checked) this._setHBar(index, 0);
+      };
+      for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) bar.addEventListener(type, release);
+      bar.addEventListener('contextmenu', (event) => event.preventDefault());
+      bar.addEventListener('keydown', (event) => {
+        if (!this._vrec) return;
+        const steps = { ArrowRight: 5, ArrowUp: 5, ArrowLeft: -5, ArrowDown: -5, PageUp: 20, PageDown: -20 };
+        if (event.key in steps) { this._setHBar(index, this._hvals[index] + steps[event.key]); event.preventDefault(); }
+        else if (event.key === 'Home') { this._setHBar(index, 0); event.preventDefault(); }
+        else if (event.key === 'End') { this._setHBar(index, 100); event.preventDefault(); }
+      });
+    }
+
+    _vrecToggle() {
+      const $ = this._el;
+      if (!this._vurl) { this._toast('Choose a video first'); return; }
+      this._vrec = !this._vrec;
+      if (!this._vrec) this._vrecBreak();
+      this._vcur = null;
+      $('vrec').classList.toggle('on', this._vrec);
+      $('vrec').textContent = this._vrec ? '■ Stop rec' : '● Rec';
+      for (const id of ['hb1', 'hb2']) $(id).classList.toggle('rec', this._vrec);
+      if (this._vrec) {
+        this._setHBar(0, 0); this._setHBar(1, 0);
+        this._toast('Recording: play the video and drag the bars.');
+        if (!$('video').paused) { this._videoHalt(); this._videoRun(); }
+      } else {
+        this._toast(this._vrecHas() ? 'Recording stopped. Use it as a take, download it, or press ● Rec to add more.' : '');
+        const video = $('video');
+        if (!video.paused) { clearInterval(this._vsyncTimer); this._vsyncTimer = null; this._videoRun(); }
+      }
+      this._videoStatus();
+    }
+
+    // Sample the bars at the video's own time (only while it plays).
+    _vrecSample() {
+      const video = this._el('video');
+      if (!this._vrec || video.paused || video.seeking) return;
+      const at = Math.round(video.currentTime * 1000);
+      const dual = Boolean(this._device && this._device.dual);
+      if (!this._vcur) this._vcur = [[], []];
+      for (const i of dual ? [0, 1] : [0]) {
+        const pass = this._vcur[i];
+        const pos = this._hvals[i];
+        const last = pass[pass.length - 1];
+        if (!last || last.pos !== pos) pass.push({ at, pos });
+        else if (last.at > at) pass.push({ at, pos });
+        this._vcurEnd = at;
+      }
+    }
+
+    // Close the current pass (pause, seek or stop) so a later pass can replace it.
+    _vrecBreak() {
+      if (!this._vcur) return;
+      this._vrecSample();
+      this._vcur.forEach((pass, i) => {
+        if (!pass.length) return;
+        const end = Math.max(this._vcurEnd || 0, pass[pass.length - 1].at);
+        if (end > pass[pass.length - 1].at) pass.push({ at: end, pos: pass[pass.length - 1].pos });
+        this._vpasses[i].push(pass);
+      });
+      this._vcur = null;
+    }
+
+    _vrecHas() { return this._vpasses[0].some((p) => p.length) || this._vpasses[1].some((p) => p.length); }
+
+    _vrecScript() {
+      this._vrecBreak();
+      const main = mergePasses(this._vpasses[0]);
+      if (!main.length) return null;
+      const end = main[main.length - 1].at;
+      if (main[main.length - 1].pos !== 0) main.push({ at: end + 1, pos: 0 });
+      const script = { version: '1.0', inverted: false, range: 100, actions: main,
+        metadata: { creator: 'OggStudio', type: 'vibration', ...(this._vname ? { title: this._vname } : {}) } };
+      const second = mergePasses(this._vpasses[1]);
+      if (second.length) {
+        if (second[second.length - 1].pos !== 0) second.push({ at: second[second.length - 1].at + 1, pos: 0 });
+        script.channels = { V1: { actions: second } };
+      }
+      return script;
+    }
+
+    _vrecInfo() {
+      const $ = this._el;
+      const has = this._vrecHas() || Boolean(this._vcur && this._vcur[0].length);
+      $('vrecdone').hidden = this._vrec || !has;
+      const merged = has ? mergePasses([...this._vpasses[0], ...(this._vcur ? [this._vcur[0]] : [])]) : [];
+      const passes = this._vpasses[0].filter((p) => p.length).length + (this._vcur && this._vcur[0].length ? 1 : 0);
+      $('vrecinfo').textContent = has
+        ? `${fmt(merged.length ? merged[merged.length - 1].at - merged[0].at : 0)} recorded${passes > 1 ? ` · ${passes} passes` : ''}`
+        : (this._vrec ? 'Play the video to record' : '');
+    }
+
+    _vrecUse() {
+      const script = this._vrecScript();
+      if (!script) return;
+      this._take = script;
+      this._vscript = script;          // replay it with the video straight away
+      this._el('name').value = this._vname || '';
+      this._vrecReset();
+      this._toast(`Recorded ${fmt(duration(script))}. It is now the current take (save it below) and plays with this video.`);
+      this._update();
+    }
+
+    _vrecDownload() {
+      const script = this._vrecScript();
+      if (!script) return;
+      const blob = new Blob([JSON.stringify(script)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${this._vname || 'oggstudio'}.funscript`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    }
+
+    _vrecReset() {
+      this._vpasses = [[], []];
+      this._vcur = null;
+      this._videoStatus();
+    }
+
     async _videoGo() {
       const $ = this._el;
       const video = $('video');
       if (!this._vurl) { this._toast('Choose a video first'); return; }
-      if (!this._vscript) { this._toast('Choose a script first'); return; }
+      if (!this._vscript && !this._vrec) { this._toast('Choose a script first, or press ● Rec to make one'); return; }
       if (!this._device) { this._toast('No Ogg device to play on'); return; }
       try {
         if (video.ended) video.currentTime = 0;
@@ -398,10 +598,11 @@
       const $ = this._el;
       const video = $('video');
       const dual = Boolean(this._device && this._device.dual);
-      $('vm2').hidden = !dual;
-      if (levels) {
-        $('vm1').firstElementChild.style.width = `${Math.round((levels[0] || 0) * 100)}%`;
-        $('vm2').firstElementChild.style.width = `${Math.round((levels[1] ?? levels[0] ?? 0) * 100)}%`;
+      $('hb2').hidden = !dual;
+      // Outside recording the bars mirror what the script is sending.
+      if (levels && !this._vrec) {
+        this._showHBar(0, (levels[0] || 0) * 100);
+        this._showHBar(1, (levels[1] ?? levels[0] ?? 0) * 100);
       }
       const parts = [];
       if (this._device && !this._online(this._device)) parts.push(`⚠ ${this._device.name} not connected`);
@@ -410,7 +611,8 @@
       if (this._vsyncTimer && levels) parts.push(`now ${levels.map((v) => Math.round(v * 100) + '%').join(' / ')}`);
       else if (this._vurl && this._vscript) parts.push('ready');
       $('vstat').textContent = parts.join(' · ');
-      $('vgo').disabled = !(this._vurl && this._vscript && this._device);
+      $('vgo').disabled = !(this._vurl && (this._vscript || this._vrec) && this._device);
+      this._vrecInfo();
     }
 
     get _device() { return this._devices.find((d) => d.id === this._deviceId) || this._devices[0]; }
