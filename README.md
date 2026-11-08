@@ -14,6 +14,24 @@ Record, import, save and replay vibration patterns on devices controlled by
 Playback runs inside Ogg's own frame loop (Ogg 2.1+), so timing does not
 depend on the dashboard or network.
 
+## Video sync
+
+The card's **Video sync** panel plays a video alongside a script:
+
+1. Choose a video on your phone or computer.
+2. Choose a script: a `.funscript` file on the same device (two files give a two-motor
+   toy one track per motor), or a script from your OggStudio library.
+3. Press **Go**.
+
+The video never leaves your device. The browser plays it straight from the local file, and
+nothing is uploaded to Home Assistant. While the video plays, the card reads the video's
+position about ten times a second and sends the matching level with `ogg.live`. Pausing,
+seeking and changing playback speed stay in sync, and pausing stops the toy. **Sync offset**
+(remembered per browser) sends each moment slightly early to make up for Bluetooth delay.
+
+Stroke funscripts made for videos are converted using movement speed, so faster strokes give
+stronger vibration. Choose "Vibration script" for scripts that already describe intensity.
+
 ## Format
 
 Scripts are standard [funscript](https://github.com/OpenFunscripter/OFS)

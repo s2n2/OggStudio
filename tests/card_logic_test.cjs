@@ -9,6 +9,19 @@ const grab = (start, end) => src.slice(src.indexOf(start), src.indexOf(end));
 // eslint-disable-next-line no-eval
 eval(grab('  const b64 =', '  // Stroke scripts') + grab('  function toIntensity', '  const duration ='));
 
+// Video sync: level at a video time, linear between actions.
+{
+  const acts = [{ at: 1000, pos: 0 }, { at: 2000, pos: 100 }, { at: 3000, pos: 40 }];
+  assert.strictEqual(sampleAt(acts, 0), 0, 'silent before the first action');
+  assert.strictEqual(sampleAt(acts, 1500), 50);
+  assert.strictEqual(sampleAt(acts, 2000), 100);
+  assert.strictEqual(sampleAt(acts, 2500), 70);
+  assert.strictEqual(sampleAt(acts, 9000), 40, 'holds the last value');
+  assert.strictEqual(sampleAt([], 100), 0);
+  const many = Array.from({ length: 10000 }, (_, i) => ({ at: i * 10, pos: i % 101 }));
+  assert.strictEqual(sampleAt(many, 55555), 0.5, 'binary search finds the right pair in long scripts');
+}
+
 const stroke = [{ at: 0, pos: 0 }, { at: 250, pos: 100 }, { at: 500, pos: 0 }, { at: 1500, pos: 50 }];
 assert.deepStrictEqual(toIntensity(stroke, 'position').map((a) => a.pos), [0, 100, 0, 50]);
 // 100 units in 0.25 s = full speed; 50 units in 1 s = 12.5%.

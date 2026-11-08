@@ -6,11 +6,13 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.1.2';
+  const VERSION = '0.2.0';
   const DEVICE_KEY = 'oggstudio_device';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
   const LIVE_MS = 300;
+  const VIDEO_TICK_MS = 100;
+  const VIDEO_OFFSET_KEY = 'oggstudio_video_offset';
 
   const b64 = (buf) => {
     const bytes = new Uint8Array(buf); let s = '';
@@ -67,6 +69,17 @@
     return script;
   }
 
+  // Level (0-100) of a script track at time ms: linear between actions,
+  // 0 before the first action, holds the last value after the end.
+  function sampleAt(actions, ms) {
+    if (!actions || !actions.length || ms < actions[0].at) return 0;
+    let lo = 0, hi = actions.length - 1;
+    if (ms >= actions[hi].at) return actions[hi].pos;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (actions[mid].at <= ms) lo = mid; else hi = mid; }
+    const a = actions[lo], b = actions[hi];
+    return b.at === a.at ? b.pos : a.pos + (b.pos - a.pos) * (ms - a.at) / (b.at - a.at);
+  }
+
   const duration = (s) => Math.max(
     s.actions.length ? s.actions[s.actions.length - 1].at : 0,
     s.channels && s.channels.V1.actions.length ? s.channels.V1.actions[s.channels.V1.actions.length - 1].at : 0);
@@ -83,6 +96,8 @@
       this._recording = false;
       this._live = false;
       this._samples = null;
+      this._vscript = null;
+      this._vurl = null;
     }
 
     setConfig(config) { this._config = config || {}; this._render(); }
@@ -163,10 +178,18 @@
           .toast{min-height:16px;font-size:12px;color:#ffcf8a;margin-top:8px}
           .check{display:flex;gap:8px;align-items:center;font-size:13px;color:#cdd6f6;flex:0 0 auto;min-height:36px}
           .check input{width:20px;height:20px;accent-color:#67e0c8}
+          video{width:100%;max-height:60vh;border-radius:12px;background:#000;margin-top:8px;display:block}
+          input[type=file]{width:100%;font-size:12px;color:var(--muted)}
+          button.go{width:100%;min-height:52px;font-size:16px;background:linear-gradient(110deg,#2fbfa9,#67e0c8);color:#062a24;border-color:transparent}
+          .vrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+          .vstat{font-size:12px;color:#cdd6f6;font-variant-numeric:tabular-nums;margin-top:6px;min-height:16px}
+          .meter{height:6px;border-radius:3px;background:#18233d;overflow:hidden;margin-top:4px}
+          .meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,#2fbfa9,#67e0c8);transition:width .1s linear}
+          .meter.m2 i{background:linear-gradient(90deg,#8f7dff,#b49cff)}
           [hidden]{display:none!important}
         </style>
         <ha-card>
-          <h2>OggStudio</h2><div class="sub">Record, import and replay patterns · v${VERSION}</div>
+          <h2>OggStudio</h2><div class="sub">Record, import, replay and sync to video · v${VERSION}</div>
           <label>Device</label><select id="device"></select>
           <section>
             <h3>Record</h3>
@@ -188,6 +211,22 @@
             <select id="saved"></select>
             <div class="row" style="margin-top:8px"><select id="speed"></select><label class="check"><input id="loop" type="checkbox"> Loop</label></div>
             <div class="row" style="margin-top:8px"><button id="play">▶ Play</button><button id="stop" class="stop">■ Stop</button><button id="code">Copy code</button><button id="delete">Delete</button></div>
+          </section>
+          <section id="videobox">
+            <h3>Video sync</h3>
+            <div class="hint" style="margin-top:0">The video plays from this phone or computer only. It is never uploaded to Home Assistant.</div>
+            <label>Video</label><input id="vfile" type="file" accept="video/*">
+            <label>Script</label><select id="vsrc"></select>
+            <div id="vfilebox"><input id="vscriptfile" type="file" accept=".funscript,.json,application/json" multiple style="margin-top:6px">
+            <label>Script type</label>
+            <select id="vmode"><option value="speed">Stroke script: movement speed → intensity</option><option value="position">Vibration script: position → intensity</option></select></div>
+            <video id="video" controls playsinline preload="metadata" hidden></video>
+            <div class="meter" id="vm1"><i></i></div><div class="meter m2" id="vm2" hidden><i></i></div>
+            <div class="vstat" id="vstat"></div>
+            <div class="row" style="margin-top:8px"><button id="vgo" class="go">▶ Go</button><button id="vstop" class="stop" style="flex:0 0 96px">■ Stop</button></div>
+            <label>Sync offset <span id="voffv"></span></label>
+            <input id="voff" type="range" min="-1000" max="1000" step="25" value="150">
+            <div class="hint">Positive values send each moment slightly early to make up for Bluetooth delay. Pause, seek and playback speed all stay in sync.</div>
           </section>
           <section>
             <h3>Import</h3>
@@ -226,7 +265,152 @@
       $('saved').addEventListener('change', () => this._hass.callService('select', 'select_option', { entity_id: this._studio.saved, option: $('saved').value }));
       $('speed').addEventListener('change', () => this._hass.callService('select', 'select_option', { entity_id: this._studio.speed, option: $('speed').value }));
       $('load').addEventListener('click', () => this._import());
+      this._bindVideo();
       this._update();
+    }
+
+    // ---------------------------------------------------------- video sync
+    _bindVideo() {
+      const $ = this._el;
+      const video = $('video');
+      let offset = 150;
+      try { const saved = Number(localStorage.getItem(VIDEO_OFFSET_KEY)); if (Number.isFinite(saved) && localStorage.getItem(VIDEO_OFFSET_KEY) !== null) offset = saved; } catch (_) { /* private mode */ }
+      $('voff').value = String(offset);
+      const showOffset = () => { $('voffv').textContent = `${Number($('voff').value) > 0 ? '+' : ''}${$('voff').value} ms`; };
+      showOffset();
+      $('voff').addEventListener('input', () => {
+        showOffset();
+        try { localStorage.setItem(VIDEO_OFFSET_KEY, $('voff').value); } catch (_) { /* private mode */ }
+        this._videoSend(true);
+      });
+      $('vfile').addEventListener('change', () => {
+        const file = $('vfile').files[0];
+        this._videoHalt();
+        if (this._vurl) URL.revokeObjectURL(this._vurl);
+        this._vurl = file ? URL.createObjectURL(file) : null;   // local only, never uploaded
+        video.hidden = !file;
+        if (file) { video.src = this._vurl; video.load(); } else { video.removeAttribute('src'); }
+        this._videoStatus();
+      });
+      $('vsrc').addEventListener('change', () => this._loadVideoScript());
+      $('vscriptfile').addEventListener('change', () => this._loadVideoScript());
+      $('vmode').addEventListener('change', () => this._loadVideoScript());
+      $('vgo').addEventListener('click', () => this._videoGo());
+      $('vstop').addEventListener('click', () => { video.pause(); try { video.currentTime = 0; } catch (_) { /* not loaded */ } this._videoHalt(); });
+      video.addEventListener('play', () => this._videoRun());
+      video.addEventListener('playing', () => this._videoRun());
+      video.addEventListener('pause', () => this._videoHalt());
+      video.addEventListener('ended', () => this._videoHalt());
+      video.addEventListener('emptied', () => this._videoHalt());
+      video.addEventListener('seeked', () => this._videoSend(true));
+      video.addEventListener('timeupdate', () => this._videoStatus());
+      video.addEventListener('loadedmetadata', () => this._videoStatus());
+    }
+
+    async _loadVideoScript() {
+      const $ = this._el;
+      const fromFile = $('vsrc').value === '';
+      $('vfilebox').hidden = !fromFile;
+      try {
+        if (fromFile) {
+          const files = [...$('vscriptfile').files];
+          if (!files.length) { this._vscript = null; this._videoStatus(); return; }
+          const parsed = await Promise.all(files.slice(0, 2).map(async (f) => decodeText(await f.text())));
+          const first = parsed[0];
+          if (parsed[1]) first.channels = { V1: { actions: parsed[1].actions || [] } };
+          this._vscript = normalise(first, $('vmode').value, Boolean(first.inverted));
+          this._vscriptName = files[0].name;
+        } else {
+          this._vscript = await this._getSaved($('vsrc').value);   // library scripts are already intensity
+          this._vscriptName = $('vsrc').value;
+        }
+        this._videoSend(true);
+      } catch (e) {
+        this._vscript = null;
+        this._toast('Could not load the script: ' + (e.message || e));
+      }
+      this._videoStatus();
+    }
+
+    _videoLevels() {
+      const video = this._el('video');
+      const s = this._vscript;
+      if (!s) return null;
+      const ms = video.currentTime * 1000 + Number(this._el('voff').value || 0);
+      const main = sampleAt(s.actions, ms) / 100;
+      const levels = [main];
+      if (this._device && this._device.dual) {
+        const v1 = s.channels && s.channels.V1 && s.channels.V1.actions;
+        levels.push(v1 && v1.length ? sampleAt(v1, ms) / 100 : main);
+      }
+      return levels.map((v) => Math.round(Math.min(1, Math.max(0, v)) * 100) / 100);
+    }
+
+    _videoSend(force) {
+      const video = this._el && this._el('video');
+      if (!this._vsyncTimer || !video || video.paused) { this._videoStatus(); return; }
+      const dev = this._device;
+      const levels = this._videoLevels();
+      if (!dev || !levels) return;
+      const now = performance.now();
+      const changed = !this._vlast || levels.some((v, i) => Math.abs(v - (this._vlast[i] ?? -1)) >= 0.01);
+      // Refresh unchanged levels too: ogg.live stops by itself if refreshes stop.
+      if (force || changed || now - this._vsentAt > 500) {
+        this._vlast = levels;
+        this._vsentAt = now;
+        this._hass.callService('ogg', 'live', { entity_id: dev.stop, levels, seconds: 1.5 })
+          .catch((e) => this._toast(e.message || String(e)));
+      }
+      this._videoStatus(levels);
+    }
+
+    _videoRun() {
+      if (this._vsyncTimer || !this._vscript) return;
+      if (this._live) { this._el('live').checked = false; this._setLive(false); }
+      this._vlast = null;
+      this._vsentAt = 0;
+      this._vsyncTimer = setInterval(() => this._videoSend(false), VIDEO_TICK_MS);
+      this._videoSend(true);
+    }
+
+    _videoHalt() {
+      if (!this._vsyncTimer) return;
+      clearInterval(this._vsyncTimer);
+      this._vsyncTimer = null;
+      this._vlast = null;
+      if (this._device) this._hass.callService('ogg', 'stop_script', { entity_id: this._device.stop }).catch(() => {});
+      this._videoStatus([0, 0]);
+    }
+
+    async _videoGo() {
+      const $ = this._el;
+      const video = $('video');
+      if (!this._vurl) { this._toast('Choose a video first'); return; }
+      if (!this._vscript) { this._toast('Choose a script first'); return; }
+      if (!this._device) { this._toast('No Ogg device to play on'); return; }
+      try {
+        if (video.ended) video.currentTime = 0;
+        await video.play();          // the play event starts the sync
+      } catch (e) { this._toast('The browser would not start the video: ' + (e.message || e)); }
+    }
+
+    _videoStatus(levels) {
+      if (!this._el) return;
+      const $ = this._el;
+      const video = $('video');
+      const dual = Boolean(this._device && this._device.dual);
+      $('vm2').hidden = !dual;
+      if (levels) {
+        $('vm1').firstElementChild.style.width = `${Math.round((levels[0] || 0) * 100)}%`;
+        $('vm2').firstElementChild.style.width = `${Math.round((levels[1] ?? levels[0] ?? 0) * 100)}%`;
+      }
+      const parts = [];
+      if (this._vscript) parts.push(`Script ${fmt(duration(this._vscript))}`);
+      if (this._vurl && Number.isFinite(video.duration)) parts.push(`video ${fmt(video.duration * 1000)}`);
+      if (this._vsyncTimer && levels) parts.push(`now ${levels.map((v) => Math.round(v * 100) + '%').join(' / ')}`);
+      else if (this._vurl && this._vscript) parts.push('ready');
+      $('vstat').textContent = parts.join(' · ');
+      $('vgo').disabled = !(this._vurl && this._vscript && this._device);
     }
 
     get _device() { return this._devices.find((d) => d.id === this._deviceId) || this._devices[0]; }
@@ -272,6 +456,7 @@
     _update() {
       if (!this._el || !this._hass) return;
       const $ = this._el;
+      this._fillVideoScripts();
       const sel = $('device');
       const key = JSON.stringify([this._rememberedLoaded, ...this._devices.map((d) => [d.id, d.name, this._online(d)])]);
       if (sel.dataset.key !== key) {
@@ -487,10 +672,25 @@
       } catch (e) { this._toast('Could not import: ' + (e.message || e)); }
     }
 
+    _fillVideoScripts() {
+      const sel = this._el('vsrc');
+      const savedState = this._studio && this._studio.saved && this._hass.states[this._studio.saved];
+      const names = ((savedState && savedState.attributes.options) || []).filter((n) => n && !/^\(.*\)$/.test(n));
+      const key = JSON.stringify(names);
+      if (sel.dataset.key === key) return;
+      const current = sel.value;
+      sel.replaceChildren(new Option('From a file on this device…', ''), ...names.map((n) => new Option(`Library: ${n}`, n)));
+      sel.dataset.key = key;
+      if ([...sel.options].some((o) => o.value === current)) sel.value = current;
+      this._el('vfilebox').hidden = sel.value !== '';
+    }
+
     _toast(text) { if (this._el) this._el('toast').textContent = text; }
 
     disconnectedCallback() {
       clearInterval(this._liveTimer); clearInterval(this._sampleTimer);
+      if (this._vsyncTimer) this._videoHalt();
+      if (this._vurl) { URL.revokeObjectURL(this._vurl); this._vurl = null; }
       if (this._recording || this._live) this._hass?.callService('ogg', 'stop_script', { entity_id: this._device?.stop }).catch(() => {});
     }
   }
