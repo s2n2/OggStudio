@@ -6,7 +6,7 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.2.0';
+  const VERSION = '0.2.1';
   const DEVICE_KEY = 'oggstudio_device';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
@@ -358,8 +358,7 @@
       if (force || changed || now - this._vsentAt > 500) {
         this._vlast = levels;
         this._vsentAt = now;
-        this._hass.callService('ogg', 'live', { entity_id: dev.stop, levels, seconds: 1.5 })
-          .catch((e) => this._toast(e.message || String(e)));
+        this._sendLive(dev, levels, 1.5);
       }
       this._videoStatus(levels);
     }
@@ -378,7 +377,7 @@
       clearInterval(this._vsyncTimer);
       this._vsyncTimer = null;
       this._vlast = null;
-      if (this._device) this._hass.callService('ogg', 'stop_script', { entity_id: this._device.stop }).catch(() => {});
+      if (this._device) this._quietStop(this._device);
       this._videoStatus([0, 0]);
     }
 
@@ -405,6 +404,7 @@
         $('vm2').firstElementChild.style.width = `${Math.round((levels[1] ?? levels[0] ?? 0) * 100)}%`;
       }
       const parts = [];
+      if (this._device && !this._online(this._device)) parts.push(`⚠ ${this._device.name} not connected`);
       if (this._vscript) parts.push(`Script ${fmt(duration(this._vscript))}`);
       if (this._vurl && Number.isFinite(video.duration)) parts.push(`video ${fmt(video.duration * 1000)}`);
       if (this._vsyncTimer && levels) parts.push(`now ${levels.map((v) => Math.round(v * 100) + '%').join(' / ')}`);
@@ -547,12 +547,12 @@
         const send = () => {
           const dev = this._device;
           if (!dev) return;
-          this._hass.callService('ogg', 'live', { entity_id: dev.stop, levels: this._levels(), seconds: 1.0 }).catch((e) => this._toast(e.message || String(e)));
+          this._sendLive(dev, this._levels(), 1.0);
         };
         send();
         this._liveTimer = setInterval(send, LIVE_MS);
       } else if (this._device) {
-        this._hass.callService('ogg', 'stop_script', { entity_id: this._device.stop }).catch(() => {});
+        this._quietStop(this._device);
       }
     }
 
@@ -685,13 +685,42 @@
       this._el('vfilebox').hidden = sel.value !== '';
     }
 
+    // Streamed live levels: never call while the device is offline, never let
+    // Home Assistant pop up an error per call (notifyOnError=false), and back
+    // off after a failure so one problem gives one message.
+    _sendLive(dev, levels, seconds) {
+      if (!this._online(dev)) {
+        this._toastOnce(`${dev.name} is not connected. Waiting for it to reconnect…`);
+        return;
+      }
+      const now = performance.now();
+      if (now < (this._liveBackoffUntil || 0)) return;
+      if (this._liveProblem) { this._liveProblem = null; this._toast(''); }
+      this._hass.callService('ogg', 'live', { entity_id: dev.stop, levels, seconds }, undefined, false)
+        .catch((e) => {
+          this._liveBackoffUntil = performance.now() + 3000;
+          this._toastOnce(`Could not control ${dev.name}: ${e.message || e}. Retrying…`);
+        });
+    }
+
+    _quietStop(dev) {
+      if (!dev || !this._hass) return;
+      this._hass.callService('ogg', 'stop_script', { entity_id: dev.stop }, undefined, false).catch(() => {});
+    }
+
+    _toastOnce(text) {
+      if (this._liveProblem === text) return;
+      this._liveProblem = text;
+      this._toast(text);
+    }
+
     _toast(text) { if (this._el) this._el('toast').textContent = text; }
 
     disconnectedCallback() {
       clearInterval(this._liveTimer); clearInterval(this._sampleTimer);
       if (this._vsyncTimer) this._videoHalt();
       if (this._vurl) { URL.revokeObjectURL(this._vurl); this._vurl = null; }
-      if (this._recording || this._live) this._hass?.callService('ogg', 'stop_script', { entity_id: this._device?.stop }).catch(() => {});
+      if (this._recording || this._live) this._quietStop(this._device);
     }
   }
 
