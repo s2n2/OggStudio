@@ -19,6 +19,29 @@ assert.deepStrictEqual(two.channels.V1.actions, [{ at: 0, pos: 30 }]);
 assert.strictEqual(normalise({ actions: [{ at: 0, pos: 20 }] }, 'position', true).actions[0].pos, 80);
 assert.throws(() => normalise({ actions: [] }, 'position', false));
 
+// Device choice: remembered > configured > first connected (never an old, offline device).
+{
+  const flat = src.replace(/\r\n/g, '\n');
+  const body = (name) => { const s = flat.indexOf(`    ${name}(`); assert.ok(s > 0, name); return flat.slice(flat.indexOf('{', s), flat.indexOf('\n    }\n', s) + 6); };
+  const card = { _hass: { states: { 'binary_sensor.old': { state: 'off' }, 'binary_sensor.sync': { state: 'on' } } }, _config: {} };
+  card._online = new Function('dev', body('_online'));
+  card._pickDevice = new Function(body('_pickDevice'));
+  card._devices = [
+    { id: 'a', name: 'Aardvark (old)', connected: 'binary_sensor.old' },
+    { id: 's', name: 'Sync 2', connected: 'binary_sensor.sync' },
+    { id: 'b', name: 'Bond', connected: 'binary_sensor.old' },
+  ];
+  assert.strictEqual(card._pickDevice(), 's', 'defaults to a connected device');
+  card._remembered = { id: 'b', name: 'Bond' };
+  assert.strictEqual(card._pickDevice(), 'b', 'remembered choice wins even while offline');
+  card._remembered = { id: 'gone', name: 'Sync 2' };
+  assert.strictEqual(card._pickDevice(), 's', 're-paired device found by name');
+  card._remembered = null; card._config = { device: 'Bond' };
+  assert.strictEqual(card._pickDevice(), 'b', 'configured device used when nothing remembered');
+  card._deviceId = 'a';
+  assert.strictEqual(card._pickDevice(), 'a', 'current selection kept');
+}
+
 (async () => {
   const script = { version: '1.0', actions: [{ at: 0, pos: 10 }, { at: 100, pos: 90 }] };
   const code = await encodeCode(script);

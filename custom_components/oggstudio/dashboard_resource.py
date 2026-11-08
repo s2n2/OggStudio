@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant
 _LOGGER = logging.getLogger(__name__)
 
 CARD_PATH = "/oggstudio/oggstudio-card.js"
-CARD_VERSION = "0.1.1"
+CARD_VERSION = "0.1.2"
 CARD_URL = f"{CARD_PATH}?v={CARD_VERSION}"
 CARD_FILE = Path(__file__).parent / "frontend" / "oggstudio-card.js"
 

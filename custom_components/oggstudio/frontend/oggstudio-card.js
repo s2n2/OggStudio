@@ -6,7 +6,8 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.1.1';
+  const VERSION = '0.1.2';
+  const DEVICE_KEY = 'oggstudio_device';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
   const LIVE_MS = 300;
@@ -76,6 +77,8 @@
       super();
       this.attachShadow({ mode: 'open' });
       this._devices = [];
+      this._remembered = null;
+      this._rememberedLoaded = false;
       this._take = null;
       this._recording = false;
       this._live = false;
@@ -93,6 +96,10 @@
     }
 
     async _loadRegistry() {
+      if (!this._rememberedLoaded && !this._loadingRemembered) {
+        this._loadingRemembered = true;
+        this._loadRemembered();
+      }
       try {
         const [entities, devices] = await Promise.all([
           this._hass.callWS({ type: 'config/entity_registry/list' }),
@@ -197,7 +204,11 @@
         </ha-card>`;
       const $ = (id) => this.shadowRoot.getElementById(id);
       this._el = $;
-      $('device').addEventListener('change', () => { this._deviceId = $('device').value; this._update(); });
+      $('device').addEventListener('change', () => {
+        this._deviceId = $('device').value;
+        this._rememberDevice(this._device);
+        this._update();
+      });
       this._vals = [0, 0];
       this._bindPad($('pad1'), 0);
       this._bindPad($('pad2'), 1);
@@ -220,17 +231,56 @@
 
     get _device() { return this._devices.find((d) => d.id === this._deviceId) || this._devices[0]; }
 
+    // Remember the chosen device per Home Assistant user (follows you across
+    // phones), with a per-browser fallback when user data is unavailable.
+    _rememberDevice(dev) {
+      if (!dev) return;
+      const value = { id: dev.id, name: dev.name };
+      try { localStorage.setItem(DEVICE_KEY, JSON.stringify(value)); } catch (_) { /* private mode */ }
+      this._remembered = value;
+      this._hass?.callWS({ type: 'frontend/set_user_data', key: DEVICE_KEY, value }).catch(() => {});
+    }
+
+    async _loadRemembered() {
+      try { this._remembered = JSON.parse(localStorage.getItem(DEVICE_KEY) || 'null'); } catch (_) { this._remembered = null; }
+      try {
+        const res = await this._hass.callWS({ type: 'frontend/get_user_data', key: DEVICE_KEY });
+        if (res && res.value && res.value.id) this._remembered = res.value;
+      } catch (_) { /* older HA or no permission: keep the browser copy */ }
+      this._rememberedLoaded = true;
+      this._update();
+    }
+
+    _online(dev) {
+      return Boolean(dev) && (!dev.connected || this._hass.states[dev.connected]?.state === 'on');
+    }
+
+    _pickDevice() {
+      const list = this._devices;
+      const known = (id) => list.find((d) => d.id === id);
+      if (this._deviceId && known(this._deviceId)) return this._deviceId;
+      const saved = this._remembered;
+      const savedDev = saved && (known(saved.id) || list.find((d) => d.name === saved.name));
+      if (savedDev) return savedDev.id;
+      const wanted = this._config && this._config.device;
+      const match = wanted && list.find((d) => d.stop === wanted || d.name === wanted);
+      if (match) return match.id;
+      const online = list.find((d) => this._online(d));
+      return (online || list[0] || {}).id;
+    }
+
     _update() {
       if (!this._el || !this._hass) return;
       const $ = this._el;
       const sel = $('device');
-      const key = JSON.stringify(this._devices.map((d) => [d.id, d.name]));
+      const key = JSON.stringify([this._rememberedLoaded, ...this._devices.map((d) => [d.id, d.name, this._online(d)])]);
       if (sel.dataset.key !== key) {
-        sel.replaceChildren(...this._devices.map((d) => new Option(d.name, d.id)));
+        // Connected devices first; ones Ogg can't reach are marked offline.
+        const ordered = [...this._devices].sort((a, b) => Number(this._online(b)) - Number(this._online(a)) || a.name.localeCompare(b.name));
+        sel.replaceChildren(...ordered.map((d) => new Option(this._online(d) ? d.name : `${d.name} (offline)`, d.id)));
         sel.dataset.key = key;
-        const wanted = this._config && this._config.device;
-        const match = wanted && this._devices.find((d) => d.stop === wanted || d.name === wanted);
-        this._deviceId = this._deviceId || (match ? match.id : this._devices[0] && this._devices[0].id);
+        // Wait for the remembered choice before falling back to a default.
+        if (this._rememberedLoaded) this._deviceId = this._pickDevice();
       }
       if (this._deviceId) sel.value = this._deviceId;
       const dev = this._device;
