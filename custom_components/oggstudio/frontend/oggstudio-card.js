@@ -6,13 +6,26 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.3.0';
+  const VERSION = '0.4.0';
   const DEVICE_KEY = 'oggstudio_device';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
   const LIVE_MS = 300;
   const VIDEO_TICK_MS = 100;
   const VIDEO_OFFSET_KEY = 'oggstudio_video_offset';
+  const PARTS = ['record', 'take', 'library', 'video', 'import'];
+  // One card class, several dashboard cards: each shows a subset of the parts.
+  const VARIANTS = {
+    'oggstudio-card': { name: 'OggStudio', sub: 'Record, import, replay and sync to video', parts: PARTS, size: 9,
+      description: 'Everything in one card: record, library, video sync and import.' },
+    'oggstudio-recorder-card': { name: 'OggStudio Recorder', sub: 'Draw a pattern with your finger and save it', parts: ['record', 'take'], size: 6,
+      description: 'Big touch pads to record (or just play live), then save the take.' },
+    'oggstudio-player-card': { name: 'OggStudio Player', sub: 'Play saved patterns and import scripts', parts: ['library', 'take', 'import'], size: 5,
+      description: 'Pick a saved pattern and play it; paste or load funscripts and share codes.' },
+    'oggstudio-video-card': { name: 'OggStudio Video', sub: 'Play a local video with its script, or record one', parts: ['video', 'take'], size: 7,
+      description: 'Sync a video on this device with a script, and record a funscript for it.' },
+  };
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
   const b64 = (buf) => {
     const bytes = new Uint8Array(buf); let s = '';
@@ -113,8 +126,15 @@
       this._vurl = null;
     }
 
+    static get variant() { return VARIANTS[TAG]; }
+    get _variant() { return this.constructor.variant; }
+    get _parts() {
+      const wanted = this._config && Array.isArray(this._config.sections) ? this._config.sections.filter((p) => PARTS.includes(p)) : [];
+      return wanted.length ? wanted : this._variant.parts;
+    }
+
     setConfig(config) { this._config = config || {}; this._render(); }
-    getCardSize() { return 9; }
+    getCardSize() { return this._variant.size; }
     static getStubConfig() { return {}; }
 
     set hass(hass) {
@@ -162,7 +182,8 @@
       this.shadowRoot.innerHTML = `
         <style>
           :host{--ink:#e8edff;--muted:#8f9ab8;--line:rgba(174,194,246,.16)}
-          ha-card{background:#0a1122;color:var(--ink);border-radius:22px;border:1px solid #293552;padding:16px;font-family:inherit}
+          ha-card{background:#0a1122;color:var(--ink);border-radius:22px;border:1px solid #293552;padding:16px;font-family:inherit;display:flex;flex-direction:column}
+          .toast{order:99}
           h2{margin:0 0 2px;font-size:20px;letter-spacing:-.02em} .sub{color:var(--muted);font-size:12px;margin-bottom:12px}
           section{border:1px solid var(--line);border-radius:16px;padding:12px;margin-top:10px;background:rgba(255,255,255,.035)}
           h3{margin:0 0 8px;font-size:13px;color:#cdd6f6;letter-spacing:.01em}
@@ -211,12 +232,12 @@
           button.vrec{flex:0 0 auto;min-height:40px;padding:0 14px;background:#5a2433;border-color:rgba(255,110,130,.5);color:#ffd2da}
           button.vrec.on{background:linear-gradient(110deg,#ff5c7a,#ff8aa0);color:#2a0710}
           .vrecinfo{flex:1;text-align:right;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
-          [hidden]{display:none!important}
+          [hidden],.off{display:none!important}
         </style>
         <ha-card>
-          <h2>OggStudio</h2><div class="sub">Record, import, replay and sync to video · v${VERSION}</div>
+          <h2>${esc(this._config.title || this._variant.name)}</h2><div class="sub">${esc(this._variant.sub)} · v${VERSION}</div>
           <label>Device</label><select id="device"></select>
-          <section>
+          <section data-part="record">
             <h3>Record</h3>
             <div class="pads" id="pads">
               <div class="pad" id="pad1" role="slider" tabindex="0" aria-label="Motor 1 level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="ticks"></div><div class="fill"></div><span class="lab">Motor 1</span><span class="pct">0%</span></div>
@@ -226,18 +247,18 @@
             <div class="row" style="margin-top:6px"><label class="check"><input id="live" type="checkbox"> Live pads</label><label class="check"><input id="spring" type="checkbox"> Drop to 0 when released</label></div>
             <div class="hint">Touch a pad and slide up or down: the level follows your finger. While recording, the pads drive the device live; tick "Live pads" to play with them without recording.</div>
           </section>
-          <section id="takebox" hidden>
+          <section id="takebox" data-part="take" hidden>
             <h3>Current take</h3><div class="take" id="takeinfo"></div>
             <div class="row"><button id="takeplay">▶ Play now</button><button id="takestop" class="stop">■ Stop</button><button id="takecode">Copy code</button><button id="takediscard">Discard</button></div>
             <label>Save as</label><div class="row"><input id="name" type="text" placeholder="Name"><button id="save" style="flex:0 0 auto">Save</button></div>
           </section>
-          <section>
+          <section data-part="library">
             <h3>Library</h3>
             <select id="saved"></select>
             <div class="row" style="margin-top:8px"><select id="speed"></select><label class="check"><input id="loop" type="checkbox"> Loop</label></div>
             <div class="row" style="margin-top:8px"><button id="play">▶ Play</button><button id="stop" class="stop">■ Stop</button><button id="code">Copy code</button><button id="delete">Delete</button></div>
           </section>
-          <section id="videobox">
+          <section id="videobox" data-part="video">
             <h3>Video sync</h3>
             <div class="hint" style="margin-top:0">The video plays from this phone or computer only. It is never uploaded to Home Assistant.</div>
             <label>Video</label><input id="vfile" type="file" accept="video/*">
@@ -257,7 +278,7 @@
             <div class="hint">Positive values send each moment slightly early to make up for Bluetooth delay. Pause, seek and playback speed all stay in sync.</div>
             <div class="hint">To make a script for this video: press ● Rec, play the video and drag the bars left and right. You can pause, scrub back and record a section again; the newer pass replaces it.</div>
           </section>
-          <section>
+          <section data-part="import">
             <h3>Import</h3>
             <textarea id="paste" placeholder="Paste a funscript, an ogg1: code, or JSON"></textarea>
             <div class="row" style="margin-top:6px"><input id="files" type="file" accept=".funscript,.json,application/json" multiple></div>
@@ -272,6 +293,11 @@
         </ha-card>`;
       const $ = (id) => this.shadowRoot.getElementById(id);
       this._el = $;
+      const parts = this._parts;
+      for (const sec of this.shadowRoot.querySelectorAll('[data-part]')) {
+        sec.classList.toggle('off', !parts.includes(sec.dataset.part));
+        sec.style.order = String(parts.indexOf(sec.dataset.part) + 1);   // sections follow the card's own order
+      }
       $('device').addEventListener('change', () => {
         this._deviceId = $('device').value;
         this._rememberDevice(this._device);
@@ -926,7 +952,11 @@
     }
   }
 
-  customElements.define(TAG, OggStudioCard);
   window.customCards = window.customCards || [];
-  window.customCards.push({ type: TAG, name: 'OggStudio', description: 'Record, import and replay patterns on Ogg devices.' });
+  for (const [tag, variant] of Object.entries(VARIANTS)) {
+    if (customElements.get(tag)) continue;
+    const cls = tag === TAG ? OggStudioCard : class extends OggStudioCard { static get variant() { return variant; } };
+    customElements.define(tag, cls);
+    window.customCards.push({ type: tag, name: variant.name, description: variant.description, preview: true });
+  }
 })();

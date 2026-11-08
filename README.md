@@ -14,6 +14,28 @@ Record, import, save and replay vibration patterns on devices controlled by
 Playback runs inside Ogg's own frame loop (Ogg 2.1+), so timing does not
 depend on the dashboard or network.
 
+## Cards
+
+Four cards come with OggStudio. Pick one that fits the dashboard, or use several:
+
+| Card | Type | Shows |
+|---|---|---|
+| OggStudio | `custom:oggstudio-card` | Everything: record, library, video sync, import |
+| OggStudio Recorder | `custom:oggstudio-recorder-card` | Big touch pads to record or play live, then save |
+| OggStudio Player | `custom:oggstudio-player-card` | Saved patterns with speed and loop, plus import |
+| OggStudio Video | `custom:oggstudio-video-card` | Video sync and recording a funscript for a video |
+
+Every card takes an optional `title`. The full card also takes `sections`, a list
+from `record`, `take`, `library`, `video` and `import`, to build your own mix:
+
+```yaml
+type: custom:oggstudio-card
+title: Bedroom studio
+sections: [library, video, take]
+```
+
+The device picked in one card is remembered for all of them.
+
 ## Video sync
 
 The card's **Video sync** panel plays a video alongside a script:
@@ -58,7 +80,7 @@ second becomes 100%. Vibration scripts use **Position → intensity**.
    `https://github.com/s2n2/OggStudio` (category Integration), install, restart.
 2. Settings → Devices & services → Add integration → **OggStudio**
    (Ogg 2.1 or later must be set up first).
-3. Add the **OggStudio** card to a dashboard (the card resource is registered
+3. Add one of the OggStudio cards (see [Cards](#cards)) to a dashboard (the card resource is registered
    automatically in storage-mode dashboards).
 
 ## Services

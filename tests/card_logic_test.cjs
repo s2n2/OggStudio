@@ -9,6 +9,18 @@ const grab = (start, end) => src.slice(src.indexOf(start), src.indexOf(end));
 // eslint-disable-next-line no-eval
 eval(grab('  const b64 =', '  // Stroke scripts') + grab('  function toIntensity', '  const duration ='));
 
+// Card variants: each tag shows a valid subset of the parts, and every part needs a take box to save into.
+{
+  const { PARTS, VARIANTS } = eval(grab('  const PARTS =', '  const esc =') + '; ({ PARTS, VARIANTS })');
+  assert.deepStrictEqual(Object.keys(VARIANTS), ['oggstudio-card', 'oggstudio-recorder-card', 'oggstudio-player-card', 'oggstudio-video-card']);
+  assert.deepStrictEqual(VARIANTS['oggstudio-card'].parts, PARTS);
+  for (const v of Object.values(VARIANTS)) {
+    assert.ok(v.parts.every((p) => PARTS.includes(p)), v.name);
+    assert.ok(v.parts.includes('take'), v.name + ' can save what it makes');
+  }
+  for (const p of PARTS) assert.ok(src.includes(`data-part="${p}"`), 'section for ' + p);
+}
+
 // Recording against a video: a later pass replaces earlier ones inside its span.
 {
   const first = [{ at: 0, pos: 10 }, { at: 1000, pos: 20 }, { at: 2000, pos: 30 }, { at: 3000, pos: 40 }, { at: 4000, pos: 0 }];
