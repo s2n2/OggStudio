@@ -1,0 +1,110 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up OggStudio",
+        "description": "Record, import, save and replay patterns on your Ogg devices. Requires Ogg 2.1 or later."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "OggStudio is already set up.",
+      "ogg_required": "Set up the Ogg integration first."
+    }
+  },
+  "entity": {
+    "select": {
+      "saved_script": {
+        "name": "Saved script"
+      },
+      "speed": {
+        "name": "Replay speed"
+      }
+    }
+  },
+  "services": {
+    "save": {
+      "name": "Save script",
+      "description": "Save a funscript under a name (overwrites a script with the same name).",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "Script name."
+        },
+        "script": {
+          "name": "Script",
+          "description": "Funscript object (pos 0-100 = intensity; optional channels.V1 for motor 2)."
+        }
+      }
+    },
+    "delete": {
+      "name": "Delete script",
+      "description": "Delete a saved script.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "Script name."
+        }
+      }
+    },
+    "rename": {
+      "name": "Rename script",
+      "description": "Rename a saved script.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "Current name."
+        },
+        "new_name": {
+          "name": "New name",
+          "description": "New name."
+        }
+      }
+    },
+    "get_script": {
+      "name": "Get script",
+      "description": "Return a saved script (for export).",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "Script name."
+        }
+      }
+    },
+    "play": {
+      "name": "Play script",
+      "description": "Play a saved script (or a given script) on an Ogg device.",
+      "fields": {
+        "entity_id": {
+          "name": "Device",
+          "description": "Any Ogg entity of the device."
+        },
+        "name": {
+          "name": "Name",
+          "description": "Saved script; defaults to the selected one."
+        },
+        "script": {
+          "name": "Script",
+          "description": "Play this funscript without saving it."
+        },
+        "speed": {
+          "name": "Speed",
+          "description": "0.5x-2x (default: the Replay speed setting)."
+        },
+        "loop": {
+          "name": "Loop",
+          "description": "Repeat until stopped."
+        }
+      }
+    },
+    "stop": {
+      "name": "Stop",
+      "description": "Stop playback on a device.",
+      "fields": {
+        "entity_id": {
+          "name": "Device",
+          "description": "Any Ogg entity of the device."
+        }
+      }
+    }
+  }
+}
