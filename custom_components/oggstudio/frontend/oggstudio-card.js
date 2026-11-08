@@ -6,7 +6,7 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.1.0';
+  const VERSION = '0.1.1';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
   const LIVE_MS = 300;
@@ -135,18 +135,27 @@
           select,input[type=text],textarea{width:100%;box-sizing:border-box;background:#18233d;color:var(--ink);border:1px solid #33415f;border-radius:10px;padding:8px;font:inherit;font-size:13px}
           textarea{min-height:60px;resize:vertical;font-family:monospace;font-size:11px}
           .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap} .row > *{flex:1}
-          button{border:1px solid rgba(118,200,239,.35);background:#24395a;color:#bef2ff;border-radius:11px;min-height:38px;padding:0 12px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+          button{border:1px solid rgba(118,200,239,.35);background:#24395a;color:#bef2ff;border-radius:12px;min-height:44px;padding:0 12px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
           button:disabled{opacity:.4;cursor:default}
-          button.rec{background:#5a2433;border-color:rgba(255,110,130,.5);color:#ffd2da}
+          button.rec{width:100%;min-height:56px;font-size:16px;background:#5a2433;border-color:rgba(255,110,130,.5);color:#ffd2da}
           button.rec.on{background:linear-gradient(110deg,#ff5c7a,#ff8aa0);color:#2a0710}
           button.stop{background:rgba(246,104,121,.08);border-color:rgba(246,104,121,.3);color:#e9adb7}
-          .slider{display:grid;grid-template-columns:60px 1fr 42px;gap:8px;align-items:center;margin:6px 0}
+          .pads{display:grid;grid-template-columns:1fr;gap:10px;margin:4px 0 10px}
+          .pads.dual{grid-template-columns:1fr 1fr}
+          .pad{position:relative;height:240px;border-radius:18px;border:1px solid #33415f;background:#141d33;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:ns-resize;outline:none}
+          .pad:focus-visible{box-shadow:0 0 0 3px rgba(103,224,200,.45)}
+          .pad .fill{position:absolute;left:0;right:0;bottom:0;height:0;background:linear-gradient(0deg,#2fbfa9,#67e0c8);transition:height .05s linear}
+          .pad.active{border-color:#67e0c8}
+          .pad .lab{position:absolute;top:10px;left:12px;font-size:12px;font-weight:700;color:#cdd6f6;mix-blend-mode:difference}
+          .pad .pct{position:absolute;bottom:12px;left:0;right:0;text-align:center;font-size:30px;font-weight:800;font-variant-numeric:tabular-nums;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.55)}
+          .pad .ticks{position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0 calc(25% - 1px),rgba(255,255,255,.07) calc(25% - 1px) 25%);pointer-events:none}
           input[type=range]{width:100%;accent-color:#67e0c8;height:28px}
           .val{font-variant-numeric:tabular-nums;text-align:right;color:#cdd6f6;font-size:12px}
           .take{font-size:12px;color:#cdd6f6;margin-bottom:6px}
           .hint{font-size:11px;color:var(--muted);margin-top:6px}
           .toast{min-height:16px;font-size:12px;color:#ffcf8a;margin-top:8px}
-          .check{display:flex;gap:6px;align-items:center;font-size:12px;color:#cdd6f6;flex:0 0 auto}
+          .check{display:flex;gap:8px;align-items:center;font-size:13px;color:#cdd6f6;flex:0 0 auto;min-height:36px}
+          .check input{width:20px;height:20px;accent-color:#67e0c8}
           [hidden]{display:none!important}
         </style>
         <ha-card>
@@ -154,10 +163,13 @@
           <label>Device</label><select id="device"></select>
           <section>
             <h3>Record</h3>
-            <div class="slider"><span>Motor 1</span><input id="m1" type="range" min="0" max="100" value="0"><span class="val" id="v1">0%</span></div>
-            <div class="slider" id="m2row" hidden><span>Motor 2</span><input id="m2" type="range" min="0" max="100" value="0"><span class="val" id="v2">0%</span></div>
-            <div class="row"><button id="rec" class="rec">● Record</button><label class="check"><input id="live" type="checkbox"> Live sliders</label><span class="val" id="timer"></span></div>
-            <div class="hint">While recording, the sliders drive the device live. Tick "Live sliders" to play with them without recording.</div>
+            <div class="pads" id="pads">
+              <div class="pad" id="pad1" role="slider" tabindex="0" aria-label="Motor 1 level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="ticks"></div><div class="fill"></div><span class="lab">Motor 1</span><span class="pct">0%</span></div>
+              <div class="pad" id="pad2" role="slider" tabindex="0" aria-label="Motor 2 level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><div class="ticks"></div><div class="fill"></div><span class="lab">Motor 2</span><span class="pct">0%</span></div>
+            </div>
+            <button id="rec" class="rec">● Record</button><div class="val" id="timer" style="text-align:center;margin-top:4px"></div>
+            <div class="row" style="margin-top:6px"><label class="check"><input id="live" type="checkbox"> Live pads</label><label class="check"><input id="spring" type="checkbox"> Drop to 0 when released</label></div>
+            <div class="hint">Touch a pad and slide up or down: the level follows your finger. While recording, the pads drive the device live; tick "Live pads" to play with them without recording.</div>
           </section>
           <section id="takebox" hidden>
             <h3>Current take</h3><div class="take" id="takeinfo"></div>
@@ -186,7 +198,9 @@
       const $ = (id) => this.shadowRoot.getElementById(id);
       this._el = $;
       $('device').addEventListener('change', () => { this._deviceId = $('device').value; this._update(); });
-      for (const n of ['1', '2']) $('m' + n).addEventListener('input', () => { $('v' + n).textContent = $('m' + n).value + '%'; });
+      this._vals = [0, 0];
+      this._bindPad($('pad1'), 0);
+      this._bindPad($('pad2'), 1);
       $('rec').addEventListener('click', () => (this._recording ? this._stopRecording() : this._startRecording()));
       $('live').addEventListener('change', () => this._setLive($('live').checked));
       $('takeplay').addEventListener('click', () => this._play(this._take));
@@ -221,7 +235,9 @@
       if (this._deviceId) sel.value = this._deviceId;
       const dev = this._device;
       const online = dev && (!dev.connected || this._hass.states[dev.connected]?.state === 'on');
-      $('m2row').hidden = !(dev && dev.dual);
+      const dual = Boolean(dev && dev.dual);
+      $('pad2').hidden = !dual;
+      $('pads').classList.toggle('dual', dual);
       for (const id of ['rec', 'takeplay', 'play']) $(id).disabled = !online;
       $('rec').textContent = this._recording ? '■ Stop recording' : '● Record';
       $('rec').classList.toggle('on', this._recording);
@@ -242,10 +258,49 @@
       if (speed && this.shadowRoot.activeElement !== $('speed')) $('speed').value = speed.state;
     }
 
+    _setPad(index, value) {
+      const pad = this._el('pad' + (index + 1));
+      const v = Math.round(Math.min(100, Math.max(0, value)));
+      this._vals[index] = v;
+      pad.querySelector('.fill').style.height = v + '%';
+      pad.querySelector('.pct').textContent = v + '%';
+      pad.setAttribute('aria-valuenow', String(v));
+    }
+
+    _bindPad(pad, index) {
+      let active = false;
+      const fromEvent = (event) => {
+        const rect = pad.getBoundingClientRect();
+        this._setPad(index, (1 - (event.clientY - rect.top) / rect.height) * 100);
+      };
+      pad.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        active = true;
+        pad.classList.add('active');
+        pad.setPointerCapture?.(event.pointerId);
+        fromEvent(event);
+      });
+      pad.addEventListener('pointermove', (event) => { if (active) fromEvent(event); });
+      const release = () => {
+        if (!active) return;
+        active = false;
+        pad.classList.remove('active');
+        if (this._el('spring').checked) this._setPad(index, 0);
+      };
+      for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) pad.addEventListener(type, release);
+      pad.addEventListener('contextmenu', (event) => event.preventDefault());
+      pad.addEventListener('keydown', (event) => {
+        const steps = { ArrowUp: 5, ArrowRight: 5, ArrowDown: -5, ArrowLeft: -5, PageUp: 20, PageDown: -20 };
+        if (event.key in steps) { this._setPad(index, this._vals[index] + steps[event.key]); event.preventDefault(); }
+        else if (event.key === 'Home') { this._setPad(index, 0); event.preventDefault(); }
+        else if (event.key === 'End') { this._setPad(index, 100); event.preventDefault(); }
+      });
+    }
+
     _levels() {
       const $ = this._el;
-      const levels = [Number($('m1').value) / 100];
-      if (this._device && this._device.dual) levels.push(Number($('m2').value) / 100);
+      const levels = [this._vals[0] / 100];
+      if (this._device && this._device.dual) levels.push(this._vals[1] / 100);
       return levels;
     }
 
@@ -297,7 +352,7 @@
       if (this._device && this._device.dual && this._samples[1].length) take.channels = { V1: { actions: this._samples[1] } };
       this._take = take.actions.length ? take : null;
       $('timer').textContent = '';
-      for (const n of ['1', '2']) { $('m' + n).value = 0; $('v' + n).textContent = '0%'; }
+      this._setPad(0, 0); this._setPad(1, 0);
       this._update();
     }
 
