@@ -19,13 +19,16 @@ from homeassistant.helpers.typing import ConfigType
 
 from .const import DOMAIN, OGG_DOMAIN, PLATFORMS, SPEEDS
 from .dashboard_resource import async_register_card
+from .convert import RUN_MODES, run_script
 from .library import Library, clean_script, script_info
 
 _LOGGER = logging.getLogger(__name__)
 
 type OggStudioConfigEntry = ConfigEntry[Library]
 
-SAVE_SCHEMA = vol.Schema({vol.Required("name"): cv.string, vol.Required("script"): dict})
+SAVE_SCHEMA = vol.Schema({vol.Required("name"): cv.string, vol.Required("script"): dict,
+                          vol.Optional("mode"): vol.In(RUN_MODES)})
+MODE_SCHEMA = vol.Schema({vol.Required("name"): cv.string, vol.Required("mode"): vol.In(RUN_MODES)})
 NAME_SCHEMA = vol.Schema({vol.Required("name"): cv.string})
 RENAME_SCHEMA = vol.Schema({vol.Required("name"): cv.string, vol.Required("new_name"): cv.string})
 PLAY_SCHEMA = vol.Schema(
@@ -35,6 +38,7 @@ PLAY_SCHEMA = vol.Schema(
         vol.Optional("script"): dict,
         vol.Optional("speed"): vol.Any(vol.In(SPEEDS), vol.All(vol.Coerce(float), vol.Range(min=0.25, max=4))),
         vol.Optional("loop", default=False): cv.boolean,
+        vol.Optional("mode"): vol.In(RUN_MODES),
     }
 )
 STOP_SCHEMA = vol.Schema({vol.Required("entity_id"): cv.entity_id})
@@ -54,8 +58,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         _LOGGER.exception("Could not register the OggStudio card")
 
     async def save(call: ServiceCall) -> ServiceResponse:
-        name = _library(hass).save(call.data["name"], call.data["script"])
+        name = _library(hass).save(call.data["name"], call.data["script"], call.data.get("mode"))
         return {"name": name}
+
+    async def set_mode(call: ServiceCall) -> None:
+        _library(hass).set_mode(call.data["name"], call.data["mode"])
 
     async def delete(call: ServiceCall) -> None:
         _library(hass).delete(call.data["name"])
@@ -69,14 +76,20 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     async def play(call: ServiceCall) -> None:
         library = _library(hass)
+        name: str | None = None
         if "script" in call.data:
             script = clean_script(call.data["script"])
-        elif "name" in call.data:
-            script = library.get(call.data["name"])
-        elif library.selected:
-            script = library.get(library.selected)
+        elif "name" in call.data or library.selected:
+            name = call.data.get("name") or library.selected
+            script = library.get(name)
         else:
             raise HomeAssistantError("Choose a saved script or give a script to play")
+        # Stroke scripts are converted with the run mode given, else the one
+        # last used for that script; giving one remembers it.
+        mode = call.data.get("mode")
+        if name and mode:
+            library.set_mode(name, mode)
+        script = run_script(script, mode or (library.mode(name) if name else None))
         speed: Any = call.data.get("speed", library.speed)
         factor = float(str(speed).rstrip("x"))
         await hass.services.async_call(
@@ -95,6 +108,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.services.async_register(DOMAIN, "save", save, schema=SAVE_SCHEMA,
                                  supports_response=SupportsResponse.OPTIONAL)
     hass.services.async_register(DOMAIN, "delete", delete, schema=NAME_SCHEMA)
+    hass.services.async_register(DOMAIN, "set_mode", set_mode, schema=MODE_SCHEMA)
     hass.services.async_register(DOMAIN, "rename", rename, schema=RENAME_SCHEMA)
     hass.services.async_register(DOMAIN, "get_script", get_script, schema=NAME_SCHEMA,
                                  supports_response=SupportsResponse.ONLY)

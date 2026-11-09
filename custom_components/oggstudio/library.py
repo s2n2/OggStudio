@@ -12,6 +12,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, MAX_NAME_LENGTH, MAX_SCRIPTS, SPEEDS, STORAGE_VERSION
+from .convert import RUN_MODES, is_stroke
 
 MAX_ACTIONS = 200_000
 MAX_MS = 6 * 60 * 60 * 1000
@@ -63,7 +64,7 @@ def script_info(script: dict[str, Any]) -> dict[str, Any]:
     first = script["actions"] or [{"at": 0}]
     duration = max(first[-1]["at"], second[-1]["at"])
     return {"duration_ms": duration, "motors": 2 if "channels" in script else 1,
-            "actions": len(script["actions"])}
+            "actions": len(script["actions"]), "kind": "stroke" if is_stroke(script) else "vibration"}
 
 
 class Library:
@@ -87,6 +88,8 @@ class Library:
                         "script": clean_script(record.get("script")),
                         "saved": record.get("saved"),
                     }
+                    if record.get("mode") in RUN_MODES:
+                        self.scripts[name]["mode"] = record["mode"]
                 except (HomeAssistantError, AttributeError):
                     continue
         if data.get("speed") in SPEEDS:
@@ -117,13 +120,15 @@ class Library:
             raise HomeAssistantError(f"Names can be at most {MAX_NAME_LENGTH} characters")
         return name
 
-    def save(self, name: Any, script: Any) -> str:
+    def save(self, name: Any, script: Any, mode: str | None = None) -> str:
         name = self._name(name)
         if name not in self.scripts and len(self.scripts) >= MAX_SCRIPTS:
             raise HomeAssistantError("The library is full; delete some scripts first")
         clean = clean_script(script)
         clean.setdefault("metadata", {})["title"] = name
         self.scripts[name] = {"script": clean, "saved": dt_util.utcnow().isoformat()}
+        if mode in RUN_MODES and is_stroke(clean):
+            self.scripts[name]["mode"] = mode
         self.selected = name
         self._save()
         self._notify()
@@ -156,6 +161,24 @@ class Library:
         if name not in self.scripts:
             raise HomeAssistantError("No saved script has that name")
         return self.scripts[name]["script"]
+
+    def mode(self, name: str) -> str | None:
+        """Run mode last used for a saved stroke script."""
+        record = self.scripts.get(name)
+        return record.get("mode") if record else None
+
+    def set_mode(self, name: Any, mode: str) -> None:
+        name = self._name(name)
+        record = self.scripts.get(name)
+        if record is None:
+            raise HomeAssistantError("No saved script has that name")
+        if mode not in RUN_MODES:
+            raise HomeAssistantError("Unknown run mode")
+        if not is_stroke(record["script"]) or record.get("mode") == mode:
+            return
+        record["mode"] = mode
+        self._save()
+        self._notify()
 
     def select(self, name: str) -> None:
         if name in self.scripts:

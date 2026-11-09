@@ -2,6 +2,11 @@ save:
   fields:
     name: {required: true, selector: {text: {}}}
     script: {required: true, selector: {object: {}}}
+    mode: {required: false, selector: {select: {options: ["speed", "position", "combo", "down", "up"]}}}
+set_mode:
+  fields:
+    name: {required: true, selector: {text: {}}}
+    mode: {required: true, selector: {select: {options: ["speed", "position", "combo", "down", "up"]}}}
 delete:
   fields:
     name: {required: true, selector: {text: {}}}
@@ -19,6 +24,7 @@ play:
     script: {required: false, selector: {object: {}}}
     speed: {required: false, selector: {select: {options: ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"]}}}
     loop: {required: false, default: false, selector: {boolean: {}}}
+    mode: {required: false, selector: {select: {options: ["speed", "position", "combo", "down", "up"]}}}
 stop:
   fields:
     entity_id: {required: true, selector: {entity: {integration: ogg}}}

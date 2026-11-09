@@ -7,13 +7,15 @@ global.window = globalThis;
 const src = fs.readFileSync(path.join(__dirname, '../custom_components/oggstudio/frontend/oggstudio-card.js'), 'utf8');
 const grab = (start, end) => src.slice(src.indexOf(start), src.indexOf(end));
 // eslint-disable-next-line no-eval
-eval(grab('  const b64 =', '  // Stroke scripts') + grab('  function toIntensity', '  const duration ='));
+const { isStroke, STROKE_SPEEDS, STROKE_LIMITS_RESET } = eval(grab('  const b64 =', '  // Run modes:') + grab('  // Run modes:', '  const duration =')
+  + '; globalThis.toIntensity = toIntensity; ({ isStroke, STROKE_SPEEDS, STROKE_LIMITS_RESET })');
 
 // Card variants: each tag shows a valid subset of the parts, and every part needs a take box to save into.
 {
   const { PARTS, VARIANTS } = eval(grab('  const PARTS =', '  const esc =') + '; ({ PARTS, VARIANTS })');
-  assert.deepStrictEqual(Object.keys(VARIANTS), ['oggstudio-card', 'oggstudio-recorder-card', 'oggstudio-player-card', 'oggstudio-video-card']);
-  assert.deepStrictEqual(VARIANTS['oggstudio-card'].parts, PARTS);
+  assert.deepStrictEqual(Object.keys(VARIANTS), ['oggstudio-card', 'oggstudio-recorder-card', 'oggstudio-player-card', 'oggstudio-video-card', 'oggstudio-stroke-card']);
+  assert.deepStrictEqual(VARIANTS['oggstudio-card'].parts, PARTS.filter((p) => p !== 'stroke'), 'the full card stays as it was; the stroke recorder is its own card');
+  assert.deepStrictEqual(VARIANTS['oggstudio-stroke-card'].parts, ['stroke', 'take']);
   for (const v of Object.values(VARIANTS)) {
     assert.ok(v.parts.every((p) => PARTS.includes(p)), v.name);
     assert.ok(v.parts.includes('take'), v.name + ' can save what it makes');
@@ -50,7 +52,7 @@ eval(grab('  const b64 =', '  // Stroke scripts') + grab('  function toIntensity
   const btn = (pressed) => ({ pressed, value: pressed ? 1 : 0 });
   const pad = (pressed = [], axes = [0, 0, 0, 0]) => ({ buttons: Array.from({ length: 17 }, (_, i) => btn(pressed.includes(i))), axes });
   const keys = new Set();
-  const { GP_DEFAULT_MAP, GP_SPEEDS, GP_ACTIONS, gpDescribe, gpPressed, gpRaw } = eval(grab('  // Game controller.', '  const duration =') + '; ({ GP_DEFAULT_MAP, GP_SPEEDS, GP_ACTIONS, gpDescribe, gpPressed, gpRaw })');
+  const { GP_DEFAULT_MAP, GP_SPEEDS, GP_ACTIONS, gpDescribe, gpPressed, gpRaw, ST_ACTIONS, ST_DEFAULT_MAP, GP_PROFILES } = eval(grab('  // Game controller.', '  const duration =') + '; ({ GP_DEFAULT_MAP, GP_SPEEDS, GP_ACTIONS, gpDescribe, gpPressed, gpRaw, ST_ACTIONS, ST_DEFAULT_MAP, GP_PROFILES })');
   // Standard D-pad buttons, an analog stick (proportional, with dead zone) and keyboard mode.
   assert.strictEqual(gpRead(GP_DEFAULT_MAP, pad([12]), keys).up, 1);
   assert.strictEqual(gpRead(GP_DEFAULT_MAP, pad([0]), keys).rec, 1);
@@ -130,18 +132,90 @@ eval(grab('  const b64 =', '  // Stroke scripts') + grab('  function toIntensity
   assert.strictEqual(gpTargetFor(['record', 'take', 'library', 'video', 'import'], false), 'record');
   assert.strictEqual(gpTargetFor(['video', 'take'], false), null);
   assert.strictEqual(gpTargetFor(['library', 'take', 'import'], true), null);
+  assert.strictEqual(gpTargetFor(['stroke', 'take'], false), 'stroke');
+  // Stroke profile: its own actions and defaults, built the same way.
+  const smap = gpBuildMap({ rec: [{ b: 5 }], fast: [{ a: 9, v: 0.71 }] }, ST_DEFAULT_MAP);
+  assert.deepStrictEqual(Object.keys(smap), ST_ACTIONS);
+  assert.deepStrictEqual(smap.fast, [{ a: 9, v: 0.71 }, { k: 'ArrowRight' }]);
+  assert.deepStrictEqual(smap.rec, [{ b: 5 }, { k: 'Enter' }, { k: 'MediaPlayPause' }]);
+  assert.strictEqual(gpRead(smap, pad([], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0.71]), keys).fast, 1);
+  assert.strictEqual(gpRead(ST_DEFAULT_MAP, pad([1]), keys).reset, 1);
+  assert.deepStrictEqual(Object.keys(gpRead(ST_DEFAULT_MAP, null, keys)), ST_ACTIONS);
+  assert.deepStrictEqual(GP_PROFILES.stroke.hold, ST_ACTIONS.filter((a) => a !== 'rec'));
+  assert.notStrictEqual(GP_PROFILES.stroke.mapKey, GP_PROFILES.level.mapKey, 'each card type learns its own controls');
   assert.ok(src.includes('id="gpon"') && src.includes('id="gplearnbtn"'), 'controller bar in the card');
 }
 
 const stroke = [{ at: 0, pos: 0 }, { at: 250, pos: 100 }, { at: 500, pos: 0 }, { at: 1500, pos: 50 }];
+const flat = (acts) => acts.map((a) => `${a.at}:${a.pos}`).join(' ');
 assert.deepStrictEqual(toIntensity(stroke, 'position').map((a) => a.pos), [0, 100, 0, 50]);
-// 100 units in 0.25 s = full speed; 50 units in 1 s = 12.5%.
-assert.deepStrictEqual(toIntensity(stroke, 'speed').map((a) => a.pos), [100, 100, 13, 0]);
+// 100 units in 0.25 s = full speed; 50 units in 1 s = 12.5%. Each move holds its level.
+assert.strictEqual(flat(toIntensity(stroke, 'speed')), '0:100 249:100 250:100 499:100 500:13 1499:13 1500:0');
+// Downstrokes only: the up moves are silent, and the reverse.
+assert.strictEqual(flat(toIntensity(stroke, 'down')), '0:0 249:0 250:100 499:100 500:0 1499:0 1500:0');
+assert.strictEqual(flat(toIntensity(stroke, 'up')), '0:100 249:100 250:0 499:0 500:13 1499:13 1500:0');
+// Combined: speed first, position fills 35% of the headroom; full speed stays 100.
+assert.strictEqual(moveIntensity('combo', 0, 100, 250), 100);
+assert.strictEqual(moveIntensity('combo', 100, 100, 1000), 35, 'a hold at the top still registers');
+assert.strictEqual(moveIntensity('combo', 0, 0, 1000), 0);
+assert.strictEqual(Math.round(moveIntensity('combo', 40, 60, 1000)), 22, '5% speed + 35% of 95 headroom at 50');
+assert.ok(moveIntensity('combo', 80, 90, 500) > moveIntensity('combo', 10, 20, 500), 'higher = stronger at the same speed');
+assert.ok(moveIntensity('combo', 10, 30, 200) > moveIntensity('combo', 10, 30, 800), 'faster = stronger at the same place');
+// Live: velocity in %/s; 400 %/s = full.
+assert.strictEqual(liveIntensity('speed', 50, -400), 100);
+assert.strictEqual(liveIntensity('down', 50, 200), 0);
+assert.strictEqual(liveIntensity('down', 50, -200), 50);
+assert.strictEqual(liveIntensity('position', 70, 0), 70);
 
-const two = normalise({ actions: stroke, channels: { V1: { actions: [{ at: 0, pos: 30 }] } } }, 'position', false);
+// Import: stroke scripts are kept as positions and marked; vibration as they are.
+const two = normalise({ actions: stroke, channels: { V1: { actions: [{ at: 0, pos: 30 }] } } }, 'vibration', false);
 assert.deepStrictEqual(two.channels.V1.actions, [{ at: 0, pos: 30 }]);
-assert.strictEqual(normalise({ actions: [{ at: 0, pos: 20 }] }, 'position', true).actions[0].pos, 80);
-assert.throws(() => normalise({ actions: [] }, 'position', false));
+assert.strictEqual(normalise({ actions: [{ at: 0, pos: 20 }] }, 'vibration', true).actions[0].pos, 80);
+assert.throws(() => normalise({ actions: [] }, 'vibration', false));
+assert.strictEqual(normalise({ actions: stroke }, 'auto', false).metadata.type, 'stroke', 'unmarked funscripts are stroke scripts');
+assert.strictEqual(normalise({ actions: stroke, metadata: { type: 'vibration' } }, 'auto', false).metadata.type, 'vibration');
+const raw = normalise({ actions: stroke }, 'stroke', false);
+assert.ok(isStroke(raw) && flat(raw.actions) === flat(stroke));
+const run = runScript(raw, 'speed');
+assert.strictEqual(run.metadata.type, 'vibration');
+assert.strictEqual(flat(run.actions), flat(toIntensity(stroke, 'speed')));
+assert.strictEqual(runScript(two, 'speed'), two, 'vibration scripts play unchanged');
+
+// Stroke recorder: holding a speed strokes between the limits.
+{
+  // Medium: a 900 ms cycle. Range 20-80 = 60 up + 60 down per cycle.
+  let r = strokeStep(20, 1, 20, 80, 900, 90);
+  assert.ok(Math.abs(r.pos - 32) < 1e-9 && r.dir === 1 && !r.turns.length, '120 units per 900 ms');
+  r = strokeStep(75, 1, 20, 80, 900, 75);   // 10 units: 5 up to the limit, 5 back down
+  assert.ok(Math.abs(r.pos - 75) < 1e-9 && r.dir === -1);
+  assert.strictEqual(r.turns.length, 1);
+  assert.strictEqual(r.turns[0].pos, 80);
+  assert.ok(Math.abs(r.turns[0].frac - 0.5) < 1e-9, 'turn half way through the tick');
+  // A whole cycle comes back to the start, turning at both limits.
+  let pos = 20, dir = 1; const turns = [];
+  for (let i = 0; i < 45; i++) { r = strokeStep(pos, dir, 20, 80, 900, 20); pos = r.pos; dir = r.dir; turns.push(...r.turns.map((t) => t.pos)); }
+  assert.ok(Math.abs(pos - 20) < 1e-6, 'one cycle = back to the start');
+  assert.deepStrictEqual(turns.slice(0, 1), [80]);
+  // Outside the range it heads in (at full-range speed) and then strokes.
+  r = strokeStep(95, 1, 20, 80, 900, 45);
+  assert.ok(r.pos < 95 && r.dir === -1, 'above the range: comes down');
+  r = strokeStep(5, -1, 20, 80, 900, 20);
+  assert.ok(r.pos > 5 && r.dir === 1);
+  assert.deepStrictEqual(strokeStep(50, 1, 50, 50, 900, 20), { pos: 50, dir: 1, turns: [] }, 'no range: no movement');
+  assert.strictEqual(strokeStep(20, 1, 20, 80, 900, 5000).pos, strokeStep(20, 1, 20, 80, 900, 100).pos, 'a long timer gap moves at most 100 ms worth');
+  assert.ok(STROKE_SPEEDS.every((x, i) => i === 0 || x.cycle < STROKE_SPEEDS[i - 1].cycle), 'slow, medium, fast');
+
+  // Set limit pairs with the limit set before it; the first replaces the nearer end.
+  let lim = { ...STROKE_LIMITS_RESET };
+  lim = strokeSetLimit(lim, 30);
+  assert.deepStrictEqual(lim, { lower: 30, upper: 100, last: 'lower' });
+  lim = strokeSetLimit(lim, 70.4);
+  assert.deepStrictEqual(lim, { lower: 30, upper: 70, last: 'upper' }, 'above the other limit = upper');
+  assert.deepStrictEqual(strokeSetLimit(lim, 50), { lower: 50, upper: 70, last: 'lower' }, 'below the last limit = lower');
+  assert.deepStrictEqual(strokeSetLimit({ lower: 30, upper: 70, last: 'lower' }, 10), { lower: 10, upper: 30, last: 'lower' });
+  assert.deepStrictEqual(strokeSetLimit({ ...STROKE_LIMITS_RESET }, 80), { lower: 0, upper: 80, last: 'upper' });
+  assert.strictEqual(strokeSetLimit(lim, 71), null, 'on top of the other limit: refused');
+}
 
 // Device choice: remembered > configured > first connected (never an old, offline device).
 {
@@ -149,6 +223,7 @@ assert.throws(() => normalise({ actions: [] }, 'position', false));
   const body = (name) => { const s = flat.indexOf(`    ${name}(`); assert.ok(s > 0, name); return flat.slice(flat.indexOf('{', s), flat.indexOf('\n    }\n', s) + 6); };
   const card = { _hass: { states: { 'binary_sensor.old': { state: 'off' }, 'binary_sensor.sync': { state: 'on' } } }, _config: {} };
   card._online = new Function('dev', body('_online'));
+  global.NO_DEVICE = 'none';
   card._pickDevice = new Function(body('_pickDevice'));
   card._devices = [
     { id: 'a', name: 'Aardvark (old)', connected: 'binary_sensor.old' },
@@ -164,6 +239,14 @@ assert.throws(() => normalise({ actions: [] }, 'position', false));
   assert.strictEqual(card._pickDevice(), 'b', 'configured device used when nothing remembered');
   card._deviceId = 'a';
   assert.strictEqual(card._pickDevice(), 'a', 'current selection kept');
+  card._deviceId = 'none';
+  assert.strictEqual(card._pickDevice(), 'none', 'No device stays chosen');
+  card._deviceId = null; card._remembered = { id: 'none', name: '' };
+  assert.strictEqual(card._pickDevice(), 'none', 'No device is remembered');
+  card._remembered = null; card._config = {}; card._devices = []; card._deviceId = null;
+  assert.strictEqual(card._pickDevice(), undefined, 'device list not loaded yet: wait');
+  card._registryDone = true;
+  assert.strictEqual(card._pickDevice(), 'none', 'no Ogg devices at all: No device');
 }
 
 (async () => {

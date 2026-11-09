@@ -32,7 +32,11 @@
         },
         "script": {
           "name": "Script",
-          "description": "Funscript object (pos 0-100 = intensity; optional channels.V1 for motor 2)."
+          "description": "Funscript object (pos 0-100; optional channels.V1 for motor 2). metadata.type 'stroke' marks a stroke script, converted to vibration when played."
+        },
+        "mode": {
+          "name": "Run mode",
+          "description": "Stroke scripts only: how position becomes vibration. speed, position, combo (speed plus position), down (speed on downstrokes only) or up (upstrokes only)."
         }
       }
     },
@@ -93,6 +97,10 @@
         "loop": {
           "name": "Loop",
           "description": "Repeat until stopped."
+        },
+        "mode": {
+          "name": "Run mode",
+          "description": "Stroke scripts only: how position becomes vibration. speed, position, combo (speed plus position), down (speed on downstrokes only) or up (upstrokes only). Defaults to the mode last used for the script; giving one remembers it."
         }
       }
     },
@@ -103,6 +111,20 @@
         "entity_id": {
           "name": "Device",
           "description": "Any Ogg entity of the device."
+        }
+      }
+    },
+    "set_mode": {
+      "name": "Set run mode",
+      "description": "Remember how a saved stroke script is converted to vibration.",
+      "fields": {
+        "name": {
+          "name": "Name",
+          "description": "Script name."
+        },
+        "mode": {
+          "name": "Run mode",
+          "description": "Stroke scripts only: how position becomes vibration. speed, position, combo (speed plus position), down (speed on downstrokes only) or up (upstrokes only)."
         }
       }
     }

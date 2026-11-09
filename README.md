@@ -12,13 +12,19 @@ Record, import, save and replay vibration patterns on devices controlled by
 * **Share codes**: `ogg1:` + base64 of the gzipped funscript, easy to paste.
 * **Game controller**: record with a Bluetooth gamepad. Up and down set the level,
   left and right set how fast it moves, and a button starts and stops recording.
+* **Stroke recorder** (for a Handy or other stroker): set an upper and lower limit, hold
+  Slow, Medium or Fast to stroke between them, and record a stroke funscript.
+* **Run modes**: stroke scripts are kept as they are and turned into vibration when they
+  play, by speed, position, both, or downstrokes or upstrokes only. Each saved script
+  remembers the mode last used for it.
+* **No device**: record without a device connected.
 
 Playback runs inside Ogg's own frame loop (Ogg 2.1+), so timing does not
 depend on the dashboard or network.
 
 ## Cards
 
-Four cards come with OggStudio. Pick one that fits the dashboard, or use several:
+Five cards come with OggStudio. Pick one that fits the dashboard, or use several:
 
 | Card | Type | Shows |
 |---|---|---|
@@ -26,9 +32,11 @@ Four cards come with OggStudio. Pick one that fits the dashboard, or use several
 | OggStudio Recorder | `custom:oggstudio-recorder-card` | Big touch pads to record or play live, then save |
 | OggStudio Player | `custom:oggstudio-player-card` | Saved patterns with speed and loop, plus import |
 | OggStudio Video | `custom:oggstudio-video-card` | Video sync and recording a funscript for a video |
+| OggStudio Stroke | `custom:oggstudio-stroke-card` | Stroke recorder with limits and three speeds (for a Handy) |
 
 Every card takes an optional `title`. The full card also takes `sections`, a list
-from `record`, `take`, `library`, `video` and `import`, to build your own mix:
+from `record`, `stroke`, `take`, `library`, `video` and `import`, to build your own mix
+(the full card leaves out `stroke` unless you list it):
 
 ```yaml
 type: custom:oggstudio-card
@@ -36,7 +44,45 @@ title: Bedroom studio
 sections: [library, video, take]
 ```
 
-The device picked in one card is remembered for all of them.
+The device picked in one card is remembered for all of them. Pick **No device (record only)**
+to record without a device: nothing is sent, and the take can be saved or downloaded as usual.
+
+## Stroke recorder
+
+The **OggStudio Stroke** card records stroke funscripts, the kind a Handy plays, with two
+limits and three speeds:
+
+* **Hold Slow, Medium or Fast** to stroke between the lower and upper limit. Let go and it
+  stops where it is. Each speed is a fixed time per stroke (1.6 s, 0.9 s or 0.5 s up and
+  down), whatever the range. You can also drag the bar to move by hand.
+* **Set limit** makes the current position a limit. Above the other limit, it becomes the
+  upper one; below it, the lower one. The first limit after a reset replaces whichever end
+  is nearer. The limits are remembered per browser.
+* **Reset limits** goes back to the full range, 0 to 100.
+* **Record** starts and stops. The take is a stroke script: save it, copy its code, or press
+  **Download** for a `.funscript` to load onto a Handy.
+
+With a vibration device chosen, the device follows live using the mode picked under the bar.
+
+On a game controller the defaults are: D-pad left, down and right for slow, medium and fast,
+D-pad up or X for Set limit, B for Reset limits and A for Record. **Learn controls** on this
+card maps its own buttons, separately from the other cards.
+
+## Run modes
+
+Stroke scripts (recorded on the Stroke card, or imported) are kept as positions and turned into
+vibration when they play. The Take, Library and Video panels have a **Run as** choice:
+
+| Mode | Vibration |
+|---|---|
+| Speed | How fast it moves: a full stroke in a quarter second = 100% |
+| Position | The position itself (also how vibration scripts play) |
+| Speed + position | Speed sets the strength, and position adds up to 35% of what is left above it. Fast strokes still reach 100%, while slow strokes and holds high up still register |
+| Speed, downstrokes only | Speed while moving down, nothing on the way up: one pulse per stroke |
+| Speed, upstrokes only | The same on the way up |
+
+Each saved stroke script remembers the mode it was last played with, from the card or from
+`oggstudio.play` with `mode`. Vibration scripts play as they are.
 
 ## Video sync
 
@@ -62,8 +108,8 @@ scrub back and record a section again: the newer pass replaces what was there. W
 done, press **Use as take** (it replays with the video straight away, and you can save it to
 the library) or **Download .funscript** (saved with the video's name).
 
-Stroke funscripts made for videos are converted using movement speed, so faster strokes give
-stronger vibration. Choose "Vibration script" for scripts that already describe intensity.
+Script files are run with the **Run as** mode: Speed suits stroke funscripts made for videos,
+Position suits scripts that already describe intensity.
 
 ## Game controller
 
@@ -122,9 +168,9 @@ JSON: `{"version": "1.0", "actions": [{"at": ms, "pos": 0-100}]}`. For
 vibration, `pos` is the intensity. A second motor is stored as
 `"channels": {"V1": {"actions": [...]}}` (TCode channel naming).
 
-When importing stroke scripts (for example ones made for synced videos),
-choose **Movement speed → intensity**: a full 0-100 stroke in a quarter
-second becomes 100%. Vibration scripts use **Position → intensity**.
+Stroke scripts are marked with `"metadata": {"type": "stroke"}` and kept as positions; see
+[Run modes](#run-modes). When importing, **Automatic** treats a script as a stroke script unless
+it says it is a vibration script.
 
 ## Install
 
@@ -139,7 +185,8 @@ second becomes 100%. Vibration scripts use **Position → intensity**.
 
 | Service | What it does |
 |---|---|
-| `oggstudio.play` | Play a saved script (`name`) or a given `script` on an Ogg device (`entity_id`), with `speed` and `loop` |
+| `oggstudio.play` | Play a saved script (`name`) or a given `script` on an Ogg device (`entity_id`), with `speed`, `loop` and, for stroke scripts, `mode` (speed, position, combo, down, up) |
+| `oggstudio.set_mode` | Remember the run mode for a saved stroke script |
 | `oggstudio.stop` | Stop playback on a device |
 | `oggstudio.save` / `delete` / `rename` | Manage the library |
 | `oggstudio.get_script` | Return a saved script (for export) |
