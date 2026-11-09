@@ -158,6 +158,15 @@ assert.deepStrictEqual(toIntensity(stroke, 'position').map((a) => a.pos), [0, 10
 // Position above 50%: 50 and below = off, 75 = half power, 100 = full.
 assert.deepStrictEqual(toIntensity([{ at: 0, pos: 30 }, { at: 1, pos: 50 }, { at: 2, pos: 75 }, { at: 3, pos: 100 }], 'upper').map((a) => a.pos), [0, 0, 50, 100]);
 assert.strictEqual(liveIntensity('upper', 75, 0), 50);
+// File names: ".vib.funscript" marks a vibration track.
+{
+  const { fileKind, fileTitle } = eval(grab('  const VIB_FILE =', '  // Speed of a move as intensity') + '; ({ fileKind, fileTitle })');
+  assert.strictEqual(fileKind('Clip.vib.funscript', 'auto'), 'vibration');
+  assert.strictEqual(fileKind('Clip.funscript', 'auto'), 'auto');
+  assert.strictEqual(fileKind('Clip.vib.funscript', 'stroke'), 'stroke', 'an explicit choice wins');
+  assert.strictEqual(fileTitle('Clip.vib.funscript'), 'Clip');
+  assert.strictEqual(fileTitle('Clip.funscript'), 'Clip');
+}
 // 100 units in 0.25 s = full speed; 50 units in 1 s = 12.5%. Each move holds its level.
 assert.strictEqual(flat(toIntensity(stroke, 'speed')), '0:100 249:100 250:100 499:100 500:13 1499:13 1500:0');
 // Downstrokes only: the up moves are silent, and the reverse.

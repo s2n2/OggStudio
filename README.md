@@ -69,17 +69,18 @@ library's speed and Loop. Automations can still play inside Ogg's own frame loop
 
 ## Devices
 
-Under the Record button (at the top on cards without one), the **Devices** box lists up to two
-outputs, used for everything on the card. Each can be a
+At the top of every card, the **Devices** box lists up to two outputs and how each one follows.
+It is used for everything on the card: recording (Vibrate or Stroke), Replay, the take and
+library Play buttons, and video. Each can be a
 device, one motor of a two-motor device, or a stroker, so you can mix: two motors of one toy,
 two toys, or a stroker and a vibrator. Pick **No device (record only)** to record without one.
 
 * **Vibrate recorder:** choosing a second output adds a second pad, and the take gets two tracks
   (the second is played on motor 2).
-* **Stroke recorder, and any stroke script being played** (Replay, library, take or video,
-  in either view): each output has its own follow type: a vibrator by one of the
-  [Run modes](#run-modes), a stroker by position (**Stroker**). A saved script's remembered
-  run mode is used for the first output.
+* **How each follows** applies to everything: a vibrator by one of the [Run modes](#run-modes)
+  (Position passes levels straight through, as before), a stroker by position (**Stroker**).
+  In the Vibrate recorder the pads show what you draw and each device gets it mapped its own
+  way. A saved stroke script's remembered run mode is used for the first output.
 
 The choices are remembered per browser.
 
@@ -239,7 +240,9 @@ JSON: `{"version": "1.0", "actions": [{"at": ms, "pos": 0-100}]}`. For
 vibration, `pos` is the intensity. A second motor is stored as
 `"channels": {"V1": {"actions": [...]}}` (TCode channel naming).
 
-Stroke scripts are marked with `"metadata": {"type": "stroke"}` and kept as positions; see
+Downloads follow the usual funscript naming: a vibration script is saved as `name.vib.funscript`
+and a stroke script as `name.funscript`. On import, **Automatic** treats a `.vib.funscript`
+file as vibration. Stroke scripts are also marked with `"metadata": {"type": "stroke"}` and kept as positions; see
 [Run modes](#run-modes). When importing, **Automatic** treats a script as a stroke script unless
 it says it is a vibration script.
 

@@ -6,11 +6,11 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.9.1';
+  const VERSION = '0.10.0';
   const DEVICE_KEY = 'oggstudio_device';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
-  const LIVE_MS = 300;
+  const LIVE_MS = 100;
   const VIDEO_TICK_MS = 100;
   const VIDEO_OFFSET_KEY = 'oggstudio_video_offset';
   const PARTS = ['record', 'stroke', 'take', 'library', 'video', 'import'];
@@ -74,6 +74,11 @@
   const RUN_MODE_DEFAULT = 'speed';
   const runModeOptions = () => Object.entries(RUN_MODES).map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
   const isStroke = (script) => Boolean(script && script.metadata && script.metadata.type === 'stroke');
+  // File names: the funscript convention for a vibration track is "name.vib.funscript"
+  // (stroke: plain "name.funscript"), so the type survives outside OggStudio.
+  const VIB_FILE = /\.vib\.(funscript|json)$/i;
+  const fileKind = (name, kind) => (kind === 'auto' && VIB_FILE.test(name || '') ? 'vibration' : kind);
+  const fileTitle = (name) => String(name || '').replace(/(\.vib)?\.(funscript|json)$/i, '');
 
   // Speed of a move as intensity: a full 0-100 stroke in a quarter second
   // (400 %/s) = 100%.
@@ -543,14 +548,13 @@
       const rec = parts.includes('stroke') ? 'stroke' : parts.includes('record') ? 'record' : null;
       const slot = rec && this.shadowRoot.querySelector(`[data-part="${rec}"] .outslot`);
       const box = this._el('outbox');
-      (slot || this._el('outhome')).appendChild(box);
+      this._el('outhome').appendChild(box);      // the devices box always sits at the top
       const cslot = rec && this.shadowRoot.querySelector(`[data-part="${rec}"] .ctlslot`);
       (cslot || this._el('outhome')).insertBefore(this._el('ctlbox'), cslot ? null : box);
       // The controller tick box sits with the recorder's live toggles (or under the video's Rec).
       const gslot = this.shadowRoot.querySelector(`[data-part="${rec || 'video'}"]:not(.off) .gpslot`);
       if (gslot) gslot.appendChild(this._el('gp'));
-      // No recorder on this card: the devices box sits at the top on its own.
-      this._el('outhome').classList.toggle('off', Boolean(rec));
+      this._el('outhome').classList.remove('off');
       this._el('outhome').style.order = '0';
       this._el('ctlbox').hidden = !rec;
       if (this._rp) this._ctlShow();
@@ -711,7 +715,8 @@
           .rpinfo{font-size:12px;color:#cdd6f6;font-variant-numeric:tabular-nums;margin-top:4px;text-align:center;min-height:16px}
           .rprow{display:grid;grid-template-columns:1fr 84px auto;gap:8px;align-items:center;margin-top:6px}
           .rprow select{min-height:44px}
-          .outbox{margin-top:10px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.025)}
+          #outhome{padding:0;border:0;background:none}
+          .outbox{margin-top:0;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.025)}
           .outbox > label{margin-top:0}
           .outrow{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;align-items:center}
           .outrow.solo{grid-template-columns:1fr}
@@ -760,7 +765,6 @@
             <button id="strec" class="rec" type="button">● Record</button><div class="stinfo" id="stinfo"></div>
             <div class="outslot"></div>
             <div class="stlive"><label class="check" id="stliverow"><input id="stlive" type="checkbox"> Devices follow without recording</label><span class="gpslot"></span></div>
-            <div class="hint">Hold Slow, Medium or Fast to stroke between the limits at that speed (% of the device's top speed); let go to stop where you are. Drag a speed's slider to change it. ⟳ Latch keeps a speed running without holding. While latched, holding another speed overrides it until you let go; holding the latched speed's own button unlatches it; latching another speed switches. Touching the position bar overrides a latch only while your finger is down. Drag the range on the left: a limit to move it, the middle to move the whole range. Touch the position bar to move there: it travels at the last speed you used until it reaches your finger, then follows it. Or stop at a spot and press Set limit: above the other limit it becomes the upper one, below it the lower one. Reset limits goes back to the full range. Each device below follows in its own way: a vibrator by speed, position or both, a stroker by position.</div>
           </section>
           <section data-part="record">
             <div class="rechead"><h3>Record</h3><div class="kind" role="group" aria-label="Recording type"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div></div>
@@ -786,7 +790,7 @@
               </div>
             </div>
             <div class="outbox" id="outbox">
-              <label>Devices (record, replay, library and video all use these)</label>
+              <label>Devices, and how each follows (used for recording, replay, library and video)</label>
               <div class="outrow" data-row="0"><select class="outt" aria-label="First device"></select><select class="outm" aria-label="How the first device follows"></select><button class="outtake" type="button" hidden>Take control</button></div>
               <div class="outrow" data-row="1"><select class="outt" aria-label="Second device"></select><select class="outm" aria-label="How the second device follows"></select><button class="outtake" type="button" hidden>Take control</button></div>
               <div class="outnote" id="outnote"></div>
@@ -1613,8 +1617,7 @@
           const parsed = await Promise.all(files.slice(0, 2).map(async (f) => decodeText(await f.text())));
           const first = parsed[0];
           if (parsed[1]) first.channels = { V1: { actions: parsed[1].actions || [] } };
-          // A file is run with the chosen mode (Position for vibration scripts).
-          this._vraw = normalise(first, 'stroke', Boolean(first.inverted));
+          this._vraw = normalise(first, fileKind(files[0].name, 'auto'), Boolean(first.inverted));
           this._vscriptName = files[0].name;
         } else if ($('vsrc').value === TAKE_SRC) {
           if (!this._take) { this._vscript = null; this._videoStatus(); return; }
@@ -1682,13 +1685,20 @@
         if (st && st.drag === null && this._stSpeed() === null) { st.pos = value; this._stShow(); }
       } else {
         const held = this._vrec || this._hbActive;
-        const vals = held ? [this._hvals[0], this._hvals[0]] : this._mapScript(this._vraw || { actions: [] }, ms, this._vconvs || (this._vconvs = {}));
+        if (held) {
+          // The slider, mapped per device like the pads.
+          const h = this._hvals[0];
+          for (const i of [0, 1]) if (!this._padActive || !this._padActive[i]) this._setPad(i, h);
+          this._outApply([0, 1].map((i) => (i && !this._twoPads ? null : this._mapLive(i, h, this._vVel))), 0.6);
+          return;
+        }
+        const vals = this._mapScript(this._vraw || { actions: [] }, ms, this._vconvs || (this._vconvs = {}));
         for (const i of [0, 1]) if (!this._padActive || !this._padActive[i]) this._setPad(i, vals[i]);
         const out = [0, 1].map((i) => {
           if (i && !this._twoPads) return null;
           const p = parseTarget(this._outTargetValue(i));
           if (p && p.motor === 'l') {
-            const next = script && nextAction(this._vraw.actions, ms);
+            const next = this._vraw && nextAction(this._vraw.actions, ms);
             return next ? { goal: next.pos, dur: (next.at - ms) / (video.playbackRate || 1) } : { goal: this._vals[i], dur: 150 };
           }
           return this._vals[i];
@@ -2064,7 +2074,7 @@
       clearInterval(this._liveTimer);
       this._liveTimer = null;
       if (on || this._recording) {
-        const send = () => this._outApply([this._vals[0], this._twoPads ? this._vals[1] : null], 1.0);
+        const send = () => this._padOut();
         send();
         this._liveTimer = setInterval(send, LIVE_MS);
       } else {
@@ -2153,7 +2163,7 @@
         const parsed = await Promise.all(files.slice(0, 2).map(async (f) => decodeText(await f.text())));
         const first = parsed[0];
         if (parsed[1]) first.channels = { V1: { actions: parsed[1].actions || [] } };
-        this._rpLoad(normalise(first, 'auto', Boolean(first.inverted)), files[0].name.replace(/\.(funscript|json)$/i, ''), null);
+        this._rpLoad(normalise(first, fileKind(files[0].name, 'auto'), Boolean(first.inverted)), fileTitle(files[0].name), null);
       } catch (e) { this._toast('Could not read the file: ' + (e.message || e)); }
       this._el('rpfile').value = '';
     }
@@ -2174,19 +2184,47 @@
     // Each output's value for a script at ms (vibrate view): a stroke script
     // is mapped per device by its follow type; a vibration script plays as
     // it is (its second track to the second output).
+    // Each output's value for a script at ms: its track (the second output
+    // takes a second track if there is one) mapped by that output's way of
+    // following. Position (and a stroker) passes it straight through.
     _mapScript(raw, ms, cache) {
-      const stroke = isStroke(raw);
       return [0, 1].map((i) => {
-        if (!stroke) {
-          const v1 = i && raw.channels && raw.channels.V1 && raw.channels.V1.actions;
-          return sampleAt(v1 && v1.length ? v1 : raw.actions, ms);
-        }
+        const v1 = i && raw.channels && raw.channels.V1 && raw.channels.V1.actions;
+        const second = Boolean(v1 && v1.length);
+        const track = second ? v1 : raw.actions;
         const p = parseTarget(this._outTargetValue(i));
         const m = this._outs[i].m;
-        if (m === FOLLOW_STROKER || (p && p.motor === 'l')) return sampleAt(raw.actions, ms);
-        if (!cache[m]) cache[m] = runScript(raw, m);
-        return sampleAt(cache[m].actions, ms);
+        if (m === FOLLOW_STROKER || m === 'position' || (p && p.motor === 'l')) return sampleAt(track, ms);
+        const key = `${second ? 1 : 0}:${m}`;
+        if (!cache[key]) cache[key] = toIntensity(track, m);
+        return sampleAt(cache[key], ms);
       });
+    }
+
+    // A live value (pad, slider) mapped by an output's way of following.
+    _mapLive(i, value, vel) {
+      const p = parseTarget(this._outTargetValue(i));
+      const m = this._outs[i].m;
+      if (p && p.motor === 'l') return { goal: value, dur: 150 };
+      if (m === FOLLOW_STROKER || m === 'position') return value;
+      return Math.min(100, Math.max(0, liveIntensity(m, value, vel)));
+    }
+
+    // Pads (vibrate recorder, live): each output follows its pad its own way.
+    _padOut() {
+      const now = performance.now();
+      this._padVel = this._padVel || [0, 0];
+      this._padPrev = this._padPrev || [null, null];
+      const out = [0, 1].map((i) => {
+        if (i && !this._twoPads) return null;
+        const v = this._vals[i];
+        const prev = this._padPrev[i];
+        const dt = prev ? now - prev.at : 0;
+        this._padVel[i] = this._padVel[i] * 0.6 + (dt > 0 ? (v - prev.v) / dt * 1000 : 0) * 0.4;
+        this._padPrev[i] = { v, at: now };
+        return this._mapLive(i, v, this._padVel[i]);
+      });
+      this._outApply(out, 1.0);
     }
 
     // A saved stroke script's remembered run mode becomes the first device's follow type.
@@ -2263,7 +2301,6 @@
       } else if (rp.raw) {
         // Vibrate view: each device (and its pad) follows its own way; a
         // vibration script plays as it is (second track on pad 2).
-        const stroke = isStroke(rp.raw);
         const targets = [0, 1].map((i) => parseTarget(this._outTargetValue(i)));
         const vals = this._mapScript(rp.raw, rp.t, rp.convs || (rp.convs = {}));
         for (const i of [0, 1]) if (!this._padActive || !this._padActive[i]) this._setPad(i, vals[i]);
@@ -2271,7 +2308,7 @@
           if (now - rp.outAt >= 100) rp.outAt = now;
           const out = [0, 1].map((i) => {
             if (i && !this._twoPads) return null;
-            if (targets[i] && targets[i].motor === 'l') return (this._padActive && this._padActive[i]) || !stroke ? { goal: this._vals[i], dur: 150 } : (this._rpGoal() || { goal: this._vals[i], dur: 150 });
+            if (targets[i] && targets[i].motor === 'l') return (this._padActive && this._padActive[i]) ? { goal: this._vals[i], dur: 150 } : (this._rpGoal() || { goal: this._vals[i], dur: 150 });
             return this._vals[i];
           });
           this._outApply(out, 0.6);
@@ -2302,7 +2339,7 @@
       try { saved = JSON.parse(localStorage.getItem(OUT_KEY) || 'null'); } catch (_) { /* private mode */ }
       const t = saved && Array.isArray(saved.t) ? saved.t : [];
       const m = saved && Array.isArray(saved.m) ? saved.m : [];
-      this._outs = [0, 1].map((i) => ({ t: typeof t[i] === 'string' ? t[i] : (i ? 'off' : null), m: typeof m[i] === 'string' ? m[i] : RUN_MODE_DEFAULT }));
+      this._outs = [0, 1].map((i) => ({ t: typeof t[i] === 'string' ? t[i] : (i ? 'off' : null), m: typeof m[i] === 'string' ? m[i] : 'position' }));
       for (const row of this.shadowRoot.querySelectorAll('.outrow')) {
         const i = Number(row.dataset.row);
         row.querySelector('.outt').addEventListener('change', (e) => { this._outSwitch(i, { t: e.target.value }); });
@@ -2469,10 +2506,8 @@
         const take = row.querySelector('.outtake');
         take.hidden = !owner;
         if (owner) take.textContent = `Take control (${owner.label || 'in use'})`;
-        // Follow types apply in the stroke view, and when a stroke script replays in the vibrate view.
-        const mapping = stroke || (this._rp && this._rp.raw && isStroke(this._rp.raw) && (this._ctl === 'replay' || this._rp.playing))
-          || Boolean(this._vraw && isStroke(this._vraw));
-        msel.hidden = !mapping || !p || Boolean(owner);
+        // How it follows applies to everything played or recorded; not for "no second device".
+        msel.hidden = value === 'off' || Boolean(owner);
         row.classList.toggle('solo', msel.hidden);
         row.classList.toggle('take', Boolean(owner));
       }
@@ -2572,7 +2607,8 @@
       const blob = new Blob([JSON.stringify(script)], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `${String(name).replace(/[\\/:*?"<>|]+/g, '_')}.funscript`;
+      const base = String(name).replace(/[\\/:*?"<>|]+/g, '_').replace(/(\.vib)?(\.funscript)?$/i, '');
+      a.download = `${base}${isStroke(script) ? '' : '.vib'}.funscript`;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     }
@@ -2615,8 +2651,8 @@
           const parsed = await Promise.all(files.slice(0, 2).map(async (f) => decodeText(await f.text())));
           const first = parsed[0];
           if (parsed[1]) first.channels = { V1: { actions: parsed[1].actions || [] } };
-          if (!first.metadata || !first.metadata.title) first.metadata = { ...(first.metadata || {}), title: files[0].name.replace(/\.(funscript|json)$/i, '') };
-          script = normalise(first, mode, inverted);
+          if (!first.metadata || !first.metadata.title) first.metadata = { ...(first.metadata || {}), title: fileTitle(files[0].name) };
+          script = normalise(first, fileKind(files[0].name, mode), inverted);
         } else if ($('paste').value.trim()) {
           script = normalise(await decodeText($('paste').value), mode, inverted);
         } else { this._toast('Paste a script or choose a file first'); return; }
