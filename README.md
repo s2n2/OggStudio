@@ -191,31 +191,36 @@ The card's **Video sync** panel plays a video alongside a script:
    toy one track per motor), the current take, or a script from your OggStudio library.
 3. Press **Go**.
 
-The video stays on your device unless you cast it. The browser plays it straight from the
-local file. While the video plays, the card reads the video's position about ten times a
-second and sends the matching level with `ogg.live`. Pausing, seeking and changing playback
-speed stay in sync, and pausing stops the toy. **Sync offset** (remembered per browser) sends
-each moment slightly early to make up for Bluetooth delay.
+The video stays on your device: the browser plays it straight from the local file, and
+nothing is stored on Home Assistant, even when casting. While the video plays, the card reads
+the video's position about ten times a second and sends the matching level with `ogg.live`.
+Pausing, seeking and changing playback speed stay in sync, and pausing stops the toy.
+**Sync offset** (remembered per browser) sends each moment slightly early to make up for
+Bluetooth delay.
 
 ### Casting the video
 
 A Chromecast or TV fetches what it plays, so it can't play a file that only exists in your
 browser. That's why Chrome's own cast fails on local videos, and the Home Assistant app has no
-browser cast at all. **📺 Cast** goes through Home Assistant instead:
+browser cast at all. **📺 Cast** has Home Assistant relay the video instead, in memory only:
 
 1. Press **📺 Cast** and pick a TV. The list shows media players from the Google Cast, DLNA,
    Kodi and Apple TV integrations.
-2. The card uploads the video to Home Assistant in 8 MB pieces; the button shows the
-   progress. An interrupted upload resumes, and casting the same file again doesn't upload
-   it again. Videos are stored in the media folder under `oggstudio/` (or
-   `config/oggstudio_videos/`), and only the last 3 are kept.
-3. Home Assistant tells the TV to play it from a signed link, starting where your video was.
+2. The card opens a private link on Home Assistant, and Home Assistant tells the TV to play it
+   (starting where your video was).
+3. Whenever the TV asks for part of the video, Home Assistant asks the card, which reads that
+   part from your file and sends it back, and Home Assistant passes it straight to the TV.
+   Nothing is written to disk.
 
-The video in the card keeps running muted, following where the TV says it is, and the devices
-sync to it as usual. Play, pause and seek in the card are sent to the TV, and pausing with
-the TV's remote pauses the card and the devices. **■ Stop** stops the TV too; the 📺 menu can
-stop casting or switch TVs. Chromecasts play MP4 (H.264/AAC) and WebM; other formats may
-not start. If the TV runs a little ahead of or behind the toy, adjust **Sync offset**.
+The link ends when you stop casting, close the card, or the card loses its connection, so
+**keep the screen on while casting** (the card asks the browser to keep it awake). The video
+in the card keeps running muted, following where the TV says it is, and the devices sync to
+it as usual. Play, pause and seek in the card are sent to the TV, and pausing with the TV's
+remote pauses the card and the devices. **■ Stop** stops the TV too; the 📺 menu can stop
+casting or switch TVs. Chromecasts play MP4 (H.264/AAC) and WebM; other formats may not start.
+If the TV runs a little ahead of or behind the toy, adjust **Sync offset**.
+
+Updating from 0.13.0, which stored cast videos, deletes those stored videos.
 
 ### Making a script for a video
 

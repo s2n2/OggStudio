@@ -6,7 +6,7 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.13.0';
+  const VERSION = '0.13.1';
   const DEVICE_KEY = 'oggstudio_device';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
@@ -14,7 +14,6 @@
   const VIDEO_TICK_MS = 100;
   // Casting goes through Home Assistant: these integrations can play a video URL.
   const CAST_PLATFORMS = ['cast', 'dlna_dmr', 'kodi', 'apple_tv'];
-  const CAST_CHUNK = 8 * 1024 * 1024;
   const CAST_DRIFT = 0.4;          // s: re-align the video here when the TV is further off
   const CAST_GRACE = 3500;         // ms after a command from here before the TV's state is followed again
   const VIDEO_OFFSET_KEY = 'oggstudio_video_offset';
@@ -1401,7 +1400,7 @@
           </section>
           <section id="videobox" data-part="video">
             <h3>Video sync</h3>
-            <div class="hint" style="margin-top:0">The video plays from this phone or computer. Only 📺 Cast uploads it to Home Assistant, so a TV can play it (the last 3 are kept).</div>
+            <div class="hint" style="margin-top:0">The video plays from this phone or computer. 📺 Cast streams it to a TV through Home Assistant while you watch; nothing is saved there. Keep this screen on while casting.</div>
             <label>Video</label><input id="vfile" type="file" accept="video/*">
             <label>Script</label><select id="vsrc"></select>
             <div id="vfilebox"><input id="vscriptfile" type="file" accept=".funscript,.json,application/json" multiple style="margin-top:6px"></div>
@@ -2213,10 +2212,11 @@
 
     // Casting. A TV fetches what it plays, so a video that only exists in this
     // browser cannot be cast directly (Chrome's own cast refuses it, and the
-    // Home Assistant app has no cast at all). Instead the video is uploaded to
-    // Home Assistant in chunks (resumed if interrupted; the same file is not
-    // sent twice) and the TV's media player (Google Cast, DLNA, ...) plays it
-    // from there. The video here stays the clock: muted, it follows where the
+    // Home Assistant app has no cast at all). Instead Home Assistant relays it,
+    // in memory only: the TV's media player (Google Cast, DLNA, ...) is given a
+    // private link, and each part of the video the TV asks for is read from the
+    // local file here and passed on. Nothing is stored; the link ends with the
+    // cast. The video here stays the clock: muted, it follows where the
     // TV says it is, and the devices sync to it as usual. Play, pause and seek
     // here are sent to the TV; pausing on the TV pauses here too.
     _bindCast() {
@@ -2267,31 +2267,43 @@
       $('castpop').hidden = false;
     }
 
-    // Upload the chosen file (or what is missing of it); returns its URL on Home Assistant.
-    async _castUpload(file, cast) {
-      const base = `/api/oggstudio/video?name=${encodeURIComponent(file.name)}&size=${file.size}`;
-      const call = async (offset, body) => {
-        for (let attempt = 0; ; attempt += 1) {
-          try {
-            const r = await this._hass.fetchWithAuth(body ? `${base}&offset=${offset}` : base, body ? { method: 'POST', body } : {});
-            if (!r.ok) throw new Error(`Home Assistant said ${r.status}: ${(await r.text()).slice(0, 120)}`);
-            return await r.json();
-          } catch (e) {
-            if (attempt >= 2 || cast.cancelled) throw e;
-            await new Promise((ok) => setTimeout(ok, 1000 * (attempt + 1)));
-          }
-        }
+    // Open the relay: Home Assistant asks for blocks of the file, this answers them.
+    async _castRelay(file, cast) {
+      let ready;
+      const link = new Promise((ok, fail) => { ready = ok; setTimeout(() => fail(new Error('Home Assistant did not open the link (update OggStudio?)')), 10000); });
+      const answer = async (req, start, length) => {
+        try {
+          const body = await file.slice(start, start + length).arrayBuffer();
+          if (this._cast !== cast) return;
+          const r = await this._hass.fetchWithAuth(`/api/oggstudio/relay_data/${cast.relay}/${req}`, { method: 'POST', body });
+          if (r.ok) { cast.sent = (cast.sent || 0) + length; this._castShowSoon(); }
+        } catch (_) { /* the TV asks again */ }
       };
-      let st = await call(0, null);
-      while (!st.done) {
-        if (cast.cancelled) throw new Error('cancelled');
-        const end = Math.min(file.size, st.received + CAST_CHUNK);
-        st = await call(st.received, file.slice(st.received, end));
-        cast.pct = st.received / file.size;
-        this._castShow();
+      cast.unsub = await this._hass.connection.subscribeMessage((m) => {
+        if (m.ready) { cast.relay = m.id; ready(m.url); } else if (m.req !== undefined) answer(m.req, m.start, m.length);
+      }, { type: 'oggstudio/relay', name: file.name, size: file.size, mime: file.type || 'video/mp4' }, { resubscribe: false });
+      if (this._cast !== cast) { cast.unsub(); throw new Error('cancelled'); }
+      return link;
+    }
+
+    _castShowSoon() {
+      if (this._castShowTimer) return;
+      this._castShowTimer = setTimeout(() => { this._castShowTimer = null; this._castShow(); }, 500);
+    }
+
+    // Keep the screen on while casting: the video streams from this device.
+    async _castWake(on) {
+      try {
+        if (!on) { if (this._wake) await this._wake.release(); this._wake = null; return; }
+        if (navigator.wakeLock && !this._wake && document.visibilityState === 'visible') {
+          this._wake = await navigator.wakeLock.request('screen');
+          this._wake.addEventListener('release', () => { this._wake = null; });
+        }
+      } catch (_) { /* not allowed here */ }
+      if (!this._wakeBound) {
+        this._wakeBound = true;
+        document.addEventListener('visibilitychange', () => { if (this._cast) this._castWake(true); });
       }
-      cast.file = st.file;
-      return st.url;
     }
 
     async _castStart(entity) {
@@ -2300,15 +2312,15 @@
       if (!file) { this._toast('Choose a video first'); return; }
       if (this._cast) this._castEnd(this._cast.entity !== entity);
       const video = this._el('video');
-      const cast = { entity, phase: 'upload', pct: 0, startAt: video.currentTime || 0, since: performance.now() };
+      const cast = { entity, phase: 'starting', startAt: video.currentTime || 0, since: performance.now() };
       this._cast = cast;
       this._castShow();
       try {
-        const url = await this._castUpload(file, cast);
+        const url = await this._castRelay(file, cast);
         if (this._cast !== cast) return;
-        cast.phase = 'starting';
+        cast.file = cast.relay;               // the TV's media id carries the relay id
         cast.since = performance.now();
-        this._castShow();
+        this._castWake(true);
         this._castWasMuted = video.muted;
         video.muted = true;                   // the sound comes from the TV
         this._castQuiet('pause');
@@ -2318,13 +2330,11 @@
         if (!this._castTimer) this._castTimer = setInterval(() => this._castSync(), 250);
       } catch (e) {
         if (this._cast !== cast) return;
-        this._cast = null;
-        this._castShow();
-        if (!cast.cancelled) this._toast('Could not cast: ' + ((e && e.message) || e));
+        this._castEnd(false, cast.cancelled ? undefined : 'Could not cast: ' + ((e && e.message) || e));
       }
     }
 
-    // Stop casting (and the TV, if asked).
+    // Stop casting (and the TV, if asked). The link to the video ends here.
     _castEnd(stopTv, message) {
       const cast = this._cast;
       if (!cast) return;
@@ -2332,9 +2342,11 @@
       this._cast = null;
       clearInterval(this._castTimer);
       this._castTimer = null;
+      if (cast.unsub) { try { cast.unsub(); } catch (_) { /* connection gone */ } }
+      this._castWake(false);
       const video = this._el && this._el('video');
       if (video && this._castWasMuted !== undefined) { video.muted = this._castWasMuted; this._castWasMuted = undefined; }
-      if (stopTv && cast.phase !== 'upload' && this._hass) this._hass.callService('media_player', 'media_stop', { entity_id: cast.entity }, undefined, false).catch(() => {});
+      if (stopTv && cast.relay && this._hass) this._hass.callService('media_player', 'media_stop', { entity_id: cast.entity }, undefined, false).catch(() => {});
       this._toast(message || 'Casting stopped.');
       this._castShow();
     }
@@ -2388,7 +2400,7 @@
 
     _castSync() {
       const cast = this._cast;
-      if (!cast || cast.phase === 'upload' || !this._el) return;
+      if (!cast || !cast.relay || !this._el) return;
       const st = this._hass.states[cast.entity];
       const video = this._el('video');
       if (!st) return;
@@ -2436,7 +2448,7 @@
       if (!this._el) return;
       const btn = this._el('vcast');
       const cast = this._cast;
-      const text = !cast ? '📺 Cast' : cast.phase === 'upload' ? `📺 ${Math.round((cast.pct || 0) * 100)}%` : cast.phase === 'starting' ? '📺 …' : '📺 On TV';
+      const text = !cast ? '📺 Cast' : cast.phase === 'starting' ? '📺 …' : '📺 On TV';
       if (btn.textContent !== text) btn.textContent = text;
       btn.classList.toggle('on', Boolean(cast && cast.phase === 'on'));
       this._videoStatus();
@@ -2752,8 +2764,8 @@
         const c = this._cast;
         const tv = this._castName(c.entity);
         const st = this._hass && this._hass.states[c.entity];
-        parts.push(c.phase === 'upload' ? `📺 sending to Home Assistant ${Math.round((c.pct || 0) * 100)}%`
-          : c.phase === 'starting' ? `📺 starting on ${tv}…` : `📺 ${tv}: ${st ? st.state : '?'}`);
+        const mb = c.sent ? ` · streamed ${Math.round(c.sent / 1048576)} MB` : '';
+        parts.push(c.phase === 'starting' ? `📺 starting on ${tv}…${mb}` : `📺 ${tv}: ${st ? st.state : '?'}${mb}`);
       }
       if (this._vscript) parts.push(`Script ${fmt(duration(this._vscript))}`);
       if (this._vurl && Number.isFinite(video.duration)) parts.push(`video ${fmt(video.duration * 1000)}`);
@@ -3692,7 +3704,7 @@
       this._stHalt();
       this._gpDetach();
       if (this._vsyncTimer) this._videoHalt();
-      if (this._cast) this._castEnd(false);      // the TV plays on
+      if (this._cast) this._castEnd(true);       // the video streams from here: stop the TV too
       if (this._vurl) { URL.revokeObjectURL(this._vurl); this._vurl = null; }
       this._outStop();
     }
