@@ -50,7 +50,7 @@ eval(grab('  const b64 =', '  // Stroke scripts') + grab('  function toIntensity
   const btn = (pressed) => ({ pressed, value: pressed ? 1 : 0 });
   const pad = (pressed = [], axes = [0, 0, 0, 0]) => ({ buttons: Array.from({ length: 17 }, (_, i) => btn(pressed.includes(i))), axes });
   const keys = new Set();
-  const { GP_DEFAULT_MAP, GP_SPEEDS, GP_ACTIONS, gpRest, gpIdle } = eval(grab('  // Game controller.', '  const duration =') + '; ({ GP_DEFAULT_MAP, GP_SPEEDS, GP_ACTIONS, gpRest, gpIdle })');
+  const { GP_DEFAULT_MAP, GP_SPEEDS, GP_ACTIONS, gpFirstButton, gpDescribe } = eval(grab('  // Game controller.', '  const duration =') + '; ({ GP_DEFAULT_MAP, GP_SPEEDS, GP_ACTIONS, gpFirstButton, gpDescribe })');
   // Standard D-pad buttons, an analog stick (proportional, with dead zone) and keyboard mode.
   assert.strictEqual(gpRead(GP_DEFAULT_MAP, pad([12]), keys).up, 1);
   assert.strictEqual(gpRead(GP_DEFAULT_MAP, pad([0]), keys).rec, 1);
@@ -70,19 +70,43 @@ eval(grab('  const b64 =', '  // Stroke scripts') + grab('  function toIntensity
   for (let i = 0; i < 60; i++) level = gpStep(level, 1, 0, 60, 1000 / 60);
   assert.ok(Math.abs(level - 60) < 1e-6, 'small per-frame steps add up (no rounding loss)');
   assert.ok(GP_SPEEDS.every((s, i) => i === 0 || s > GP_SPEEDS[i - 1]), 'speeds go up');
-  // Learning: first pressed button, or an axis pushed away from rest (triggers rest at -1).
-  assert.deepStrictEqual(gpLearnInput([0, 0], pad([7])), { b: 7 });
-  assert.deepStrictEqual(gpLearnInput([0, 0], pad([], [0, 0, 0, 0, 0, 0, 0, 1])), { a: 7, d: 1 });
-  assert.deepStrictEqual(gpLearnInput([0, 0, -1], pad([], [0, 0, -1])), null, 'a trigger at rest is not a press');
-  assert.deepStrictEqual(gpRest(pad([], [0.05, -1, 0.3])), [0, -1, 0]);
-  assert.ok(gpIdle([0, 0], pad()));
-  assert.ok(!gpIdle([0, 0], pad([2])));
-  assert.ok(!gpIdle([0, 0], pad([], [0, 0.8])));
+  // Learning: hands-off calibration measures rest and jitter per axis.
+  const noisy = Array.from({ length: 40 }, (_, i) => [0.01 * (i % 3), -1, 0.5 + (i % 2 ? 0.2 : -0.2), 3.29]);
+  const cal = gpCalibrate(noisy);
+  assert.ok(Math.abs(cal.rest[2] - 0.5) < 1e-9 && Math.abs(cal.noise[2] - 0.2) < 1e-9, 'jittery axis: rest 0.5, jitter 0.2');
+  assert.strictEqual(cal.rest[1], -1);
+  // Holding nothing: jitter, a trigger at rest and an idle hat are not inputs.
+  assert.strictEqual(gpPickInput(pad([], [0.02, -1, 0.68, 3.29]), cal, 0), null, 'jitter inside its band is ignored');
+  // The confirm (Record) button itself is never the answer; another button is.
+  assert.strictEqual(gpPickInput(pad([0], [0, -1, 0.5, 3.29]), cal, 0), null);
+  assert.deepStrictEqual(gpPickInput(pad([0, 5], [0, -1, 0.5, 3.29]), cal, 0), { b: 5 });
+  // A stick pushed: direction from its rest point.
+  assert.deepStrictEqual(gpPickInput(pad([0], [-0.9, -1, 0.5, 3.29]), cal, 0), { a: 0, d: -1 });
+  // A jittery axis needs a big move, and keeps its rest point and a wider dead zone.
+  assert.strictEqual(gpPickInput(pad([0], [0, -1, 0.95, 3.29]), cal, 0), null, 'move smaller than 2x jitter + 0.2');
+  assert.deepStrictEqual(gpPickInput(pad([0], [0, -1, -0.6, 3.29]), cal, 0), { a: 2, d: -1, r: 0.5, z: 0.3 });
+  // Hat switch (rests at 3.29, one value per direction): binds to the value.
+  assert.deepStrictEqual(gpPickInput(pad([0], [0, -1, 0.5, -1]), cal, 0), { a: 3, v: -1 });
+  assert.deepStrictEqual(gpPickInput(pad([0], [0, 0.95, 0.5, 0.14]), cal, 0), { a: 3, v: 0.14 }, 'furthest beyond its threshold wins');
+  const hatUp = { up: [{ a: 3, v: -1 }], down: [{ a: 3, v: 0.14 }] };
+  assert.strictEqual(gpRead(hatUp, pad([], [0, 0, 0, -1]), keys).up, 1);
+  assert.strictEqual(gpRead(hatUp, pad([], [0, 0, 0, -1]), keys).down, 0);
+  assert.strictEqual(gpRead(hatUp, pad([], [0, 0, 0, 3.29]), keys).up, 0, 'idle hat is nothing');
+  assert.strictEqual(gpRead(hatUp, pad([], [0, 0, 0, 0.14]), keys).down, 1);
+  // Off-centre axis with its rest point: still at rest = 0, pushed = pressed.
+  const off = { down: [{ a: 2, d: -1, r: 0.5, z: 0.3 }] };
+  assert.strictEqual(gpRead(off, pad([], [0, 0, 0.6]), keys).down, 0);
+  assert.strictEqual(gpRead(off, pad([], [0, 0, -0.5]), keys).down, 1);
+  assert.strictEqual(gpFirstButton(pad([4, 9]), 4), 9);
+  assert.strictEqual(gpFirstButton(pad()), -1);
+  assert.strictEqual(gpDescribe({ a: 3, v: -1 }), 'hat axis 3 at -1');
+  assert.strictEqual(gpDescribe(null), 'default');
   const map = gpBuildMap({ rec: [{ b: 3 }], up: [{ a: 9, d: -1 }] });
   assert.deepStrictEqual(map.rec, [{ b: 3 }, { k: 'Enter' }, { k: 'MediaPlayPause' }]);
   assert.deepStrictEqual(map.up, [{ a: 9, d: -1 }, { k: 'ArrowUp' }], 'learned action: what was learned, plus its keyboard keys');
   assert.deepStrictEqual(map.motor, [], 'a default that clashes with a learned control is dropped');
-  assert.deepStrictEqual(map.down, GP_DEFAULT_MAP.down);
+  assert.deepStrictEqual(map.down, [{ b: 13 }, { k: 'ArrowDown' }], 'skipped action keeps defaults but not stick axes');
+  assert.deepStrictEqual(gpBuildMap({}).down, GP_DEFAULT_MAP.down, 'nothing learned = full defaults');
   assert.deepStrictEqual(Object.keys(map), GP_ACTIONS);
   // Target: video recording when this card has a video loaded, else the pads.
   assert.strictEqual(gpTargetFor(['record', 'take', 'library', 'video', 'import'], true), 'video');

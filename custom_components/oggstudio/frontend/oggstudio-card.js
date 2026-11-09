@@ -6,7 +6,7 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.5.0';
+  const VERSION = '0.5.1';
   const DEVICE_KEY = 'oggstudio_device';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
@@ -129,6 +129,9 @@
   const GP_ON_KEY = 'oggstudio_pad_on';
   const GP_DEAD = 0.25;
   const GP_POLL_MS = 20;
+  const GP_HAT_TOL = 0.12;        // hat switch: one axis, one value per direction
+  const GP_REST_SAMPLES = 40;     // ~0.8 s of hands-off readings when learning
+  const GP_HOLD_ACTIONS = ['up', 'down', 'left', 'right', 'zero', 'motor'];
 
   // How hard one action is pressed, 0..1.
   function gpStrength(binds, pad, keys) {
@@ -138,7 +141,12 @@
       if (bind.k !== undefined) v = keys && keys.has(bind.k) ? 1 : 0;
       else if (!pad) continue;
       else if (bind.b !== undefined) { const btn = pad.buttons && pad.buttons[bind.b]; v = btn && btn.pressed ? 1 : 0; }
-      else if (bind.a !== undefined) { const raw = ((pad.axes && pad.axes[bind.a]) || 0) * bind.d; v = raw > GP_DEAD ? (raw - GP_DEAD) / (1 - GP_DEAD) : 0; }
+      else if (bind.a !== undefined && bind.v !== undefined) v = Math.abs(((pad.axes && pad.axes[bind.a]) ?? 99) - bind.v) < GP_HAT_TOL ? 1 : 0;
+      else if (bind.a !== undefined) {
+        const dead = bind.z || GP_DEAD;
+        const raw = (((pad.axes && pad.axes[bind.a]) || 0) - (bind.r || 0)) * bind.d;
+        v = raw > dead ? (raw - dead) / (1 - dead) : 0;
+      }
       best = Math.max(best, Math.min(1, v));
     }
     return best;
@@ -155,26 +163,57 @@
     return Math.min(100, Math.max(0, level + (up - down) * speed * Math.min(dtMs, 100) / 1000));
   }
 
-  // While learning: the first pressed button, or an axis pushed well away
-  // from where it rests (rest = axis values seen when learning started).
-  function gpLearnInput(rest, pad) {
-    if (!pad) return null;
-    const buttons = pad.buttons || [];
-    for (let i = 0; i < buttons.length; i++) if (buttons[i] && buttons[i].pressed) return { b: i };
-    const axes = pad.axes || [];
-    for (let i = 0; i < axes.length; i++) {
-      const v = axes[i];
-      if (Math.abs(v - ((rest && rest[i]) || 0)) > 0.6 && Math.abs(v) > 0.5) return { a: i, d: v > 0 ? 1 : -1 };
+  // Learning, step 1: hands off. Each axis's resting value and how much it
+  // jitters, from a run of axis readings.
+  function gpCalibrate(samples) {
+    const len = Math.max(0, ...samples.map((x) => x.length));
+    const rest = [], noise = [];
+    for (let i = 0; i < len; i++) {
+      const vals = samples.map((x) => x[i] || 0);
+      const mean = vals.reduce((a, b) => a + b, 0) / (vals.length || 1);
+      rest.push(mean);
+      noise.push(Math.max(0, ...vals.map((v) => Math.abs(v - mean))));
     }
-    return null;
+    return { rest, noise };
   }
 
-  // Where each axis rests: centred (0), except triggers that sit at -1 or +1.
-  const gpRest = (pad) => [...(pad.axes || [])].map((v) => (Math.abs(v) > 0.9 ? v : 0));
+  // How far an axis must move from rest to count: well clear of its jitter.
+  const gpThreshold = (cal, i) => Math.max(0.35, 2 * ((cal && cal.noise[i]) || 0) + 0.2);
+  const round2 = (v) => Math.round(v * 100) / 100;
 
-  // Nothing pressed and every axis back near rest.
-  const gpIdle = (rest, pad) => !pad || ([...(pad.buttons || [])].every((b) => !b || !b.pressed)
-    && [...(pad.axes || [])].every((v, i) => Math.abs(v - ((rest && rest[i]) || 0)) < 0.3));
+  // Learning, later steps: what is being held right now? A pressed button
+  // (other than the Record button used to confirm), else the axis furthest
+  // beyond its own jitter. Hat switches (one axis resting outside -1..1,
+  // a value per direction) bind to that value; other axes to a direction,
+  // measured from their resting point.
+  function gpPickInput(pad, cal, confirmButton) {
+    if (!pad) return null;
+    const buttons = pad.buttons || [];
+    for (let i = 0; i < buttons.length; i++) if (i !== confirmButton && buttons[i] && buttons[i].pressed) return { b: i };
+    const axes = pad.axes || [];
+    let best = -1, score = 1;
+    for (let i = 0; i < axes.length; i++) {
+      const s = Math.abs(axes[i] - ((cal && cal.rest[i]) || 0)) / gpThreshold(cal, i);
+      if (s > score) { score = s; best = i; }
+    }
+    if (best < 0) return null;
+    const v = axes[best], rest = (cal && cal.rest[best]) || 0;
+    if (Math.abs(rest) > 1.05) return { a: best, v: round2(v) };
+    const bind = { a: best, d: v > rest ? 1 : -1 };
+    if (Math.abs(rest) > 0.05) bind.r = round2(rest);
+    const dead = round2(Math.max(GP_DEAD, ((cal && cal.noise[best]) || 0) + 0.1));
+    if (dead > GP_DEAD) bind.z = dead;
+    return bind;
+  }
+
+  const gpFirstButton = (pad, except) => {
+    const buttons = (pad && pad.buttons) || [];
+    for (let i = 0; i < buttons.length; i++) if (i !== except && buttons[i] && buttons[i].pressed) return i;
+    return -1;
+  };
+
+  const gpDescribe = (b) => (!b ? 'default' : b.k !== undefined ? `key ${b.k}` : b.b !== undefined ? `button ${b.b}`
+    : b.v !== undefined ? `hat axis ${b.a} at ${b.v}` : `axis ${b.a} ${b.d > 0 ? '+' : '-'}`);
 
   // Turn learned bindings into a full map: a learned action uses what was
   // learned plus its default keyboard keys, the rest keep their defaults;
@@ -185,7 +224,10 @@
     const map = {};
     for (const action of GP_ACTIONS) {
       const own = learned[action] && learned[action].length ? learned[action] : [];
-      const defaults = GP_DEFAULT_MAP[action].filter((b) => !taken.has(key(b)) && (!own.length || b.k !== undefined));
+      // Once anything is learned, default stick axes go: on a pad whose axes
+      // rest off-centre or jitter they would fire on their own.
+      const defaults = GP_DEFAULT_MAP[action].filter((b) => !taken.has(key(b))
+        && (own.length ? b.k !== undefined : !(taken.size && b.a !== undefined)));
       map[action] = [...own, ...defaults];
     }
     return map;
@@ -452,7 +494,7 @@
       $('gpon').checked = load(GP_ON_KEY, false) === true;
       $('gpon').addEventListener('change', () => { this._gpSave(GP_ON_KEY, $('gpon').checked); gpOwner = this; this._gpRun(); this._gpStatus(); });
       $('gplearnbtn').addEventListener('click', () => this._gpLearnStart());
-      $('gpskip').addEventListener('click', () => this._gpLearnNext(null));
+      $('gpskip').addEventListener('click', () => this._gpLearnSkip());
       $('gpreset').addEventListener('click', () => { this._gpSave(GP_MAP_KEY, null); this._gpMap = { ...GP_DEFAULT_MAP }; this._gpLearnEnd('Controller: default controls restored.'); });
       $('gpcancel').addEventListener('click', () => this._gpLearnEnd(''));
       this._gpStatus();
@@ -474,7 +516,7 @@
           if (this._gpLearning) {
             if (e.key === 'Tab') return;
             e.preventDefault(); e.stopPropagation();
-            if (!e.repeat) this._gpLearnNext({ k: e.code || e.key });
+            if (!e.repeat) this._gpLearnKey(e.code || e.key);
             return;
           }
           if (!this._el('gpon').checked || !this._gpUsable() || !this._gpIsOwner()) return;
@@ -651,11 +693,12 @@
       if (this._gpStatusHtml !== html) { this._gpStatusHtml = html; $('gpstat').innerHTML = html; }
     }
 
+    // Learn controls: (1) hands off while axes are measured, (2) press the
+    // button for Record, (3) for each other control: hold it, press Record.
     _gpLearnStart() {
       const $ = this._el;
       if (!$('gpon').checked) { $('gpon').checked = true; this._gpSave(GP_ON_KEY, true); }
-      const pad = this._gpPad();
-      this._gpLearning = { step: 0, learned: {}, rest: pad ? gpRest(pad) : null, wait: true };
+      this._gpLearning = { phase: 'wake', learned: {}, step: 0, samples: [], cal: null, recBtn: -1, recKey: null, wait: true, last: '' };
       $('gplearn').hidden = false; $('gplearnrow').hidden = false; $('gplearnbtn').hidden = true;
       this._gpStatus();
       this._gpLearnShow();
@@ -664,29 +707,85 @@
 
     _gpLearnShow() {
       const L = this._gpLearning;
-      this._el('gplearn').textContent = `Press: ${GP_LABELS[GP_ACTIONS[L.step]]}  (${L.step + 1} of ${GP_ACTIONS.length}, Skip keeps the default)`;
+      if (!L || !this._el) return;
+      const recName = L.recKey ? `key ${L.recKey}` : `button ${L.recBtn}`;
+      const text = {
+        wake: 'Press any button on the controller to wake it, then let go. (Keyboard-mode controller: press the key you want for Record.)',
+        rest: 'Hands off the controller for a moment...',
+        rec: 'Press the button you want for Record start/stop.',
+        hold: `${L.step + 1}/${GP_HOLD_ACTIONS.length}: hold ${GP_LABELS[GP_HOLD_ACTIONS[L.step]].toUpperCase()}, then press Record (${recName}) to confirm. Nothing held, or Skip = keep the default.`,
+      }[L.phase];
+      const t = (L.last ? `✓ ${L.last}. ` : '') + text;
+      if (this._el('gplearn').textContent !== t) this._el('gplearn').textContent = t;
     }
 
     _gpLearnPoll(pad) {
       const L = this._gpLearning;
-      if (pad && !L.rest) L.rest = gpRest(pad);
-      if (L.wait) { if (gpIdle(L.rest, pad)) L.wait = false; return; }
-      const bind = gpLearnInput(L.rest, pad);
-      if (bind) this._gpLearnNext(bind);
+      if (L.phase === 'wake') {
+        if (pad && gpFirstButton(pad) < 0) { L.phase = 'rest'; L.samples = []; this._gpLearnShow(); }
+        return;
+      }
+      if (!pad) return;
+      if (L.phase === 'rest') {
+        if (gpFirstButton(pad) >= 0) { L.samples = []; return; }   // start again if a button is touched
+        L.samples.push([...pad.axes]);
+        if (L.samples.length >= GP_REST_SAMPLES) { L.cal = gpCalibrate(L.samples); L.phase = 'rec'; L.wait = true; this._gpLearnShow(); }
+        return;
+      }
+      if (L.phase === 'rec') {
+        const b = gpFirstButton(pad);
+        if (L.wait) { if (b < 0) L.wait = false; return; }
+        if (b >= 0) this._gpLearnSetRec({ b });
+        return;
+      }
+      // hold: confirm on the rising edge of the Record button.
+      const recDown = L.recBtn >= 0 && Boolean(pad.buttons[L.recBtn] && pad.buttons[L.recBtn].pressed);
+      if (L.wait) { if (!recDown) L.wait = false; return; }
+      if (recDown) this._gpLearnNext(gpPickInput(pad, L.cal, L.recBtn));
+    }
+
+    _gpLearnSetRec(bind) {
+      const L = this._gpLearning;
+      L.learned.rec = [bind];
+      if (bind.b !== undefined) L.recBtn = bind.b; else L.recKey = bind.k;
+      L.last = `Record = ${gpDescribe(bind)}`;
+      L.phase = 'hold'; L.step = 0; L.wait = true;
+      this._gpLearnShow();
+    }
+
+    // Keys while learning: a key for Record (keyboard-mode pads), the Record
+    // key confirms what is held, any other key binds straight away.
+    _gpLearnKey(k) {
+      const L = this._gpLearning;
+      if (L.phase !== 'hold') { this._gpLearnSetRec({ k }); return; }
+      if (k === L.recKey) this._gpLearnNext(gpPickInput(this._gpPad(), L.cal, L.recBtn));
+      else this._gpLearnNext({ k });
+    }
+
+    _gpLearnSkip() {
+      const L = this._gpLearning;
+      if (!L) return;
+      if (L.phase === 'hold') { this._gpLearnNext(null); return; }
+      // Record skipped: keep the default (button 0) and confirm with it.
+      L.recBtn = 0; L.last = 'Record = button 0 (default)';
+      if (!L.cal && L.samples.length) L.cal = gpCalibrate(L.samples);
+      L.phase = 'hold'; L.step = 0; L.wait = true;
+      this._gpLearnShow();
     }
 
     _gpLearnNext(bind) {
       const L = this._gpLearning;
-      if (!L) return;
-      const action = GP_ACTIONS[L.step];
+      if (!L || L.phase !== 'hold') return;
+      const action = GP_HOLD_ACTIONS[L.step];
       if (bind) {
         const same = JSON.stringify(bind);
         for (const a of Object.keys(L.learned)) L.learned[a] = L.learned[a].filter((b) => JSON.stringify(b) !== same);
         L.learned[action] = [bind];
       }
+      L.last = `${GP_LABELS[action]} = ${gpDescribe(bind)}`;
       L.wait = true;
       L.step += 1;
-      if (L.step < GP_ACTIONS.length) { this._gpLearnShow(); return; }
+      if (L.step < GP_HOLD_ACTIONS.length) { this._gpLearnShow(); return; }
       this._gpSave(GP_MAP_KEY, L.learned);
       this._gpMap = gpBuildMap(L.learned);
       this._gpLearnEnd('Controller: controls saved for this browser.');

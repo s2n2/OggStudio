@@ -82,10 +82,20 @@ connects; Chrome only reports a controller after you press one of its buttons.
 The level stays where you leave it. Recording works as it does with the pads: the device
 follows live and every change is saved in the take.
 
-Generic controllers number their buttons in different ways. Press **Learn controls** and
-press each control when asked; **Skip** keeps the default. The mapping, the speed and the
-on/off setting are remembered per browser. Controllers in keyboard mode, which send arrow
-keys, also work, and so does a keyboard on a computer.
+Generic controllers number their buttons in different ways, and some have axes that jitter or
+rest off-centre. Press **Learn controls** to map yours:
+
+1. Press any button to wake the controller, then leave it alone for a moment while the card
+   measures where each axis rests and how much it jitters.
+2. Press the button you want for **Record**.
+3. For each other control, **hold it, then press Record** to confirm. The card takes whatever
+   moved furthest beyond its normal jitter. Pressing Record with nothing held, or **Skip**,
+   keeps the default.
+
+Hat-switch D-pads, which report all four directions on one axis, are recognised. The mapping,
+the speed and the on/off setting are remembered per browser. Controllers in keyboard mode,
+which send arrow keys, also work: press a key for Record, then a key for each control. A
+keyboard on a computer works the same way.
 
 **HTTPS needed for gamepads.** Chrome hides gamepads from pages that are not served over
 HTTPS, so a dashboard opened as `http://192.168.x.x:8123` cannot see them. In that case the
