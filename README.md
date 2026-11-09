@@ -184,7 +184,8 @@ if the file already describes intensity.
 ## Game controller
 
 You can record with a small Bluetooth gamepad paired to your phone instead of your finger.
-Tick **🎮 Controller** on the Recorder or Video card. It ticks itself when a controller
+Tick **🎮 Controller**, next to the Live pads / Devices follow checkbox in the Record section
+(under ● Rec on the Video card); its status and **Learn controls** appear once it is ticked. It ticks itself when a controller
 connects; Chrome only reports a controller after you press one of its buttons.
 
 | Control | Default | Does |

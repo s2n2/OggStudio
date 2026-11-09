@@ -6,7 +6,7 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.9.0';
+  const VERSION = '0.9.1';
   const DEVICE_KEY = 'oggstudio_device';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
@@ -546,6 +546,9 @@
       (slot || this._el('outhome')).appendChild(box);
       const cslot = rec && this.shadowRoot.querySelector(`[data-part="${rec}"] .ctlslot`);
       (cslot || this._el('outhome')).insertBefore(this._el('ctlbox'), cslot ? null : box);
+      // The controller tick box sits with the recorder's live toggles (or under the video's Rec).
+      const gslot = this.shadowRoot.querySelector(`[data-part="${rec || 'video'}"]:not(.off) .gpslot`);
+      if (gslot) gslot.appendChild(this._el('gp'));
       // No recorder on this card: the devices box sits at the top on its own.
       this._el('outhome').classList.toggle('off', Boolean(rec));
       this._el('outhome').style.order = '0';
@@ -659,8 +662,12 @@
           button.vrec{flex:0 0 auto;min-height:40px;padding:0 14px;background:#5a2433;border-color:rgba(255,110,130,.5);color:#ffd2da}
           button.vrec.on{background:linear-gradient(110deg,#ff5c7a,#ff8aa0);color:#2a0710}
           .vrecinfo{flex:1;text-align:right;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
-          .gp{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;padding:6px 10px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.025)}
-          .gp .check{min-height:36px;font-size:12.5px}
+          .gp{display:flex;gap:8px;align-items:center;flex-wrap:wrap;flex:0 1 auto}
+          .gp.on{flex:1 1 100%;margin-top:4px;padding:4px 10px 8px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.025)}
+          .gp .check{min-height:36px;font-size:13px}
+          .gpmore{display:flex;gap:8px;align-items:center;flex-wrap:wrap;flex:1 1 100%}
+          .gpslot{display:contents}
+          .stlive{display:flex;gap:8px 16px;align-items:center;flex-wrap:wrap;margin-top:6px}
           .gp .gpstat{flex:1;min-width:140px;font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
           .gp .gpstat b{color:#bef2ff}
           .gp button{min-height:36px;flex:0 0 auto}
@@ -727,11 +734,13 @@
           <div id="devbox"><label>Playback device</label><select id="device"></select></div>
           <div class="gp" id="gp">
             <label class="check"><input id="gpon" type="checkbox"> 🎮 Controller</label>
-            <span class="gpstat" id="gpstat"></span>
-            <button id="gplearnbtn" type="button">Learn controls</button>
-            <div class="gplearn" id="gplearn" hidden></div>
-            <div class="gpraw" id="gpraw" hidden></div>
-            <div class="row" id="gplearnrow" style="flex-basis:100%" hidden><button id="gpskip" type="button">Skip</button><button id="gpreset" type="button">Use defaults</button><button id="gpcancel" type="button" class="stop">Cancel</button></div>
+            <div class="gpmore" id="gpmore" hidden>
+              <span class="gpstat" id="gpstat"></span>
+              <button id="gplearnbtn" type="button">Learn controls</button>
+              <div class="gplearn" id="gplearn" hidden></div>
+              <div class="gpraw" id="gpraw" hidden></div>
+              <div class="row" id="gplearnrow" style="flex-basis:100%" hidden><button id="gpskip" type="button">Skip</button><button id="gpreset" type="button">Use defaults</button><button id="gpcancel" type="button" class="stop">Cancel</button></div>
+            </div>
           </div>
           <section data-part="stroke">
             <div class="rechead"><h3>Stroke recorder</h3><div class="kind" role="group" aria-label="Recording type"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div></div>
@@ -750,7 +759,7 @@
             <div class="ctlslot"></div>
             <button id="strec" class="rec" type="button">● Record</button><div class="stinfo" id="stinfo"></div>
             <div class="outslot"></div>
-            <label class="check" id="stliverow" style="margin-top:6px"><input id="stlive" type="checkbox"> Devices follow without recording</label>
+            <div class="stlive"><label class="check" id="stliverow"><input id="stlive" type="checkbox"> Devices follow without recording</label><span class="gpslot"></span></div>
             <div class="hint">Hold Slow, Medium or Fast to stroke between the limits at that speed (% of the device's top speed); let go to stop where you are. Drag a speed's slider to change it. ⟳ Latch keeps a speed running without holding. While latched, holding another speed overrides it until you let go; holding the latched speed's own button unlatches it; latching another speed switches. Touching the position bar overrides a latch only while your finger is down. Drag the range on the left: a limit to move it, the middle to move the whole range. Touch the position bar to move there: it travels at the last speed you used until it reaches your finger, then follows it. Or stop at a spot and press Set limit: above the other limit it becomes the upper one, below it the lower one. Reset limits goes back to the full range. Each device below follows in its own way: a vibrator by speed, position or both, a stroker by position.</div>
           </section>
           <section data-part="record">
@@ -762,7 +771,7 @@
             <div class="ctlslot"></div>
             <button id="rec" class="rec">● Record</button><div class="val" id="timer" style="text-align:center;margin-top:4px"></div>
             <div class="outslot"></div>
-            <div class="row" style="margin-top:6px"><label class="check" id="liverow"><input id="live" type="checkbox"> Live pads</label><label class="check"><input id="spring" type="checkbox"> Drop to 0 when released</label></div>
+            <div class="row" style="margin-top:6px"><label class="check" id="liverow"><input id="live" type="checkbox"> Live pads</label><label class="check"><input id="spring" type="checkbox"> Drop to 0 when released</label><span class="gpslot"></span></div>
             <div class="hint">Touch a pad and slide up or down: the level follows your finger. While recording, the pads drive the devices below live; tick "Live pads" to play with them without recording. Choose a second device (or a device's other motor) to get a second pad.</div>
           </section>
           <section data-part="outputs" id="outhome" class="off">
@@ -806,6 +815,7 @@
             <div class="hbar" id="hb1" role="slider" tabindex="0" aria-label="Motor 1 level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill"></div><span class="lab">Motor 1</span><span class="pct">0%</span></div>
             <div class="hbar m2" id="hb2" role="slider" tabindex="0" aria-label="Motor 2 level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><div class="fill"></div><span class="lab">Motor 2</span><span class="pct">0%</span></div>
             <div class="vrecrow"><button id="vrec" class="vrec" type="button">● Rec</button><label class="check"><input id="vspring" type="checkbox" checked> Drop to 0 on release</label><span class="vrecinfo" id="vrecinfo"></span></div>
+            <div class="stlive"><span class="gpslot"></span></div>
             <div class="row" id="vrecdone" style="margin-top:6px" hidden><button id="vrecuse">Use as take</button><button id="vrecdl">Download .funscript</button><button id="vrecclear" class="stop">Clear</button></div>
             <div class="vstat" id="vstat"></div>
             <div class="row" style="margin-top:8px"><button id="vgo" class="go">▶ Go</button><button id="vstop" class="stop" style="flex:0 0 96px">■ Stop</button></div>
@@ -1383,6 +1393,8 @@
     _gpStatus() {
       if (!this._el) return;
       const $ = this._el;
+      const open = $('gpon').checked || Boolean(this._gpLearning);
+      if ($('gpmore').hidden === open) { $('gpmore').hidden = !open; $('gp').classList.toggle('on', open); }
       let html = '';
       const stroke = this._gpProfName === 'stroke';
       if (this._gpLearning) html = '';
