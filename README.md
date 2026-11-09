@@ -50,7 +50,9 @@ to record without a device: nothing is sent, and the take can be saved or downlo
 ## Stroke recorder
 
 The **OggStudio Stroke** card records stroke funscripts, the kind a Handy plays, with two
-limits and three speeds:
+limits and three speeds. On the OggStudio and Recorder cards, the **〰 Vibrate / ↕ Stroke**
+toggle at the top of the Record section switches between the pads and this stroke recorder
+(remembered per card type):
 
 * **Hold Slow, Medium or Fast** to stroke between the lower and upper limit. Let go and it
   stops where it is. Each speed is a fixed time per stroke (1.6 s, 0.9 s or 0.5 s up and

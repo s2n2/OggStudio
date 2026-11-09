@@ -6,7 +6,7 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.6.0';
+  const VERSION = '0.6.1';
   const DEVICE_KEY = 'oggstudio_device';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
@@ -403,9 +403,55 @@
 
     static get variant() { return VARIANTS[TAG]; }
     get _variant() { return this.constructor.variant; }
-    get _parts() {
+    get _baseParts() {
       const wanted = this._config && Array.isArray(this._config.sections) ? this._config.sections.filter((p) => PARTS.includes(p)) : [];
       return wanted.length ? wanted : this._variant.parts;
+    }
+
+    // A card with one recorder (pads or stroke) can switch between the two
+    // with the Vibrate / Stroke toggle; the choice is kept per card type.
+    get _canToggleKind() { const b = this._baseParts; return b.includes('record') !== b.includes('stroke'); }
+    get _kindKey() { return `oggstudio_rec_kind:${this.localName}`; }
+    get _recKind() {
+      if (this._kind) return this._kind;
+      let saved = null;
+      try { saved = localStorage.getItem(this._kindKey); } catch (_) { /* private mode */ }
+      this._kind = saved === 'stroke' || saved === 'vibrate' ? saved : (this._baseParts.includes('stroke') ? 'stroke' : 'vibrate');
+      return this._kind;
+    }
+
+    get _parts() {
+      const base = this._baseParts;
+      if (!this._canToggleKind) return base;
+      const [from, to] = this._recKind === 'stroke' ? ['record', 'stroke'] : ['stroke', 'record'];
+      return base.map((x) => (x === from ? to : x));
+    }
+
+    _setRecKind(kind) {
+      if (kind === this._recKind) return;
+      // Finish whatever the other recorder was doing.
+      if (this._recording) this._stopRecording();
+      if (this._live) { this._el('live').checked = false; this._setLive(false); }
+      if (this._stRecording) this._stStop();
+      if (this._st) { this._st.touch = null; this._st.pad = null; this._st.drag = null; }
+      this._el('stlive').checked = false;
+      this._stHalt();
+      this._kind = kind;
+      try { localStorage.setItem(this._kindKey, kind); } catch (_) { /* private mode */ }
+      this._applyParts();
+      this._gpStatus();
+    }
+
+    _applyParts() {
+      const parts = this._parts;
+      for (const sec of this.shadowRoot.querySelectorAll('[data-part]')) {
+        sec.classList.toggle('off', !parts.includes(sec.dataset.part));
+        sec.style.order = String(parts.indexOf(sec.dataset.part) + 1);   // sections follow the card's own order
+      }
+      for (const tog of this.shadowRoot.querySelectorAll('.kind')) {
+        tog.hidden = !this._canToggleKind;
+        for (const b of tog.querySelectorAll('button')) b.classList.toggle('on', b.dataset.kind === this._recKind);
+      }
     }
 
     setConfig(config) { this._config = config || {}; this._render(); }
@@ -528,6 +574,11 @@
           .stside button.sthold.on{background:linear-gradient(110deg,#2fbfa9,#67e0c8);color:#062a24;border-color:transparent}
           .stside .row button{min-height:46px}
           .stinfo{font-size:12px;color:#cdd6f6;font-variant-numeric:tabular-nums;margin-top:6px;text-align:center}
+          .rechead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+          .rechead h3{margin:0}
+          .kind{display:flex;border:1px solid #33415f;border-radius:12px;overflow:hidden;flex:0 0 auto}
+          .kind button{border:0;border-radius:0;min-height:38px;padding:0 14px;background:#141d33;color:var(--muted)}
+          .kind button.on{background:linear-gradient(110deg,#2fbfa9,#67e0c8);color:#062a24}
           [hidden],.off{display:none!important}
         </style>
         <ha-card>
@@ -542,7 +593,7 @@
             <div class="row" id="gplearnrow" style="flex-basis:100%" hidden><button id="gpskip" type="button">Skip</button><button id="gpreset" type="button">Use defaults</button><button id="gpcancel" type="button" class="stop">Cancel</button></div>
           </div>
           <section data-part="stroke">
-            <h3>Stroke recorder</h3>
+            <div class="rechead"><h3>Stroke recorder</h3><div class="kind" role="group" aria-label="Recording type"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div></div>
             <div class="st">
               <div class="sttrack" id="sttrack" role="slider" tabindex="0" aria-label="Stroke position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><div class="ticks"></div><div class="stband" id="stband"></div><span class="stlim" id="stup"></span><span class="stlim" id="stlo"></span><div class="stpos" id="stpos"></div><span class="pct" id="stpct">50</span></div>
               <div class="stside">
@@ -558,7 +609,7 @@
             <div class="hint">Hold Slow, Medium or Fast to stroke between the limits; let go to stop where you are. To set a limit, stop at the spot (or drag the bar) and press Set limit: above the other limit it becomes the upper one, below it the lower one. Reset limits goes back to the full range. A vibration device follows using the mode above.</div>
           </section>
           <section data-part="record">
-            <h3>Record</h3>
+            <div class="rechead"><h3>Record</h3><div class="kind" role="group" aria-label="Recording type"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div></div>
             <div class="pads" id="pads">
               <div class="pad" id="pad1" role="slider" tabindex="0" aria-label="Motor 1 level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="ticks"></div><div class="fill"></div><span class="lab">Motor 1</span><span class="pct">0%</span></div>
               <div class="pad" id="pad2" role="slider" tabindex="0" aria-label="Motor 2 level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><div class="ticks"></div><div class="fill"></div><span class="lab">Motor 2</span><span class="pct">0%</span></div>
@@ -614,11 +665,8 @@
         </ha-card>`;
       const $ = (id) => this.shadowRoot.getElementById(id);
       this._el = $;
-      const parts = this._parts;
-      for (const sec of this.shadowRoot.querySelectorAll('[data-part]')) {
-        sec.classList.toggle('off', !parts.includes(sec.dataset.part));
-        sec.style.order = String(parts.indexOf(sec.dataset.part) + 1);   // sections follow the card's own order
-      }
+      this._applyParts();
+      for (const b of this.shadowRoot.querySelectorAll('.kind button')) b.addEventListener('click', () => this._setRecKind(b.dataset.kind));
       $('device').addEventListener('change', () => {
         this._deviceId = $('device').value;
         this._rememberDevice(this._device || { id: NO_DEVICE, name: '' });
@@ -834,7 +882,7 @@
     // ---------------------------------------------------------- game controller
     _bindGamepad() {
       const $ = this._el;
-      const parts = this._parts;
+      const parts = this._baseParts;
       $('gp').hidden = !(parts.includes('record') || parts.includes('video') || parts.includes('stroke'));
       this._gpLearning = null;
       this._gpStatusHtml = null;
