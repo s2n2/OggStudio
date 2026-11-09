@@ -6,7 +6,7 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.8.0';
+  const VERSION = '0.8.1';
   const DEVICE_KEY = 'oggstudio_device';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
@@ -65,6 +65,7 @@
   const RUN_MODES = {
     speed: 'Speed: faster strokes vibrate harder',
     position: 'Position: higher = stronger (vibration scripts)',
+    upper: 'Position above 50%: 50% and below = off, 75% = half power',
     combo: 'Speed + position combined',
     down: 'Speed, downstrokes only',
     up: 'Speed, upstrokes only',
@@ -89,6 +90,9 @@
     return s;
   }
 
+  // Position above 50% as power: 50 and below = 0, then 0-100 over the top half.
+  const upperHalf = (pos) => Math.max(0, Math.round((pos - 50) * 2));
+
   const cleanActions = (actions) => (Array.isArray(actions) ? actions : [])
     .filter((x) => x && Number.isFinite(x.at) && Number.isFinite(x.pos))
     .map((x) => ({ at: Math.max(0, Math.round(x.at)), pos: Math.round(Math.min(100, Math.max(0, x.pos))) }))
@@ -98,6 +102,7 @@
   // for the whole move (a step, not a ramp), ending at 0.
   function toIntensity(actions, mode) {
     const a = cleanActions(actions);
+    if (mode === 'upper') return a.map((x) => ({ at: x.at, pos: upperHalf(x.pos) }));
     if (!RUN_MODES[mode] || mode === 'position' || a.length < 2) return a;
     const out = [];
     const push = (at, pos) => {
@@ -139,6 +144,7 @@
   // Live: intensity now from position and velocity (% per second).
   function liveIntensity(mode, pos, vel) {
     if (mode === 'position') return pos;
+    if (mode === 'upper') return upperHalf(pos);
     return moveIntensity(mode, pos - vel / 10, pos, 100);   // the last 100 ms of movement
   }
 
@@ -679,9 +685,9 @@
           .stsl input{flex:1;min-width:0;height:24px;margin:0}
           .stsl b{flex:0 0 42px;text-align:right;font-size:12.5px;color:#bef2ff;font-variant-numeric:tabular-nums}
           .st{position:relative}
-          .ctltabs{display:grid;grid-template-columns:1fr 1fr;border:1px solid #33415f;border-radius:14px;overflow:hidden;margin-bottom:8px}
-          .ctltabs button{border:0;border-radius:0;min-height:42px;background:#141d33;color:var(--muted);font-size:14px}
-          .ctltabs button.on{background:#24395a;color:#bef2ff;box-shadow:inset 0 -3px 0 #67e0c8}
+          .ctltabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+          .ctltabs button{min-height:44px;font-size:14.5px;background:#24395a;color:#bef2ff}
+          .ctltabs button.on{background:linear-gradient(110deg,#2fbfa9,#67e0c8);color:#062a24;border-color:transparent}
           .rpbox{position:relative}
           button.rppick{width:100%;text-align:left;background:#18233d;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
           .rppop{position:absolute;z-index:6;left:0;right:0;top:48px;max-height:300px;overflow:auto;padding:6px;border-radius:14px;border:1px solid #67e0c8;background:#101a30;box-shadow:0 10px 30px rgba(0,0,0,.6)}

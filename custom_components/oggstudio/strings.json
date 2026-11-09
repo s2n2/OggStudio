@@ -36,7 +36,7 @@
         },
         "mode": {
           "name": "Run mode",
-          "description": "Stroke scripts only: how position becomes vibration. speed, position, combo (speed plus position), down (speed on downstrokes only) or up (upstrokes only)."
+          "description": "Stroke scripts only: how position becomes vibration. speed, position, upper (position above 50%: 50% and below off, 75% = half power), combo (speed plus position), down (speed on downstrokes only) or up (upstrokes only)."
         }
       }
     },
@@ -100,7 +100,7 @@
         },
         "mode": {
           "name": "Run mode",
-          "description": "Stroke scripts only: how position becomes vibration. speed, position, combo (speed plus position), down (speed on downstrokes only) or up (upstrokes only). Defaults to the mode last used for the script; giving one remembers it."
+          "description": "Stroke scripts only: how position becomes vibration. speed, position, upper (position above 50%: 50% and below off, 75% = half power), combo (speed plus position), down (speed on downstrokes only) or up (upstrokes only). Defaults to the mode last used for the script; giving one remembers it."
         }
       }
     },
@@ -124,7 +124,7 @@
         },
         "mode": {
           "name": "Run mode",
-          "description": "Stroke scripts only: how position becomes vibration. speed, position, combo (speed plus position), down (speed on downstrokes only) or up (upstrokes only)."
+          "description": "Stroke scripts only: how position becomes vibration. speed, position, upper (position above 50%: 50% and below off, 75% = half power), combo (speed plus position), down (speed on downstrokes only) or up (upstrokes only)."
         }
       }
     },

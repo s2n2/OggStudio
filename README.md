@@ -138,12 +138,13 @@ vibration when they play. The Take, Library and Video panels have a **Run as** c
 |---|---|
 | Speed | How fast it moves: a full stroke in a quarter second = 100% |
 | Position | The position itself (also how vibration scripts play) |
+| Position above 50% | Only the top half counts: 50% and below is off, then it scales to full, so 75% position = 50% power |
 | Speed + position | Speed sets the strength, and position adds up to 35% of what is left above it. Fast strokes still reach 100%, while slow strokes and holds high up still register |
 | Speed, downstrokes only | Speed while moving down, nothing on the way up: one pulse per stroke |
 | Speed, upstrokes only | The same on the way up |
 
 Each saved stroke script remembers the mode it was last played with, from the card or from
-`oggstudio.play` with `mode`. Vibration scripts play as they are.
+`oggstudio.play` with `mode` (speed, position, upper, combo, down, up). Vibration scripts play as they are.
 
 ## Video sync
 

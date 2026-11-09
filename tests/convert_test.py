@@ -21,6 +21,7 @@ assert flat(convert.to_intensity(stroke, "speed")) == "0:100 249:100 250:100 499
 assert flat(convert.to_intensity(stroke, "down")) == "0:0 249:0 250:100 499:100 500:0 1499:0 1500:0"
 assert flat(convert.to_intensity(stroke, "position")) == flat(stroke)
 assert convert.move_intensity("combo", 100, 100, 1000) == 35
+assert [x["pos"] for x in convert.to_intensity([{"at": 0, "pos": 30}, {"at": 1, "pos": 75}, {"at": 2, "pos": 100}], "upper")] == [0, 50, 100]
 
 script = {"version": "1.0", "actions": stroke, "metadata": {"type": "stroke", "title": "x"}}
 played = convert.run_script(script, None)

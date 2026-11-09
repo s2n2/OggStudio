@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
-RUN_MODES = ("speed", "position", "combo", "down", "up")
+RUN_MODES = ("speed", "position", "upper", "combo", "down", "up")
 DEFAULT_RUN_MODE = "speed"
 
 
@@ -43,6 +43,9 @@ def _round(value: float) -> int:
 
 def to_intensity(actions: list[dict[str, int]], mode: str) -> list[dict[str, int]]:
     """Each move holds its intensity for the whole move, ending at 0."""
+    if mode == "upper":
+        # Position above 50% as power: 50 and below = 0, 75 = 50, 100 = 100.
+        return [{"at": a["at"], "pos": max(0, _round((a["pos"] - 50) * 2))} for a in actions]
     if mode not in RUN_MODES or mode == "position" or len(actions) < 2:
         return [dict(a) for a in actions]
     out: list[dict[str, int]] = []
