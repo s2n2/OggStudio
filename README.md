@@ -58,8 +58,9 @@ press **▶ Replay**, with a speed (0.5x to 2x) and Loop. Tap the progress bar t
   switch Vibrate / Stroke while it plays to compare. It works with no device too (it just shows).
 * Touching a pad, the position bar or a speed button takes over until you let go, then the
   script carries on.
-* In the Vibrate view, a stroke script is shown converted with the mode under the player
-  (remembered for saved scripts).
+* A stroke script replayed in the Vibrate view is mapped to vibration per device: each device
+  (and its pad) has its own follow type, as in the Stroke view. A saved script's remembered
+  run mode is used for the first device, and replaying remembers it again.
 
 Replay is driven from the browser about 10 times a second (strokers get each move as it
 starts). The Library's ▶ Play runs a script inside Ogg's own frame loop instead.

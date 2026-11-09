@@ -6,7 +6,7 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.8.1';
+  const VERSION = '0.8.2';
   const DEVICE_KEY = 'oggstudio_device';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
@@ -525,7 +525,7 @@
       this._kind = kind;
       try { localStorage.setItem(this._kindKey, kind); } catch (_) { /* private mode */ }
       this._applyParts();
-      if (this._rp && this._rp.playing) { this._rpConvert(); this._rpTick(); }
+      if (this._rp && this._rp.playing) this._rpTick();
       this._gpStatus();
     }
 
@@ -769,7 +769,6 @@
                 <div class="rpbar" id="rpbar" title="Tap to jump"><i id="rpfill"></i></div>
                 <div class="rpinfo" id="rpinfo"></div>
                 <div class="rprow"><button id="rpplay" type="button" class="go">▶ Replay</button><select id="rpspeed" aria-label="Replay speed"></select><label class="check"><input id="rploop" type="checkbox"> Loop</label></div>
-                <div id="rpmodebox" hidden><label>Pads show this stroke script as</label><select id="rpmode">${runModeOptions()}</select></div>
               </div>
             </div>
             <div class="outbox" id="outbox">
@@ -2092,10 +2091,6 @@
       $('rppick').addEventListener('click', () => this._rpPicker(!$('rppop').hidden ? false : true));
       $('rpfile').addEventListener('change', () => this._rpFromFiles());
       $('rpplay').addEventListener('click', () => this._rpToggle());
-      $('rpmode').addEventListener('change', () => {
-        this._rpConvert();
-        if (this._rp.lib) this._setMode(this._rp.lib, $('rpmode').value);
-      });
       const bar = $('rpbar');
       const seek = (e) => { const r = bar.getBoundingClientRect(); this._rp.t = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * this._rp.len; this._rpShow(); if (this._rp.playing) this._rpTick(); };
       bar.addEventListener('pointerdown', (e) => { if (!this._rp.raw) return; e.preventDefault(); capture(bar, e); seek(e); bar.dataset.drag = '1'; });
@@ -2130,6 +2125,7 @@
       const replay = this._ctl === 'replay';
       for (const b of this.shadowRoot.querySelectorAll('.ctltabs button')) b.classList.toggle('on', b.dataset.ctl === this._ctl);
       $('rpbox').hidden = !replay;
+      this._outRender();
       for (const id of ['rec', 'timer', 'strec', 'liverow', 'stliverow']) $(id).hidden = replay;
       this._rpShow();
     }
@@ -2170,14 +2166,24 @@
       const rp = this._rp;
       rp.raw = script; rp.name = name; rp.lib = lib; rp.t = 0; rp.len = duration(script);
       const info = lib && this._scriptInfo(lib);
-      this._el('rpmode').value = (info && info.mode) || (lib ? RUN_MODE_DEFAULT : (RUN_MODES[this._el('takemode').value] ? this._el('takemode').value : RUN_MODE_DEFAULT));
-      this._rpConvert();
+      rp.convs = {};
+      // A saved stroke script's remembered run mode becomes the first device's way of following.
+      if (info && info.mode && RUN_MODES[info.mode] && isStroke(script) && parseTarget(this._outTargetValue(0)) && parseTarget(this._outTargetValue(0)).motor !== 'l') {
+        this._outs[0].m = info.mode; this._outSave();
+      }
+      this._outRender();
       this._rpPicker(false);
       this._rpShow();
     }
 
     // The vibration version (pads in the vibrate view) of the loaded script.
-    _rpConvert() { const rp = this._rp; rp.conv = rp.raw ? runScript(rp.raw, this._el('rpmode').value) : null; }
+    // The script converted with one run mode (cached per mode).
+    _rpConv(mode) {
+      const rp = this._rp;
+      rp.convs = rp.convs || {};
+      if (!rp.convs[mode]) rp.convs[mode] = runScript(rp.raw, mode);
+      return rp.convs[mode];
+    }
 
     _rpToggle() { if (this._rp.playing) this._rpStop(); else this._rpPlay(); }
 
@@ -2185,6 +2191,7 @@
       const rp = this._rp;
       if (!rp.raw) { this._rpPicker(true); return; }
       if (rp.t >= rp.len) rp.t = 0;
+      if (rp.lib && isStroke(rp.raw) && RUN_MODES[this._outs[0].m]) this._setMode(rp.lib, this._outs[0].m);
       rp.playing = true;
       rp.last = performance.now();
       rp.outAt = 0;
@@ -2230,13 +2237,30 @@
       }
       if (this._strokeKind) {
         this._stRun();                 // the stroke timer moves the bar and drives the devices
-      } else if (rp.conv) {
-        const a = sampleAt(rp.conv.actions, rp.t);
-        const v1 = rp.conv.channels && rp.conv.channels.V1 && rp.conv.channels.V1.actions;
-        const b = v1 && v1.length ? sampleAt(v1, rp.t) : a;
-        if (!this._padActive || !this._padActive[0]) this._setPad(0, a);
-        if (!this._padActive || !this._padActive[1]) this._setPad(1, b);
-        if (now - rp.outAt >= 100) { rp.outAt = now; this._outApply([this._vals[0], this._twoPads ? this._vals[1] : null], 0.6); }
+      } else if (rp.raw) {
+        // Vibrate view: each device (and its pad) follows its own way; a
+        // vibration script plays as it is (second track on pad 2).
+        const stroke = isStroke(rp.raw);
+        const targets = [0, 1].map((i) => parseTarget(this._outTargetValue(i)));
+        const value = (i) => {
+          if (!stroke) {
+            const v1 = i && rp.raw.channels && rp.raw.channels.V1 && rp.raw.channels.V1.actions;
+            return sampleAt(v1 && v1.length ? v1 : rp.raw.actions, rp.t);
+          }
+          const m = this._outs[i].m;
+          if (m === FOLLOW_STROKER || (targets[i] && targets[i].motor === 'l')) return sampleAt(rp.raw.actions, rp.t);
+          return sampleAt(this._rpConv(m).actions, rp.t);
+        };
+        for (const i of [0, 1]) if (!this._padActive || !this._padActive[i]) this._setPad(i, value(i));
+        if (now - rp.outAt >= 100 || targets.some((t) => t && t.motor === 'l')) {
+          if (now - rp.outAt >= 100) rp.outAt = now;
+          const out = [0, 1].map((i) => {
+            if (i && !this._twoPads) return null;
+            if (targets[i] && targets[i].motor === 'l') return (this._padActive && this._padActive[i]) || !stroke ? { goal: this._vals[i], dur: 150 } : (this._rpGoal() || { goal: this._vals[i], dur: 150 });
+            return this._vals[i];
+          });
+          this._outApply(out, 0.6);
+        }
       }
       if (now - (rp.shownAt || 0) >= 100) { rp.shownAt = now; this._rpShow(); }
     }
@@ -2254,7 +2278,6 @@
       $('rpinfo').textContent = parts.join(' · ');
       $('rpplay').textContent = rp.playing ? '■ Stop' : '▶ Replay';
       $('rpplay').classList.toggle('stop', rp.playing);
-      $('rpmodebox').hidden = !(rp.raw && isStroke(rp.raw) && !this._strokeKind);
     }
 
     // ---------------------------------------------------------- outputs
@@ -2431,7 +2454,9 @@
         const take = row.querySelector('.outtake');
         take.hidden = !owner;
         if (owner) take.textContent = `Take control (${owner.label || 'in use'})`;
-        msel.hidden = !stroke || !p || Boolean(owner);
+        // Follow types apply in the stroke view, and when a stroke script replays in the vibrate view.
+        const mapping = stroke || (this._ctl === 'replay' && this._rp && this._rp.raw && isStroke(this._rp.raw));
+        msel.hidden = !mapping || !p || Boolean(owner);
         row.classList.toggle('solo', msel.hidden);
         row.classList.toggle('take', Boolean(owner));
       }
