@@ -355,6 +355,12 @@ assert.strictEqual(runScript(two, 'speed'), two, 'vibration scripts play unchang
     }
   }
   assert.strictEqual(n, keys.length * 3 * 2);
+  // Strength softens strokers: depth toward the tip, so half strength = half the travel (and speed).
+  const { moodSoften } = eval(grab('  const MOOD_TIP =', '  // Build a combo:') + '; ({ moodSoften })');
+  assert.strictEqual(moodSoften(95, 0.5), 95);
+  assert.strictEqual(moodSoften(5, 0.5), 50);
+  assert.strictEqual(moodSoften(5, 1), 5);
+  assert.strictEqual(Math.abs(moodSoften(5, 0.5) - moodSoften(85, 0.5)), 40, '80 units of travel become 40');
   // Alternating moods give the second device its own track.
   assert.strictEqual(buildMood(MOODS.squeeze.combos[1][1], aiRandom(3)).vibe.length, 2);
   assert.strictEqual(buildMood(MOODS.tease.combos[0][1], aiRandom(3)).vibe.length, 1);

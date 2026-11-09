@@ -6,7 +6,7 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.12.0';
+  const VERSION = '0.12.1';
   const DEVICE_KEY = 'oggstudio_device';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
@@ -716,6 +716,11 @@
     ] },
   };
 
+  // Strength for strokers: depth scales toward the tip (95), so a softer
+  // setting gives shallower strokes at the same timing, which is also slower.
+  const MOOD_TIP = 95;
+  const moodSoften = (pos, k) => MOOD_TIP + (pos - MOOD_TIP) * k;
+
   // Build a combo: a stroke track and one or two vibration tracks, aligned at every section.
   function buildMood(sections, r) {
     const s = moodTrack(85, true), v1 = moodTrack(0, false), v2 = moodTrack(0, false);
@@ -1328,7 +1333,7 @@
                 <div class="moodgrid">${Object.entries(MOODS).map(([k, m]) => `<button type="button" class="moodbtn" data-mood="${k}"><span>${m.icon}</span>${m.label}</button>`).join('')}</div>
                 <div class="rpbar" id="moodbar"><i id="moodfill"></i></div>
                 <div class="rpinfo" id="moodinfo"></div>
-                <div class="moodrow"><label>Strength</label><input id="moodstr" type="range" min="20" max="100" step="5" value="100"><b id="moodstrv">100%</b></div>
+                <div class="moodrow"><label title="Vibration level, and stroke depth and speed">Strength</label><input id="moodstr" type="range" min="20" max="100" step="5" value="100"><b id="moodstrv">100%</b></div>
                 <div class="row" style="margin-top:6px"><button id="moodnext" type="button">🎲 Another</button><button id="moodstop" type="button" class="stop">■ Stop</button></div>
               </div>
               <div class="rpbox" id="rpbox" hidden>
@@ -2797,11 +2802,11 @@
     _mapScript(raw, ms, cache) {
       if (raw.mood) {
         // A mood: vibrators get its vibration tracks (scaled by Strength), strokers its strokes.
-        const k = Number(this._el('moodstr').value || 100) / 100;
+        const k = this._moodStrength();
         return [0, 1].map((i) => {
           const p = parseTarget(this._outTargetValue(i));
           this._aiLabel(i, null);
-          if (p && p.motor === 'l') return sampleAt(raw.actions, ms);
+          if (p && p.motor === 'l') return moodSoften(sampleAt(raw.actions, ms), k);
           return sampleAt(raw.mood.vibe[i] || raw.mood.vibe[0], ms) * k;
         });
       }
@@ -2830,7 +2835,13 @@
 
     // A stroker's next move from a script at ms: its next action (or, with AI
     // feel on a vibration script, the next planned stroke) and how long to take.
+    _moodStrength() { return Number(this._el('moodstr').value || 100) / 100; }
+
     _goalFrom(i, raw, ms, rate, cache) {
+      if (raw.mood) {
+        const next = nextAction(raw.actions, ms);
+        return next ? { goal: moodSoften(next.pos, this._moodStrength()), dur: (next.at - ms) / (rate || 1) } : null;
+      }
       const v1 = i && raw.channels && raw.channels.V1 && raw.channels.V1.actions;
       const second = Boolean(v1 && v1.length);
       let src = second ? v1 : raw.actions;
@@ -2982,7 +2993,12 @@
     _rpSpeed() { return parseFloat(this._el('rpspeed').value) || 1; }
 
     // Raw position (stroke view) at the replay time.
-    _rpPos() { const rp = this._rp; return rp.raw ? sampleAt(rp.raw.actions, rp.t) : 0; }
+    _rpPos() {
+      const rp = this._rp;
+      if (!rp.raw) return 0;
+      const pos = sampleAt(rp.raw.actions, rp.t);
+      return rp.raw.mood ? moodSoften(pos, this._moodStrength()) : pos;
+    }
 
     // A stroker's next move from the script: the next action and how long to get there.
     _rpGoal() {

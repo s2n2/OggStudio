@@ -77,8 +77,9 @@ Each mood has three hand-made combos. Each combo has strokes for a stroker and a
 track for vibrators, built in sections that stay in step; Embrace, Squeeze and Heartbeat
 give a second vibrator its own alternating track. Tapping a mood plays one of its combos at
 random, with small variations, and a different combo follows when it ends (about 30 s each).
-🎲 Another switches now, tapping the lit mood (or ■ Stop) stops, and **Strength** scales the
-vibration. A mood is its own feel, so it ignores each device's follow type. Strokes stay
+🎲 Another switches now, tapping the lit mood (or ■ Stop) stops, and **Strength** softens it:
+vibration level, and for a stroker the depth (scaled toward the tip, so strokes get shallower
+and, at the same timing, slower). A mood is its own feel, so it ignores each device's follow type. Strokes stay
 within the device's top speed.
 
 ## Devices
