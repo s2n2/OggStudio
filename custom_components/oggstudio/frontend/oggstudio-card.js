@@ -6,7 +6,7 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.6.2';
+  const VERSION = '0.6.3';
   const DEVICE_KEY = 'oggstudio_device';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
@@ -28,6 +28,8 @@
     'oggstudio-stroke-card': { name: 'OggStudio Stroke', sub: 'Record stroke scripts (for a Handy) between two limits', parts: ['stroke', 'take'], size: 8,
       description: 'Stroke recorder: set an upper and lower limit, hold a speed to stroke between them, record a stroke funscript.' },
   };
+  // Pointer capture can fail (a pointer already gone); never let it stop a press.
+  const capture = (el, e) => { try { el.setPointerCapture(e.pointerId); } catch (_) { /* no capture */ } };
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
   const b64 = (buf) => {
@@ -140,25 +142,29 @@
     return moveIntensity(mode, pos - vel / 10, pos, 100);   // the last 100 ms of movement
   }
 
-  // Stroke recorder. Holding a speed strokes between the lower and upper
-  // limits; one full cycle (up and down) takes the same time whatever the
-  // range, like a stroker's speed setting.
-  const STROKE_SPEEDS = [{ name: 'Slow', cycle: 1600 }, { name: 'Medium', cycle: 900 }, { name: 'Fast', cycle: 500 }];
+  // Stroke recorder. Holding (or latching) a speed strokes between the lower
+  // and upper limits at that device speed, whatever the range: a speed is a
+  // % of top speed, and 100% = a full 0-100 stroke in a quarter second
+  // (400 units/s, the same scale as the Speed run mode).
+  const STROKE_TOP = 400;   // position units per second at 100%
+  const STROKE_SPEEDS = [{ name: 'Slow', pct: 30 }, { name: 'Medium', pct: 55 }, { name: 'Fast', pct: 100 }];
+  const STROKE_PCTS = Array.from({ length: 20 }, (_, i) => (i + 1) * 5);   // 5..100
+  const STROKE_SPEED_KEY = 'oggstudio_stroke_speeds';
+  const strokeVel = (pct) => pct / 100 * STROKE_TOP / 1000;               // units per ms
   const STROKE_MODE_KEY = 'oggstudio_stroke_mode';
   const STROKE_LIMIT_KEY = 'oggstudio_stroke_limits';
 
-  // Move for dtMs at a speed. Returns the new position and direction, and
-  // each turn (a limit reached) with how far through dtMs it happened.
-  // Outside the range it heads into it at full-range speed.
-  function strokeStep(pos, dir, lower, upper, cycleMs, dtMs) {
+  // Move for dtMs at vel (units per ms). Returns the new position and
+  // direction, and each turn (a limit reached) with how far through dtMs it
+  // happened. Outside the range it heads into it at the same speed.
+  function strokeStep(pos, dir, lower, upper, vel, dtMs) {
     const span = upper - lower;
     if (span < 1) return { pos, dir, turns: [] };
-    const outside = pos < lower || pos > upper;
     if (pos < lower) dir = 1; else if (pos > upper) dir = -1;
-    const total = 2 * (outside ? Math.max(span, 100) : span) / cycleMs * Math.min(dtMs, 100);
+    const total = vel * Math.min(dtMs, 100);
     let left = total;
     const turns = [];
-    for (let guard = 0; guard < 16 && left > 1e-9; guard++) {
+    for (let guard = 0; guard < 64 && left > 1e-9; guard++) {
       const target = dir > 0 ? upper : lower;
       const dist = (target - pos) * dir;
       if (left < dist) { pos += left * dir; left = 0; break; }
@@ -200,10 +206,10 @@
   }
 
   // Touching the position lane: until the stroker reaches the finger it moves
-  // no faster than the last speed button strokes (Slow if none), so a touch
-  // far from where it is never makes it jump. After that it follows the finger.
-  function approachStep(pos, target, lower, upper, cycleMs, dtMs) {
-    const step = 2 * Math.max(upper - lower, 20) / cycleMs * Math.min(dtMs, 100);
+  // no faster than the last speed used (Slow if none), so a touch far from
+  // where it is never makes it jump. After that it follows the finger.
+  function approachStep(pos, target, vel, dtMs) {
+    const step = vel * Math.min(dtMs, 100);
     const d = target - pos;
     if (Math.abs(d) <= step) return { pos: target, caught: true };
     return { pos: pos + Math.sign(d) * step, caught: false };
@@ -463,7 +469,7 @@
       if (this._recording) this._stopRecording();
       if (this._live) { this._el('live').checked = false; this._setLive(false); }
       if (this._stRecording) this._stStop();
-      if (this._st) { this._st.touch = null; this._st.pad = null; this._st.drag = null; }
+      if (this._st) { this._st.touch = null; this._st.pad = null; this._st.drag = null; this._st.latch = null; }
       this._el('stlive').checked = false;
       this._stHalt();
       this._kind = kind;
@@ -607,8 +613,13 @@
           .stlim{position:absolute;left:0;right:0;text-align:center;font-size:11px;font-weight:800;color:#bff5ea;font-variant-numeric:tabular-nums;pointer-events:none}
           .stlane .pct{position:absolute;top:8px;left:0;right:0;text-align:center;font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.55);pointer-events:none}
           .stside{display:flex;flex-direction:column;gap:8px}
-          .stside button.sthold{flex:1;min-height:58px;font-size:15px;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+          .stspd{flex:1;display:flex;flex-direction:column;gap:4px;padding:5px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.025)}
+          .stside button.sthold{flex:1;min-height:46px;font-size:15px;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
           .stside button.sthold.on{background:linear-gradient(110deg,#2fbfa9,#67e0c8);color:#062a24;border-color:transparent}
+          .stctl{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+          .stctl select{padding:4px 6px;min-height:32px;font-size:12px;border-radius:9px}
+          .stside button.stlatch{min-height:32px;padding:0 6px;font-size:11.5px;border-radius:9px;background:#141d33;color:var(--muted)}
+          .stside button.stlatch.on{background:linear-gradient(110deg,#ff5c7a,#ff8aa0);color:#2a0710;border-color:transparent}
           .stside .row button{min-height:46px}
           .stinfo{font-size:12px;color:#cdd6f6;font-variant-numeric:tabular-nums;margin-top:6px;text-align:center}
           .rechead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
@@ -637,16 +648,16 @@
                 <div class="stlane" id="stlane" role="slider" tabindex="0" aria-label="Stroke position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><div class="ticks"></div><div class="stshade" id="stshade"></div><div class="stpos" id="stpos"></div><span class="pct" id="stpct">50</span></div>
               </div></div>
               <div class="stside">
-                <button class="sthold" type="button" data-speed="2">Fast</button>
-                <button class="sthold" type="button" data-speed="1">Medium</button>
-                <button class="sthold" type="button" data-speed="0">Slow</button>
+                <div class="stspd"><button class="sthold" type="button" data-speed="2">Fast</button><div class="stctl"><select class="stpct" data-speed="2" aria-label="Fast speed">${STROKE_PCTS.map((v) => `<option value="${v}">${v}%</option>`).join('')}</select><button class="stlatch" type="button" data-speed="2" aria-pressed="false" title="Keep running at this speed">⟳ Latch</button></div></div>
+                <div class="stspd"><button class="sthold" type="button" data-speed="1">Medium</button><div class="stctl"><select class="stpct" data-speed="1" aria-label="Medium speed">${STROKE_PCTS.map((v) => `<option value="${v}">${v}%</option>`).join('')}</select><button class="stlatch" type="button" data-speed="1" aria-pressed="false" title="Keep running at this speed">⟳ Latch</button></div></div>
+                <div class="stspd"><button class="sthold" type="button" data-speed="0">Slow</button><div class="stctl"><select class="stpct" data-speed="0" aria-label="Slow speed">${STROKE_PCTS.map((v) => `<option value="${v}">${v}%</option>`).join('')}</select><button class="stlatch" type="button" data-speed="0" aria-pressed="false" title="Keep running at this speed">⟳ Latch</button></div></div>
                 <div class="row"><button id="stlimit" type="button">Set limit</button><button id="streset" type="button">Reset limits</button></div>
               </div>
             </div>
             <button id="strec" class="rec" type="button">● Record</button><div class="stinfo" id="stinfo"></div>
             <label>The device follows as</label><select id="stmode">${runModeOptions()}</select>
             <label class="check" style="margin-top:6px"><input id="stlive" type="checkbox"> Device follows without recording</label>
-            <div class="hint">Hold Slow, Medium or Fast to stroke between the limits; let go to stop where you are. Drag the range on the left: a limit to move it, the middle to move the whole range. Touch the position bar to move there: it travels at the last speed you used until it reaches your finger, then follows it. Or stop at a spot and press Set limit: above the other limit it becomes the upper one, below it the lower one. Reset limits goes back to the full range. A vibration device follows using the mode above.</div>
+            <div class="hint">Hold Slow, Medium or Fast to stroke between the limits at that speed (% of the device's top speed); let go to stop where you are. ⟳ Latch keeps a speed running without holding; pressing any speed button, or latching another, takes over. Touching the position bar overrides a latch only while your finger is down. Drag the range on the left: a limit to move it, the middle to move the whole range. Touch the position bar to move there: it travels at the last speed you used until it reaches your finger, then follows it. Or stop at a spot and press Set limit: above the other limit it becomes the upper one, below it the lower one. Reset limits goes back to the full range. A vibration device follows using the mode above.</div>
           </section>
           <section data-part="record">
             <div class="rechead"><h3>Record</h3><div class="kind" role="group" aria-label="Recording type"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div></div>
@@ -743,7 +754,7 @@
       const lim = load(STROKE_LIMIT_KEY, null);
       const okLim = lim && Number.isFinite(lim.lower) && Number.isFinite(lim.upper) && lim.upper - lim.lower >= 2;
       // pad / touch: speed held on the controller / on screen; drag: finger on the bar.
-      this._st = { pos: 50, dir: 1, vel: 0, pad: null, touch: null, drag: null, moving: null,
+      this._st = { pos: 50, dir: 1, vel: 0, pad: null, touch: null, latch: null, drag: null, moving: null,
         ...(okLim ? { lower: lim.lower, upper: lim.upper, last: lim.last || null } : { ...STROKE_LIMITS_RESET }) };
       this._stRecording = false;
       const mode = load(STROKE_MODE_KEY, RUN_MODE_DEFAULT);
@@ -753,13 +764,25 @@
       $('strec').addEventListener('click', () => (this._stRecording ? this._stStop() : this._stStart()));
       $('stlimit').addEventListener('click', () => this._stSetLimit());
       $('streset').addEventListener('click', () => this._stReset());
+      const pcts = load(STROKE_SPEED_KEY, null);
+      this._stPcts = STROKE_SPEEDS.map((sp, i) => (Array.isArray(pcts) && STROKE_PCTS.includes(pcts[i]) ? pcts[i] : sp.pct));
+      for (const sel of this.shadowRoot.querySelectorAll('.stpct')) {
+        const i = Number(sel.dataset.speed);
+        sel.value = String(this._stPcts[i]);
+        sel.addEventListener('change', () => { this._stPcts[i] = Number(sel.value); this._gpSave(STROKE_SPEED_KEY, this._stPcts); this._stShow(); this._gpStatus(); });
+      }
+      for (const btn of this.shadowRoot.querySelectorAll('.stlatch')) {
+        const i = Number(btn.dataset.speed);
+        btn.addEventListener('click', () => { this._st.latch = this._st.latch === i ? null : i; this._stRun(); });
+      }
       for (const btn of this.shadowRoot.querySelectorAll('.sthold')) {
         const speed = Number(btn.dataset.speed);
         const release = () => { if (this._st.touch === speed) { this._st.touch = null; this._stRun(); } };
-        btn.addEventListener('pointerdown', (e) => { e.preventDefault(); btn.setPointerCapture?.(e.pointerId); this._st.touch = speed; this._stRun(); });
+        // Pressing a speed takes over from a latched one: it runs while held and stops on release.
+        btn.addEventListener('pointerdown', (e) => { e.preventDefault(); capture(btn, e); this._st.latch = null; this._st.touch = speed; this._stRun(); });
         for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) btn.addEventListener(type, release);
         btn.addEventListener('contextmenu', (e) => e.preventDefault());
-        btn.addEventListener('keydown', (e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); this._st.touch = speed; this._stRun(); } });
+        btn.addEventListener('keydown', (e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); this._st.latch = null; this._st.touch = speed; this._stRun(); } });
         btn.addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') release(); });
       }
       const level = (el, e) => { const r = el.getBoundingClientRect(); return Math.min(100, Math.max(0, (1 - (e.clientY - r.top) / r.height) * 100)); };
@@ -767,7 +790,7 @@
       const lane = $('stlane');
       lane.addEventListener('pointerdown', (e) => {
         e.preventDefault();
-        lane.setPointerCapture?.(e.pointerId);
+        capture(lane, e);
         lane.classList.add('active');
         this._st.caught = false;
         this._st.drag = level(lane, e);
@@ -786,7 +809,7 @@
       let grab = null;
       rail.addEventListener('pointerdown', (e) => {
         e.preventDefault();
-        rail.setPointerCapture?.(e.pointerId);
+        capture(rail, e);
         rail.classList.add('active');
         const v = level(rail, e);
         grab = railGrab(this._st, v, 22 / rail.getBoundingClientRect().height * 100);   // ~22 px either side of a limit
@@ -822,7 +845,7 @@
 
     _stSpeed() {
       const st = this._st;
-      return st.drag !== null ? null : st.touch ?? st.pad ?? null;
+      return st.drag !== null ? null : st.touch ?? st.pad ?? st.latch ?? null;
     }
 
     // One timer while anything moves, records or follows live; it stops
@@ -847,13 +870,13 @@
       }
       if (speed !== null) st.lastSpeed = speed;
       if (speed !== null) {
-        const r = strokeStep(st.pos, st.dir, st.lower, st.upper, STROKE_SPEEDS[speed].cycle, dt);
+        const r = strokeStep(st.pos, st.dir, st.lower, st.upper, strokeVel(this._stPcts[speed]), dt);
         for (const t of r.turns) this._stMark(now - dt + t.frac * dt, t.pos);
         st.pos = r.pos; st.dir = r.dir;
       } else if (st.drag !== null) {
         if (st.caught) st.pos = st.drag;
         else {
-          const r = approachStep(st.pos, st.drag, st.lower, st.upper, STROKE_SPEEDS[st.lastSpeed ?? 0].cycle, dt);
+          const r = approachStep(st.pos, st.drag, strokeVel(this._stPcts[st.lastSpeed ?? 0]), dt);
           st.pos = r.pos; st.caught = r.caught;
         }
         if (Math.abs(st.pos - before) > 0.5 && now - (this._stDragMark || 0) >= 50) { this._stDragMark = now; this._stMark(now); }
@@ -957,10 +980,14 @@
       $('strail').setAttribute('aria-valuetext', `range ${st.lower} to ${st.upper}`);
       const speed = this._stSpeed();
       for (const b of this.shadowRoot.querySelectorAll('.sthold')) b.classList.toggle('on', Number(b.dataset.speed) === speed);
+      for (const b of this.shadowRoot.querySelectorAll('.stlatch')) {
+        const on = Number(b.dataset.speed) === st.latch;
+        if (b.classList.contains('on') !== on) { b.classList.toggle('on', on); b.textContent = on ? '■ Latched' : '⟳ Latch'; b.setAttribute('aria-pressed', String(on)); }
+      }
       $('strec').textContent = this._stRecording ? '■ Stop recording' : '● Record';
       $('strec').classList.toggle('on', this._stRecording);
       const bits = [`Range ${st.lower}–${st.upper}`];
-      if (speed !== null) bits.push(STROKE_SPEEDS[speed].name);
+      if (speed !== null) bits.push(`${STROKE_SPEEDS[speed].name} ${this._stPcts[speed]}%${st.latch === speed && st.touch === null && st.pad === null ? ' (latched)' : ''}`);
       if (this._stRecording) bits.push(`● ${fmt(performance.now() - this._st0)}`);
       if (!this._device) bits.push('no device: recording only');
       else if (this._stLiveSent) bits.push(`device ${Math.round(this._stLiveSent.v * 100)}%`);
@@ -1140,7 +1167,7 @@
         if (pressed('limit')) this._stSetLimit();
         if (pressed('reset')) this._stReset();
         const held = s.fast > 0.5 ? 2 : s.med > 0.5 ? 1 : s.slow > 0.5 ? 0 : null;
-        if (held !== this._st.pad) { this._st.pad = held; this._stRun(); }
+        if (held !== this._st.pad) { if (held !== null) this._st.latch = null; this._st.pad = held; this._stRun(); }
         this._gpPrev = s;
         this._gpStatus();
         return;
@@ -1224,7 +1251,8 @@
       else if (!$('gpon').checked) html = stroke ? 'Hold a speed to stroke, set and reset limits, record' : 'Up/down = level, left/right = speed, A = record';
       else if (stroke) {
         const st = this._st;
-        const bits = [st.pad !== null && st.pad !== undefined ? `<b>${STROKE_SPEEDS[st.pad].name}</b>` : 'hold a speed to stroke'];
+        const sp = this._stSpeed();
+        const bits = [sp !== null && sp !== undefined ? `<b>${STROKE_SPEEDS[sp].name} ${this._stPcts[sp]}%</b>` : 'hold a speed to stroke'];
         if (this._gpPadId) bits.push(esc(this._gpPadId.replace(/\s*\(.*$/, '').slice(0, 28)) + (this._gpPadCount > 1 && this._gpActive === undefined ? ` (1 of ${this._gpPadCount}: press a button to choose)` : ''));
         else if (this._gpBlocked || !window.isSecureContext) bits.push('no gamepad: this page is not HTTPS, so only keyboard-mode controllers work');
         else bits.push('press a button on the controller');
@@ -1539,7 +1567,7 @@
         event.preventDefault();
         active = true;
         bar.classList.add('active');
-        bar.setPointerCapture?.(event.pointerId);
+        capture(bar, event);
         fromEvent(event);
       });
       bar.addEventListener('pointermove', (event) => { if (active) fromEvent(event); });
@@ -1811,7 +1839,7 @@
         event.preventDefault();
         active = true;
         pad.classList.add('active');
-        pad.setPointerCapture?.(event.pointerId);
+        capture(pad, event);
         fromEvent(event);
       });
       pad.addEventListener('pointermove', (event) => { if (active) fromEvent(event); });

@@ -55,14 +55,21 @@ toggle at the top of the Record section switches between the pads and this strok
 (remembered per card type):
 
 * **Hold Slow, Medium or Fast** to stroke between the lower and upper limit. Let go and it
-  stops where it is. Each speed is a fixed time per stroke (1.6 s, 0.9 s or 0.5 s up and
-  down), whatever the range.
+  stops where it is. Each speed is a % of the device's top speed, chosen in the dropdown
+  under it (defaults 30%, 55% and 100%). 100% is a full 0 to 100 stroke in a quarter second.
+  The device moves at that speed whatever the range, so a short range just makes quicker
+  strokes. The choices are remembered per browser.
+* **⟳ Latch** keeps a speed running without holding the button. Latching another speed
+  switches to it, and pressing the latch again stops. Pressing any speed button takes over
+  from a latch: it runs while held and stops when you let go.
 * **Range bar** (left): drag the top or bottom edge to move that limit, or drag the middle
   to move the whole range without changing its width.
 * **Position bar** (right): touch to move the stroker there by hand. Until it reaches your
   finger it moves no faster than the last speed button you used (Slow if none), so a stray
   touch at the far end never makes it jump. Once it has caught up it follows your finger
-  directly, fast or slow.
+  directly, fast or slow. While a speed is latched, the position bar overrides it only while
+  your finger is down (even outside the range); let go and it heads back into the range and
+  carries on.
 * **Set limit** makes the current position a limit (handy on a controller). Above the other limit, it becomes the
   upper one; below it, the lower one. The first limit after a reset replaces whichever end
   is nearer. The limits are remembered per browser.

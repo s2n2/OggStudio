@@ -183,27 +183,30 @@ assert.strictEqual(runScript(two, 'speed'), two, 'vibration scripts play unchang
 
 // Stroke recorder: holding a speed strokes between the limits.
 {
-  // Medium: a 900 ms cycle. Range 20-80 = 60 up + 60 down per cycle.
-  let r = strokeStep(20, 1, 20, 80, 900, 90);
-  assert.ok(Math.abs(r.pos - 32) < 1e-9 && r.dir === 1 && !r.turns.length, '120 units per 900 ms');
-  r = strokeStep(75, 1, 20, 80, 900, 75);   // 10 units: 5 up to the limit, 5 back down
+  // Speed is device speed: 100% = 400 units/s, whatever the range.
+  const V = (pct) => pct / 100 * 400 / 1000;
+  let r = strokeStep(20, 1, 20, 80, V(50), 60);
+  assert.ok(Math.abs(r.pos - 32) < 1e-9 && r.dir === 1 && !r.turns.length, '50% = 200 units/s = 12 units in 60 ms');
+  const short = strokeStep(40, 1, 40, 60, V(100), 20), long = strokeStep(0, 1, 0, 100, V(100), 20);
+  assert.strictEqual(short.pos - 40, long.pos - 0, 'same speed on a short range as on the full range');
+  r = strokeStep(75, 1, 20, 80, V(100), 25);   // 10 units: 5 up to the limit, 5 back down
   assert.ok(Math.abs(r.pos - 75) < 1e-9 && r.dir === -1);
   assert.strictEqual(r.turns.length, 1);
   assert.strictEqual(r.turns[0].pos, 80);
   assert.ok(Math.abs(r.turns[0].frac - 0.5) < 1e-9, 'turn half way through the tick');
-  // A whole cycle comes back to the start, turning at both limits.
-  let pos = 20, dir = 1; const turns = [];
-  for (let i = 0; i < 45; i++) { r = strokeStep(pos, dir, 20, 80, 900, 20); pos = r.pos; dir = r.dir; turns.push(...r.turns.map((t) => t.pos)); }
-  assert.ok(Math.abs(pos - 20) < 1e-6, 'one cycle = back to the start');
-  assert.deepStrictEqual(turns.slice(0, 1), [80]);
-  // Outside the range it heads in (at full-range speed) and then strokes.
-  r = strokeStep(95, 1, 20, 80, 900, 45);
+  // A 20-wide range at 100%: up and back (40 units) in 100 ms; the full range takes 500 ms.
+  let pos = 40, dir = 1; const turns = [];
+  for (let i = 0; i < 5; i++) { r = strokeStep(pos, dir, 40, 60, V(100), 20); pos = r.pos; dir = r.dir; turns.push(...r.turns.map((t) => t.pos)); }
+  assert.ok(Math.abs(pos - 40) < 1e-6, 'short range: shorter cycle, not slower movement');
+  assert.deepStrictEqual(turns, [60, 40]);
+  // Outside the range it heads in and then strokes.
+  r = strokeStep(95, 1, 20, 80, V(50), 45);
   assert.ok(r.pos < 95 && r.dir === -1, 'above the range: comes down');
-  r = strokeStep(5, -1, 20, 80, 900, 20);
+  r = strokeStep(5, -1, 20, 80, V(50), 20);
   assert.ok(r.pos > 5 && r.dir === 1);
-  assert.deepStrictEqual(strokeStep(50, 1, 50, 50, 900, 20), { pos: 50, dir: 1, turns: [] }, 'no range: no movement');
-  assert.strictEqual(strokeStep(20, 1, 20, 80, 900, 5000).pos, strokeStep(20, 1, 20, 80, 900, 100).pos, 'a long timer gap moves at most 100 ms worth');
-  assert.ok(STROKE_SPEEDS.every((x, i) => i === 0 || x.cycle < STROKE_SPEEDS[i - 1].cycle), 'slow, medium, fast');
+  assert.deepStrictEqual(strokeStep(50, 1, 50, 50, V(50), 20), { pos: 50, dir: 1, turns: [] }, 'no range: no movement');
+  assert.strictEqual(strokeStep(20, 1, 20, 80, V(30), 5000).pos, strokeStep(20, 1, 20, 80, V(30), 100).pos, 'a long timer gap moves at most 100 ms worth');
+  assert.ok(STROKE_SPEEDS.every((x, i) => i === 0 || x.pct > STROKE_SPEEDS[i - 1].pct), 'slow, medium, fast');
 
   // Set limit pairs with the limit set before it; the first replaces the nearer end.
   let lim = { ...STROKE_LIMITS_RESET };
@@ -231,17 +234,14 @@ assert.strictEqual(runScript(two, 'speed'), two, 'vibration scripts play unchang
   assert.deepStrictEqual(railDrag(L, { mode: 'move', off: 20 }, 99), { lower: 60, upper: 100 }, 'stops at the top');
   assert.deepStrictEqual(railDrag(L, { mode: 'move', off: 20 }, -5), { lower: 0, upper: 40 }, 'stops at the bottom');
 
-  // First touch on the position bar: no faster than the last speed (here Slow,
-  // full range: 200 units per 1600 ms), then it follows the finger.
-  let a = approachStep(0, 100, 0, 100, 1600, 20);
-  assert.ok(Math.abs(a.pos - 2.5) < 1e-9 && !a.caught, 'slow: 2.5 units per 20 ms');
-  a = approachStep(0, 100, 0, 100, 500, 20);
-  assert.ok(Math.abs(a.pos - 8) < 1e-9, 'after Fast: faster');
-  assert.deepStrictEqual(approachStep(49, 50, 0, 100, 1600, 20), { pos: 50, caught: true }, 'close enough: caught');
+  // First touch on the position bar: no faster than the last speed, then it follows the finger.
+  let a = approachStep(0, 100, V(30), 20);
+  assert.ok(Math.abs(a.pos - 2.4) < 1e-9 && !a.caught, '30%: 2.4 units per 20 ms');
+  assert.ok(Math.abs(approachStep(0, 100, V(100), 20).pos - 8) < 1e-9, '100%: 8 units per 20 ms');
+  assert.deepStrictEqual(approachStep(49, 50, V(30), 20), { pos: 50, caught: true }, 'close enough: caught');
   let p2 = 0, t = 0, caught = false;
-  while (!caught && t < 5000) { const r = approachStep(p2, 100, 0, 100, 1600, 20); p2 = r.pos; caught = r.caught; t += 20; }
-  assert.ok(t >= 780 && t <= 820, 'a full-range jump at Slow takes about 0.8 s, not an instant');
-  assert.ok(approachStep(40, 60, 40, 45, 1600, 20).pos - 40 >= 0.5 - 1e-9, 'tiny range: never crawls (counts as at least 20 wide)');
+  while (!caught && t < 5000) { const q = approachStep(p2, 100, V(30), 20); p2 = q.pos; caught = q.caught; t += 20; }
+  assert.ok(t >= 820 && t <= 860, 'a full-range jump at 30% takes about 0.83 s, not an instant');
 }
 
 // Device choice: remembered > configured > first connected (never an old, offline device).
