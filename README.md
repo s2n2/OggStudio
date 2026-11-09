@@ -56,8 +56,14 @@ toggle at the top of the Record section switches between the pads and this strok
 
 * **Hold Slow, Medium or Fast** to stroke between the lower and upper limit. Let go and it
   stops where it is. Each speed is a fixed time per stroke (1.6 s, 0.9 s or 0.5 s up and
-  down), whatever the range. You can also drag the bar to move by hand.
-* **Set limit** makes the current position a limit. Above the other limit, it becomes the
+  down), whatever the range.
+* **Range bar** (left): drag the top or bottom edge to move that limit, or drag the middle
+  to move the whole range without changing its width.
+* **Position bar** (right): touch to move the stroker there by hand. Until it reaches your
+  finger it moves no faster than the last speed button you used (Slow if none), so a stray
+  touch at the far end never makes it jump. Once it has caught up it follows your finger
+  directly, fast or slow.
+* **Set limit** makes the current position a limit (handy on a controller). Above the other limit, it becomes the
   upper one; below it, the lower one. The first limit after a reset replaces whichever end
   is nearer. The limits are remembered per browser.
 * **Reset limits** goes back to the full range, 0 to 100.

@@ -215,6 +215,33 @@ assert.strictEqual(runScript(two, 'speed'), two, 'vibration scripts play unchang
   assert.deepStrictEqual(strokeSetLimit({ lower: 30, upper: 70, last: 'lower' }, 10), { lower: 10, upper: 30, last: 'lower' });
   assert.deepStrictEqual(strokeSetLimit({ ...STROKE_LIMITS_RESET }, 80), { lower: 0, upper: 80, last: 'upper' });
   assert.strictEqual(strokeSetLimit(lim, 71), null, 'on top of the other limit: refused');
+
+  // Range rail: grab a limit near it, the band in the middle, the nearer limit outside.
+  const L = { lower: 30, upper: 70 };
+  assert.deepStrictEqual(railGrab(L, 72, 5), { mode: 'upper' });
+  assert.deepStrictEqual(railGrab(L, 27, 5), { mode: 'lower' });
+  assert.deepStrictEqual(railGrab(L, 50, 5), { mode: 'move', off: 20 });
+  assert.deepStrictEqual(railGrab(L, 90, 5), { mode: 'upper' });
+  assert.deepStrictEqual(railGrab(L, 5, 5), { mode: 'lower' });
+  assert.deepStrictEqual(railGrab({ lower: 48, upper: 52 }, 50.5, 5), { mode: 'upper' }, 'narrow range: the nearer limit');
+  assert.deepStrictEqual(railDrag(L, { mode: 'upper' }, 85.4), { lower: 30, upper: 85 });
+  assert.deepStrictEqual(railDrag(L, { mode: 'upper' }, 10), { lower: 30, upper: 32 }, 'upper never goes below lower');
+  assert.deepStrictEqual(railDrag(L, { mode: 'lower' }, 99), { lower: 68, upper: 70 });
+  assert.deepStrictEqual(railDrag(L, { mode: 'move', off: 20 }, 60), { lower: 40, upper: 80 }, 'whole range moves, same width');
+  assert.deepStrictEqual(railDrag(L, { mode: 'move', off: 20 }, 99), { lower: 60, upper: 100 }, 'stops at the top');
+  assert.deepStrictEqual(railDrag(L, { mode: 'move', off: 20 }, -5), { lower: 0, upper: 40 }, 'stops at the bottom');
+
+  // First touch on the position bar: no faster than the last speed (here Slow,
+  // full range: 200 units per 1600 ms), then it follows the finger.
+  let a = approachStep(0, 100, 0, 100, 1600, 20);
+  assert.ok(Math.abs(a.pos - 2.5) < 1e-9 && !a.caught, 'slow: 2.5 units per 20 ms');
+  a = approachStep(0, 100, 0, 100, 500, 20);
+  assert.ok(Math.abs(a.pos - 8) < 1e-9, 'after Fast: faster');
+  assert.deepStrictEqual(approachStep(49, 50, 0, 100, 1600, 20), { pos: 50, caught: true }, 'close enough: caught');
+  let p2 = 0, t = 0, caught = false;
+  while (!caught && t < 5000) { const r = approachStep(p2, 100, 0, 100, 1600, 20); p2 = r.pos; caught = r.caught; t += 20; }
+  assert.ok(t >= 780 && t <= 820, 'a full-range jump at Slow takes about 0.8 s, not an instant');
+  assert.ok(approachStep(40, 60, 40, 45, 1600, 20).pos - 40 >= 0.5 - 1e-9, 'tiny range: never crawls (counts as at least 20 wide)');
 }
 
 // Device choice: remembered > configured > first connected (never an old, offline device).

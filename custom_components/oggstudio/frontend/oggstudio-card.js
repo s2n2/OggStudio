@@ -6,7 +6,7 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.6.1';
+  const VERSION = '0.6.2';
   const DEVICE_KEY = 'oggstudio_device';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
@@ -178,6 +178,36 @@
     return p > keep ? { lower: keep, upper: p, last: 'upper' } : { lower: p, upper: keep, last: 'lower' };
   }
   const STROKE_LIMITS_RESET = { lower: 0, upper: 100, last: null };
+  const STROKE_MIN_SPAN = 2;
+
+  // Range rail: what a touch at v grabs. Near a limit = that limit, inside
+  // the band = the whole range, outside = the nearer limit (which jumps there).
+  function railGrab(lim, v, tol) {
+    const du = Math.abs(v - lim.upper), dl = Math.abs(v - lim.lower);
+    if (Math.min(du, dl) <= tol) return du <= dl ? { mode: 'upper' } : { mode: 'lower' };
+    if (v > lim.lower && v < lim.upper) return { mode: 'move', off: v - lim.lower };
+    return { mode: v > lim.upper ? 'upper' : 'lower' };
+  }
+
+  // New limits while dragging on the rail.
+  function railDrag(lim, grab, v) {
+    const r = (x) => Math.round(Math.min(100, Math.max(0, x)));
+    if (grab.mode === 'upper') return { lower: lim.lower, upper: Math.max(lim.lower + STROKE_MIN_SPAN, r(v)) };
+    if (grab.mode === 'lower') return { lower: Math.min(lim.upper - STROKE_MIN_SPAN, r(v)), upper: lim.upper };
+    const span = lim.upper - lim.lower;
+    const lower = Math.min(100 - span, r(v - grab.off));
+    return { lower, upper: lower + span };
+  }
+
+  // Touching the position lane: until the stroker reaches the finger it moves
+  // no faster than the last speed button strokes (Slow if none), so a touch
+  // far from where it is never makes it jump. After that it follows the finger.
+  function approachStep(pos, target, lower, upper, cycleMs, dtMs) {
+    const step = 2 * Math.max(upper - lower, 20) / cycleMs * Math.min(dtMs, 100);
+    const d = target - pos;
+    if (Math.abs(d) <= step) return { pos: target, caught: true };
+    return { pos: pos + Math.sign(d) * step, caught: false };
+  }
 
   // Level (0-100) of a script track at time ms: linear between actions,
   // 0 before the first action, holds the last value after the end.
@@ -561,14 +591,21 @@
           .gp button{min-height:36px;flex:0 0 auto}
           .gplearn{flex-basis:100%;font-size:13px;color:#ffcf8a;font-weight:700}
           .gpraw{flex-basis:100%;font-size:10.5px;color:var(--muted);font-family:monospace;word-break:break-all}
-          .st{display:grid;grid-template-columns:minmax(96px,38%) 1fr;gap:10px;margin:4px 0 10px}
-          .sttrack{position:relative;height:300px;border-radius:18px;border:1px solid #33415f;background:#141d33;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:ns-resize;outline:none}
-          .sttrack.active{border-color:#67e0c8}
+          .st{display:grid;grid-template-columns:minmax(150px,52%) 1fr;gap:10px;margin:4px 0 10px}
+          .sttrack{display:grid;grid-template-columns:44% 1fr;gap:6px;height:300px}
+          .strail,.stlane{position:relative;border-radius:16px;border:1px solid #33415f;background:#141d33;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:ns-resize;outline:none}
+          .strail.active,.stlane.active{border-color:#67e0c8}
+          .strail:focus-visible,.stlane:focus-visible{box-shadow:0 0 0 3px rgba(103,224,200,.45)}
           .sttrack .ticks{position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0 calc(25% - 1px),rgba(255,255,255,.07) calc(25% - 1px) 25%);pointer-events:none}
-          .stband{position:absolute;left:0;right:0;background:rgba(103,224,200,.16);border-top:2px solid #67e0c8;border-bottom:2px solid #67e0c8;box-sizing:border-box}
+          .stband{position:absolute;left:6px;right:6px;border-radius:10px;background:rgba(103,224,200,.22);box-sizing:border-box;pointer-events:none}
+          .stband::before,.stband::after{content:'';position:absolute;left:18%;right:18%;height:6px;border-radius:3px;background:#67e0c8}
+          .stband::before{top:-3px} .stband::after{bottom:-3px}
+          .stband .grip{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:14px;color:rgba(103,224,200,.85)}
+          .stshade{position:absolute;left:0;right:0;background:rgba(103,224,200,.08);border-top:1px dashed rgba(103,224,200,.45);border-bottom:1px dashed rgba(103,224,200,.45);box-sizing:border-box;pointer-events:none}
+          .sttags{display:grid;grid-template-columns:44% 1fr;gap:6px;margin-bottom:4px;font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.05em;text-align:center}
           .stpos{position:absolute;left:8%;right:8%;height:14px;margin-bottom:-7px;border-radius:7px;background:linear-gradient(90deg,#ff8aa0,#ffcf8a);box-shadow:0 0 12px rgba(255,138,160,.6)}
-          .stlim{position:absolute;right:8px;font-size:10.5px;font-weight:700;color:#67e0c8;font-variant-numeric:tabular-nums}
-          .sttrack .pct{position:absolute;top:8px;left:0;right:0;text-align:center;font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.55);pointer-events:none}
+          .stlim{position:absolute;left:0;right:0;text-align:center;font-size:11px;font-weight:800;color:#bff5ea;font-variant-numeric:tabular-nums;pointer-events:none}
+          .stlane .pct{position:absolute;top:8px;left:0;right:0;text-align:center;font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.55);pointer-events:none}
           .stside{display:flex;flex-direction:column;gap:8px}
           .stside button.sthold{flex:1;min-height:58px;font-size:15px;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
           .stside button.sthold.on{background:linear-gradient(110deg,#2fbfa9,#67e0c8);color:#062a24;border-color:transparent}
@@ -595,7 +632,10 @@
           <section data-part="stroke">
             <div class="rechead"><h3>Stroke recorder</h3><div class="kind" role="group" aria-label="Recording type"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div></div>
             <div class="st">
-              <div class="sttrack" id="sttrack" role="slider" tabindex="0" aria-label="Stroke position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><div class="ticks"></div><div class="stband" id="stband"></div><span class="stlim" id="stup"></span><span class="stlim" id="stlo"></span><div class="stpos" id="stpos"></div><span class="pct" id="stpct">50</span></div>
+              <div><div class="sttags"><span>RANGE</span><span>POSITION</span></div><div class="sttrack">
+                <div class="strail" id="strail" tabindex="0" aria-label="Stroke range: drag a limit, or the middle to move the whole range"><div class="ticks"></div><div class="stband" id="stband"><span class="grip">⇕</span></div><span class="stlim" id="stup"></span><span class="stlim" id="stlo"></span></div>
+                <div class="stlane" id="stlane" role="slider" tabindex="0" aria-label="Stroke position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><div class="ticks"></div><div class="stshade" id="stshade"></div><div class="stpos" id="stpos"></div><span class="pct" id="stpct">50</span></div>
+              </div></div>
               <div class="stside">
                 <button class="sthold" type="button" data-speed="2">Fast</button>
                 <button class="sthold" type="button" data-speed="1">Medium</button>
@@ -606,7 +646,7 @@
             <button id="strec" class="rec" type="button">● Record</button><div class="stinfo" id="stinfo"></div>
             <label>The device follows as</label><select id="stmode">${runModeOptions()}</select>
             <label class="check" style="margin-top:6px"><input id="stlive" type="checkbox"> Device follows without recording</label>
-            <div class="hint">Hold Slow, Medium or Fast to stroke between the limits; let go to stop where you are. To set a limit, stop at the spot (or drag the bar) and press Set limit: above the other limit it becomes the upper one, below it the lower one. Reset limits goes back to the full range. A vibration device follows using the mode above.</div>
+            <div class="hint">Hold Slow, Medium or Fast to stroke between the limits; let go to stop where you are. Drag the range on the left: a limit to move it, the middle to move the whole range. Touch the position bar to move there: it travels at the last speed you used until it reaches your finger, then follows it. Or stop at a spot and press Set limit: above the other limit it becomes the upper one, below it the lower one. Reset limits goes back to the full range. A vibration device follows using the mode above.</div>
           </section>
           <section data-part="record">
             <div class="rechead"><h3>Record</h3><div class="kind" role="group" aria-label="Recording type"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div></div>
@@ -722,22 +762,60 @@
         btn.addEventListener('keydown', (e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); this._st.touch = speed; this._stRun(); } });
         btn.addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') release(); });
       }
-      const track = $('sttrack');
-      const fromEvent = (e) => { const r = track.getBoundingClientRect(); this._st.drag = Math.min(100, Math.max(0, (1 - (e.clientY - r.top) / r.height) * 100)); };
-      track.addEventListener('pointerdown', (e) => {
+      const level = (el, e) => { const r = el.getBoundingClientRect(); return Math.min(100, Math.max(0, (1 - (e.clientY - r.top) / r.height) * 100)); };
+      // Position lane: the stroker heads for the finger (speed-limited until it gets there).
+      const lane = $('stlane');
+      lane.addEventListener('pointerdown', (e) => {
         e.preventDefault();
-        track.setPointerCapture?.(e.pointerId);
-        track.classList.add('active');
-        fromEvent(e);
+        lane.setPointerCapture?.(e.pointerId);
+        lane.classList.add('active');
+        this._st.caught = false;
+        this._st.drag = level(lane, e);
         this._stRun();
       });
-      track.addEventListener('pointermove', (e) => { if (this._st.drag !== null) fromEvent(e); });
-      const up = () => { if (this._st.drag === null) return; this._st.drag = null; track.classList.remove('active'); this._stRun(); };
-      for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) track.addEventListener(type, up);
-      track.addEventListener('contextmenu', (e) => e.preventDefault());
-      track.addEventListener('keydown', (e) => {
+      lane.addEventListener('pointermove', (e) => { if (this._st.drag !== null) this._st.drag = level(lane, e); });
+      const laneUp = () => { if (this._st.drag === null) return; this._st.drag = null; lane.classList.remove('active'); this._stRun(); };
+      for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) lane.addEventListener(type, laneUp);
+      lane.addEventListener('contextmenu', (e) => e.preventDefault());
+      lane.addEventListener('keydown', (e) => {
         const steps = { ArrowUp: 2, ArrowDown: -2, PageUp: 10, PageDown: -10 };
         if (e.key in steps) { e.preventDefault(); e.stopPropagation(); this._st.pos = Math.min(100, Math.max(0, this._st.pos + steps[e.key])); this._stMark(); this._stRun(); }
+      });
+      // Range rail: drag a limit, or the band to move the whole range.
+      const rail = $('strail');
+      let grab = null;
+      rail.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        rail.setPointerCapture?.(e.pointerId);
+        rail.classList.add('active');
+        const v = level(rail, e);
+        grab = railGrab(this._st, v, 22 / rail.getBoundingClientRect().height * 100);   // ~22 px either side of a limit
+        if (grab.mode !== 'move') Object.assign(this._st, railDrag(this._st, grab, v));
+        this._stShow();
+      });
+      rail.addEventListener('pointermove', (e) => {
+        if (!grab) return;
+        Object.assign(this._st, railDrag(this._st, grab, level(rail, e)));
+        this._stShow();
+      });
+      const railUp = () => {
+        if (!grab) return;
+        // A limit dragged by hand counts as the last one set (for Set limit's pairing).
+        if (grab.mode !== 'move') this._st.last = grab.mode;
+        grab = null;
+        rail.classList.remove('active');
+        this._stSaveLimits();
+        this._stShow();
+      };
+      for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) rail.addEventListener(type, railUp);
+      rail.addEventListener('contextmenu', (e) => e.preventDefault());
+      rail.addEventListener('keydown', (e) => {
+        const steps = { ArrowUp: 2, ArrowDown: -2, PageUp: 10, PageDown: -10 };
+        if (!(e.key in steps)) return;
+        e.preventDefault(); e.stopPropagation();
+        Object.assign(this._st, railDrag(this._st, { mode: 'move', off: 0 }, this._st.lower + steps[e.key]));
+        this._stSaveLimits();
+        this._stShow();
       });
       this._stShow();
     }
@@ -767,12 +845,17 @@
         this._stMark(now - dt);       // a hold starts, stops or changes speed here
         st.moving = speed;
       }
+      if (speed !== null) st.lastSpeed = speed;
       if (speed !== null) {
         const r = strokeStep(st.pos, st.dir, st.lower, st.upper, STROKE_SPEEDS[speed].cycle, dt);
         for (const t of r.turns) this._stMark(now - dt + t.frac * dt, t.pos);
         st.pos = r.pos; st.dir = r.dir;
       } else if (st.drag !== null) {
-        st.pos = st.drag;
+        if (st.caught) st.pos = st.drag;
+        else {
+          const r = approachStep(st.pos, st.drag, st.lower, st.upper, STROKE_SPEEDS[st.lastSpeed ?? 0].cycle, dt);
+          st.pos = r.pos; st.caught = r.caught;
+        }
         if (Math.abs(st.pos - before) > 0.5 && now - (this._stDragMark || 0) >= 50) { this._stDragMark = now; this._stMark(now); }
       }
       const vel = dt > 0 ? (st.pos - before) / dt * 1000 : 0;
@@ -842,9 +925,14 @@
       const next = strokeSetLimit(st, st.pos);
       if (!next) { this._toast('That is where the other limit is: move first, then set the limit.'); return; }
       Object.assign(st, next);
-      this._gpSave(STROKE_LIMIT_KEY, { lower: st.lower, upper: st.upper, last: st.last });
+      this._stSaveLimits();
       this._toast(`${next.last === 'upper' ? 'Upper' : 'Lower'} limit set: range ${st.lower}–${st.upper}.`);
       this._stShow();
+    }
+
+    _stSaveLimits() {
+      const st = this._st;
+      this._gpSave(STROKE_LIMIT_KEY, { lower: st.lower, upper: st.upper, last: st.last });
     }
 
     _stReset() {
@@ -859,13 +947,14 @@
       const $ = this._el;
       const st = this._st;
       const pos = Math.round(st.pos);
-      $('stband').style.top = `${100 - st.upper}%`;
-      $('stband').style.height = `${st.upper - st.lower}%`;
+      for (const id of ['stband', 'stshade']) { $(id).style.top = `${100 - st.upper}%`; $(id).style.height = `${st.upper - st.lower}%`; }
       $('stpos').style.bottom = `${st.pos}%`;
-      $('stup').style.top = `calc(${100 - st.upper}% + 4px)`; $('stup').textContent = `▲ ${st.upper}`;
-      $('stlo').style.bottom = `calc(${st.lower}% + 4px)`; $('stlo').textContent = `▼ ${st.lower}`;
+      // Limit numbers sit outside the band, so they stay readable on a narrow range.
+      $('stup').style.top = st.upper > 90 ? `calc(${100 - st.upper}% + 6px)` : `calc(${100 - st.upper}% - 18px)`; $('stup').textContent = String(st.upper);
+      $('stlo').style.bottom = st.lower < 10 ? `calc(${st.lower}% + 6px)` : `calc(${st.lower}% - 18px)`; $('stlo').textContent = String(st.lower);
       $('stpct').textContent = String(pos);
-      $('sttrack').setAttribute('aria-valuenow', String(pos));
+      $('stlane').setAttribute('aria-valuenow', String(pos));
+      $('strail').setAttribute('aria-valuetext', `range ${st.lower} to ${st.upper}`);
       const speed = this._stSpeed();
       for (const b of this.shadowRoot.querySelectorAll('.sthold')) b.classList.toggle('on', Number(b.dataset.speed) === speed);
       $('strec').textContent = this._stRecording ? '■ Stop recording' : '● Record';
