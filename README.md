@@ -153,7 +153,7 @@ The card's **Video sync** panel plays a video alongside a script:
 
 1. Choose a video on your phone or computer.
 2. Choose a script: a `.funscript` file on the same device (two files give a two-motor
-   toy one track per motor), or a script from your OggStudio library.
+   toy one track per motor), the current take, or a script from your OggStudio library.
 3. Press **Go**.
 
 The video never leaves your device. The browser plays it straight from the local file, and

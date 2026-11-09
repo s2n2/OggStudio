@@ -6,7 +6,7 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.8.2';
+  const VERSION = '0.8.3';
   const DEVICE_KEY = 'oggstudio_device';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
@@ -15,6 +15,7 @@
   const VIDEO_OFFSET_KEY = 'oggstudio_video_offset';
   const PARTS = ['record', 'stroke', 'take', 'library', 'video', 'import'];
   const NO_DEVICE = 'none';           // record without a device
+  const TAKE_SRC = 'take';      // "Current take" in script lists (never a saved name)
   // One card class, several dashboard cards: each shows a subset of the parts.
   const VARIANTS = {
     'oggstudio-card': { name: 'OggStudio', sub: 'Record, import, replay and sync to video', parts: PARTS.filter((p) => p !== 'stroke'), size: 9,
@@ -1564,14 +1565,15 @@
         this._videoStatus();
       });
       $('vsrc').addEventListener('change', () => {
-        const info = this._scriptInfo($('vsrc').value);
+        const info = $('vsrc').value === TAKE_SRC ? null : this._scriptInfo($('vsrc').value);
         if (info && info.kind === 'stroke') $('vmode').value = info.mode || RUN_MODE_DEFAULT;
+        if ($('vsrc').value === TAKE_SRC && this._take && isStroke(this._take)) $('vmode').value = $('takemode').value;
         this._loadVideoScript();
       });
       $('vscriptfile').addEventListener('change', () => this._loadVideoScript());
       $('vmode').addEventListener('change', () => {
         const name = $('vsrc').value;
-        if (name && this._vraw && isStroke(this._vraw)) this._setMode(name, $('vmode').value);
+        if (name && name !== TAKE_SRC && this._vraw && isStroke(this._vraw)) this._setMode(name, $('vmode').value);
         this._loadVideoScript();
       });
       $('vgo').addEventListener('click', () => this._videoGo());
@@ -1611,6 +1613,10 @@
           // A file is run with the chosen mode (Position for vibration scripts).
           this._vraw = normalise(first, 'stroke', Boolean(first.inverted));
           this._vscriptName = files[0].name;
+        } else if ($('vsrc').value === TAKE_SRC) {
+          if (!this._take) { this._vscript = null; this._videoStatus(); return; }
+          this._vraw = this._take;
+          this._vscriptName = 'Current take';
         } else {
           this._vraw = await this._getSaved($('vsrc').value);
           this._vscriptName = $('vsrc').value;
@@ -2621,13 +2627,17 @@
       const sel = this._el('vsrc');
       const savedState = this._studio && this._studio.saved && this._hass.states[this._studio.saved];
       const names = ((savedState && savedState.attributes.options) || []).filter((n) => n && !/^\(.*\)$/.test(n));
-      const key = JSON.stringify(names);
+      const take = this._take ? `Current take (${isStroke(this._take) ? 'stroke' : 'vibration'}, ${fmt(duration(this._take))})` : null;
+      const key = JSON.stringify([names, take]);
       if (sel.dataset.key === key) return;
       const current = sel.value;
-      sel.replaceChildren(new Option('From a file on this device…', ''), ...names.map((n) => new Option(`Library: ${n}`, n)));
+      sel.replaceChildren(new Option('From a file on this device…', ''), ...(take ? [new Option(take, TAKE_SRC)] : []), ...names.map((n) => new Option(`Library: ${n}`, n)));
       sel.dataset.key = key;
       if ([...sel.options].some((o) => o.value === current)) sel.value = current;
+      else if (current === TAKE_SRC) { sel.value = ''; this._loadVideoScript(); }   // the take went (saved or discarded)
       this._el('vfilebox').hidden = sel.value !== '';
+      // A new take while "Current take" is chosen: play the new one.
+      if (sel.value === TAKE_SRC && this._vraw !== this._take) this._loadVideoScript();
     }
 
     // Streamed live levels: never call while the device is offline, never let
