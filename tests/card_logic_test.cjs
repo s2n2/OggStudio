@@ -50,7 +50,7 @@ eval(grab('  const b64 =', '  // Stroke scripts') + grab('  function toIntensity
   const btn = (pressed) => ({ pressed, value: pressed ? 1 : 0 });
   const pad = (pressed = [], axes = [0, 0, 0, 0]) => ({ buttons: Array.from({ length: 17 }, (_, i) => btn(pressed.includes(i))), axes });
   const keys = new Set();
-  const { GP_DEFAULT_MAP, GP_SPEEDS, GP_ACTIONS, gpFirstButton, gpDescribe } = eval(grab('  // Game controller.', '  const duration =') + '; ({ GP_DEFAULT_MAP, GP_SPEEDS, GP_ACTIONS, gpFirstButton, gpDescribe })');
+  const { GP_DEFAULT_MAP, GP_SPEEDS, GP_ACTIONS, gpDescribe, gpPressed, gpRaw } = eval(grab('  // Game controller.', '  const duration =') + '; ({ GP_DEFAULT_MAP, GP_SPEEDS, GP_ACTIONS, gpDescribe, gpPressed, gpRaw })');
   // Standard D-pad buttons, an analog stick (proportional, with dead zone) and keyboard mode.
   assert.strictEqual(gpRead(GP_DEFAULT_MAP, pad([12]), keys).up, 1);
   assert.strictEqual(gpRead(GP_DEFAULT_MAP, pad([0]), keys).rec, 1);
@@ -99,6 +99,23 @@ eval(grab('  const b64 =', '  // Stroke scripts') + grab('  function toIntensity
   assert.strictEqual(gpRead(off, pad([], [0, 0, -0.5]), keys).down, 1);
   assert.strictEqual(gpFirstButton(pad([4, 9]), 4), 9);
   assert.strictEqual(gpFirstButton(pad()), -1);
+  // A button that reads as pressed all the time is ignored, for picking and for Record.
+  assert.strictEqual(gpFirstButton(pad([2, 7]), -1, [2]), 7);
+  assert.strictEqual(gpFirstButton(pad([2]), -1, [2]), -1);
+  const stuckCal = { ...cal, stuck: [2] };
+  assert.strictEqual(gpPickInput(pad([0, 2], [0, -1, 0.5, 3.29]), stuckCal, 0), null, 'stuck button is not an input');
+  assert.deepStrictEqual(gpPickInput(pad([0, 2, 6], [0, -1, 0.5, 3.29]), stuckCal, 0), { b: 6 });
+  assert.deepStrictEqual(gpPressed(pad([1, 4])), [1, 4]);
+  // Several gamepads (Android lists extra devices): the last one pressed wins,
+  // else a standard-mapped one, else the one with the most buttons.
+  const phantom = { index: 0, connected: true, mapping: '', id: 'uinput-fpc', buttons: [btn(false)], axes: [] };
+  const real = { ...pad(), index: 1, connected: true, mapping: '', id: 'Generic BT' };
+  const std = { ...pad(), index: 2, connected: true, mapping: 'standard', id: 'Std' };
+  assert.strictEqual(gpChoosePad([phantom, real], undefined).index, 1, 'more buttons beats a phantom device');
+  assert.strictEqual(gpChoosePad([phantom, real, std], undefined).index, 2);
+  assert.strictEqual(gpChoosePad([phantom, real, std], 1).index, 1, 'last pressed wins');
+  assert.strictEqual(gpChoosePad([null, undefined], undefined), null);
+  assert.ok(gpRaw({ ...real, buttons: pad([3]).buttons, axes: [0.123, -1] }).includes('pressed [3] · axes 0:0.12 1:-1.00'));
   assert.strictEqual(gpDescribe({ a: 3, v: -1 }), 'hat axis 3 at -1');
   assert.strictEqual(gpDescribe(null), 'default');
   const map = gpBuildMap({ rec: [{ b: 3 }], up: [{ a: 9, d: -1 }] });

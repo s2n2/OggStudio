@@ -92,7 +92,12 @@ rest off-centre. Press **Learn controls** to map yours:
    moved furthest beyond its normal jitter. Pressing Record with nothing held, or **Skip**,
    keeps the default.
 
-Hat-switch D-pads, which report all four directions on one axis, are recognised. The mapping,
+Hat-switch D-pads, which report all four directions on one axis, are recognised. So are
+buttons that read as pressed all the time, which are ignored. If Android lists extra devices
+as gamepads, the card uses the one you press buttons on. While learning, a line under the
+prompt shows the controller's raw readings. Each step is also written to the Home Assistant
+log (Settings → System → Logs, search "OggStudio controller"), which helps when diagnosing an
+odd controller. The mapping,
 the speed and the on/off setting are remembered per browser. Controllers in keyboard mode,
 which send arrow keys, also work: press a key for Record, then a key for each control. A
 keyboard on a computer works the same way.

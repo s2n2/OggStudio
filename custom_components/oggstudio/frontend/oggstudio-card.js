@@ -6,7 +6,7 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.5.1';
+  const VERSION = '0.5.2';
   const DEVICE_KEY = 'oggstudio_device';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
@@ -188,8 +188,8 @@
   // measured from their resting point.
   function gpPickInput(pad, cal, confirmButton) {
     if (!pad) return null;
-    const buttons = pad.buttons || [];
-    for (let i = 0; i < buttons.length; i++) if (i !== confirmButton && buttons[i] && buttons[i].pressed) return { b: i };
+    const b = gpFirstButton(pad, confirmButton, cal && cal.stuck);
+    if (b >= 0) return { b };
     const axes = pad.axes || [];
     let best = -1, score = 1;
     for (let i = 0; i < axes.length; i++) {
@@ -206,11 +206,30 @@
     return bind;
   }
 
-  const gpFirstButton = (pad, except) => {
+  // First pressed button, skipping `except` and any button that reads as
+  // pressed all the time (some pads report one permanently).
+  function gpFirstButton(pad, except, stuck) {
     const buttons = (pad && pad.buttons) || [];
-    for (let i = 0; i < buttons.length; i++) if (i !== except && buttons[i] && buttons[i].pressed) return i;
+    for (let i = 0; i < buttons.length; i++) {
+      if (i !== except && buttons[i] && buttons[i].pressed && !(stuck && stuck.includes(i))) return i;
+    }
     return -1;
-  };
+  }
+
+  const gpPressed = (pad) => [...((pad && pad.buttons) || [])].map((b, i) => (b && b.pressed ? i : -1)).filter((i) => i >= 0);
+
+  // Of several gamepads (Android often lists extra input devices), the one
+  // the user last pressed a button on; before that, a standard-mapped one,
+  // else the one with the most buttons.
+  function gpChoosePad(pads, lastActive) {
+    const live = pads.filter((p) => p && p.connected);
+    return live.find((p) => p.index === lastActive)
+      || live.find((p) => p.mapping === 'standard')
+      || live.sort((a, b) => (b.buttons || []).length - (a.buttons || []).length)[0] || null;
+  }
+
+  // One line of what a pad reads now, for the raw readout and the log.
+  const gpRaw = (pad) => (!pad ? 'no gamepad' : `#${pad.index} "${String(pad.id).slice(0, 40)}" ${pad.mapping || 'no-mapping'} · pressed [${gpPressed(pad).join(',')}] · axes ${[...pad.axes].map((v, i) => `${i}:${v.toFixed(2)}`).join(' ')}`);
 
   const gpDescribe = (b) => (!b ? 'default' : b.k !== undefined ? `key ${b.k}` : b.b !== undefined ? `button ${b.b}`
     : b.v !== undefined ? `hat axis ${b.a} at ${b.v}` : `axis ${b.a} ${b.d > 0 ? '+' : '-'}`);
@@ -379,6 +398,7 @@
           .gp .gpstat b{color:#bef2ff}
           .gp button{min-height:36px;flex:0 0 auto}
           .gplearn{flex-basis:100%;font-size:13px;color:#ffcf8a;font-weight:700}
+          .gpraw{flex-basis:100%;font-size:10.5px;color:var(--muted);font-family:monospace;word-break:break-all}
           [hidden],.off{display:none!important}
         </style>
         <ha-card>
@@ -389,6 +409,7 @@
             <span class="gpstat" id="gpstat"></span>
             <button id="gplearnbtn" type="button">Learn controls</button>
             <div class="gplearn" id="gplearn" hidden></div>
+            <div class="gpraw" id="gpraw" hidden></div>
             <div class="row" id="gplearnrow" style="flex-basis:100%" hidden><button id="gpskip" type="button">Skip</button><button id="gpreset" type="button">Use defaults</button><button id="gpcancel" type="button" class="stop">Cancel</button></div>
           </div>
           <section data-part="record">
@@ -516,13 +537,20 @@
           if (this._gpLearning) {
             if (e.key === 'Tab') return;
             e.preventDefault(); e.stopPropagation();
-            if (!e.repeat) this._gpLearnKey(e.code || e.key);
+            if (e.repeat) return;
+            // On Android a gamepad's D-pad and buttons often also arrive as
+            // keys; with a gamepad present, learn from the gamepad only.
+            if (this._gpPad()) { this._gpLearning.keys = (this._gpLearning.keys || 0) + 1; if (this._gpLearning.keys <= 3) this._gpLog(`key ignored while learning (gamepad present): code=${e.code} key=${e.key}`); return; }
+            this._gpLearnKey(e.code || e.key);
             return;
           }
           if (!this._el('gpon').checked || !this._gpUsable() || !this._gpIsOwner()) return;
           const n = names(e);
           if (!GP_ACTIONS.some((a) => (this._gpMap[a] || []).some((b) => b.k !== undefined && n.includes(b.k)))) return;
           e.preventDefault(); e.stopPropagation();
+          // With a gamepad present its own readings count; key echoes of its
+          // buttons (Android) would otherwise fire the wrong action.
+          if (this._gpPad()) return;
           n.forEach((k) => this._gpKeys.add(k));
           this._gpRun();
         },
@@ -532,6 +560,7 @@
           if (!this._el || !this._gpUsable()) return;
           if (!this._el('gpon').checked) { this._el('gpon').checked = true; this._gpSave(GP_ON_KEY, true); }
           this._toast(`Controller connected: ${e.gamepad && e.gamepad.id ? e.gamepad.id : 'game controller'}`);
+          if (gpOwner === this || !gpOwner) this._gpLogPads();
           this._gpRun();
           this._gpStatus();
         },
@@ -577,7 +606,30 @@
     _gpPad() {
       let pads = [];
       try { pads = navigator.getGamepads ? [...navigator.getGamepads()] : []; this._gpBlocked = false; } catch (_) { this._gpBlocked = true; }
-      return pads.find((p) => p && p.connected) || null;
+      this._gpPrevPressed = this._gpPrevPressed || {};
+      for (const p of pads) {
+        if (!p || !p.connected) continue;
+        const now = gpPressed(p);
+        const before = this._gpPrevPressed[p.index];
+        if (before && now.some((i) => !before.includes(i))) this._gpActive = p.index;   // a new press
+        this._gpPrevPressed[p.index] = now;
+      }
+      this._gpPadCount = pads.filter((p) => p && p.connected).length;
+      return gpChoosePad(pads, this._gpActive);
+    }
+
+    // Learn controls reports what it sees to the Home Assistant log
+    // (Settings > System > Logs), so a controller's quirks can be diagnosed.
+    _gpLog(message) {
+      if (!this._hass) return;
+      this._hass.callService('system_log', 'write', { message: `OggStudio controller: ${message}`, level: 'warning', logger: 'oggstudio.card' }, undefined, false).catch(() => {});
+    }
+
+    _gpLogPads() {
+      let pads = [];
+      try { pads = navigator.getGamepads ? [...navigator.getGamepads()] : []; } catch (_) { /* blocked */ }
+      const live = pads.filter((p) => p && p.connected);
+      this._gpLog(`${live.length} gamepad(s): ${live.map((p) => gpRaw(p)).join(' || ') || 'none'} · chosen #${this._gpPad() ? this._gpPad().index : '-'} · secure=${window.isSecureContext} · ${navigator.userAgent}`);
     }
 
     _gpTarget() { return gpTargetFor(this._parts, Boolean(this._vurl)); }
@@ -685,7 +737,7 @@
         if (this._device && this._device.dual) bits.push(['Motor 1', 'Motor 2', 'Both motors'][this._gpMotor]);
         const target = this._gpTarget();
         bits.push(target === 'video' ? '→ video' : target === 'record' ? '→ pads' : '');
-        if (this._gpPadId) bits.push(esc(this._gpPadId.replace(/\s*\(.*$/, '').slice(0, 28)));
+        if (this._gpPadId) bits.push(esc(this._gpPadId.replace(/\s*\(.*$/, '').slice(0, 28)) + (this._gpPadCount > 1 && this._gpActive === undefined ? ` (1 of ${this._gpPadCount}: press a button to choose)` : ''));
         else if (this._gpBlocked || !window.isSecureContext) bits.push('no gamepad: this page is not HTTPS, so only keyboard-mode controllers work');
         else bits.push('press a button on the controller');
         html = bits.filter(Boolean).join(' · ');
@@ -699,7 +751,9 @@
       const $ = this._el;
       if (!$('gpon').checked) { $('gpon').checked = true; this._gpSave(GP_ON_KEY, true); }
       this._gpLearning = { phase: 'wake', learned: {}, step: 0, samples: [], cal: null, recBtn: -1, recKey: null, wait: true, last: '' };
-      $('gplearn').hidden = false; $('gplearnrow').hidden = false; $('gplearnbtn').hidden = true;
+      $('gplearn').hidden = false; $('gplearnrow').hidden = false; $('gpraw').hidden = false; $('gplearnbtn').hidden = true;
+      this._gpLog('learn started');
+      this._gpLogPads();
       this._gpStatus();
       this._gpLearnShow();
       this._gpRun();
@@ -721,27 +775,44 @@
 
     _gpLearnPoll(pad) {
       const L = this._gpLearning;
+      L.ticks = (L.ticks || 0) + 1;
+      if (L.ticks % 5 === 0 && this._el) this._el('gpraw').textContent = `${gpRaw(pad)}${this._gpPadCount > 1 ? ` (of ${this._gpPadCount} gamepads)` : ''}`;
       if (L.phase === 'wake') {
-        if (pad && gpFirstButton(pad) < 0) { L.phase = 'rest'; L.samples = []; this._gpLearnShow(); }
+        if (pad) { L.phase = 'rest'; L.samples = []; L.restPressed = null; this._gpLearnShow(); }
         return;
       }
       if (!pad) return;
       if (L.phase === 'rest') {
-        if (gpFirstButton(pad) >= 0) { L.samples = []; return; }   // start again if a button is touched
+        // Buttons must stay the same for the whole hands-off run; any that
+        // are down throughout are stuck and ignored from now on.
+        const pressed = gpPressed(pad).join(',');
+        if (pressed !== L.restPressed) { L.restPressed = pressed; L.samples = []; }
         L.samples.push([...pad.axes]);
-        if (L.samples.length >= GP_REST_SAMPLES) { L.cal = gpCalibrate(L.samples); L.phase = 'rec'; L.wait = true; this._gpLearnShow(); }
+        if (L.samples.length >= GP_REST_SAMPLES) {
+          L.cal = gpCalibrate(L.samples);
+          L.cal.stuck = gpPressed(pad);
+          L.padIndex = pad.index;
+          L.phase = 'rec'; L.wait = true;
+          this._gpLog(`calibrated pad #${pad.index}: rest [${L.cal.rest.map((v) => v.toFixed(2)).join(' ')}] jitter [${L.cal.noise.map((v) => v.toFixed(2)).join(' ')}] stuck buttons [${L.cal.stuck.join(',')}]`);
+          this._gpLearnShow();
+        }
         return;
       }
+      const stuck = L.cal ? L.cal.stuck : [];
       if (L.phase === 'rec') {
-        const b = gpFirstButton(pad);
+        const b = gpFirstButton(pad, -1, stuck);
         if (L.wait) { if (b < 0) L.wait = false; return; }
-        if (b >= 0) this._gpLearnSetRec({ b });
+        if (b >= 0) { this._gpLog(`record button: ${gpRaw(pad)}`); this._gpLearnSetRec({ b }); }
         return;
       }
       // hold: confirm on the rising edge of the Record button.
-      const recDown = L.recBtn >= 0 && Boolean(pad.buttons[L.recBtn] && pad.buttons[L.recBtn].pressed);
+      const recDown = L.recBtn >= 0 && !stuck.includes(L.recBtn) && Boolean(pad.buttons[L.recBtn] && pad.buttons[L.recBtn].pressed);
       if (L.wait) { if (!recDown) L.wait = false; return; }
-      if (recDown) this._gpLearnNext(gpPickInput(pad, L.cal, L.recBtn));
+      if (recDown) {
+        const bind = gpPickInput(pad, L.cal, L.recBtn);
+        this._gpLog(`${GP_HOLD_ACTIONS[L.step]} confirmed -> ${gpDescribe(bind)} · ${gpRaw(pad)}`);
+        this._gpLearnNext(bind);
+      }
     }
 
     _gpLearnSetRec(bind) {
@@ -768,7 +839,7 @@
       if (L.phase === 'hold') { this._gpLearnNext(null); return; }
       // Record skipped: keep the default (button 0) and confirm with it.
       L.recBtn = 0; L.last = 'Record = button 0 (default)';
-      if (!L.cal && L.samples.length) L.cal = gpCalibrate(L.samples);
+      if (!L.cal && L.samples.length) { L.cal = gpCalibrate(L.samples); L.cal.stuck = []; }
       L.phase = 'hold'; L.step = 0; L.wait = true;
       this._gpLearnShow();
     }
@@ -788,13 +859,14 @@
       if (L.step < GP_HOLD_ACTIONS.length) { this._gpLearnShow(); return; }
       this._gpSave(GP_MAP_KEY, L.learned);
       this._gpMap = gpBuildMap(L.learned);
+      this._gpLog(`learn finished: ${JSON.stringify(L.learned)}`);
       this._gpLearnEnd('Controller: controls saved for this browser.');
     }
 
     _gpLearnEnd(message) {
       const $ = this._el;
       this._gpLearning = null;
-      $('gplearn').hidden = true; $('gplearnrow').hidden = true; $('gplearnbtn').hidden = false;
+      $('gplearn').hidden = true; $('gplearnrow').hidden = true; $('gpraw').hidden = true; $('gplearnbtn').hidden = false;
       // Treat everything as held so nothing fires until it is released.
       this._gpPrev = Object.fromEntries(GP_ACTIONS.map((a) => [a, 1]));
       this._gpKeys.clear();
