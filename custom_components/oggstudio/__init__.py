@@ -21,6 +21,7 @@ from .const import DOMAIN, OGG_DOMAIN, PLATFORMS, SPEEDS
 from .dashboard_resource import async_register_card
 from .convert import RUN_MODES, run_script
 from .library import Library, clean_script, script_info
+from .video import async_register_video
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -64,6 +65,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         await async_register_card(hass)
     except Exception:  # noqa: BLE001 - an optional card must never break the integration
         _LOGGER.exception("Could not register the OggStudio card")
+    async_register_video(hass)
 
     async def save(call: ServiceCall) -> ServiceResponse:
         name = _library(hass).save(call.data["name"], call.data["script"], call.data.get("mode"))

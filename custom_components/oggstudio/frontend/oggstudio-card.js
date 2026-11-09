@@ -6,12 +6,17 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.12.2';
+  const VERSION = '0.13.0';
   const DEVICE_KEY = 'oggstudio_device';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
   const LIVE_MS = 100;
   const VIDEO_TICK_MS = 100;
+  // Casting goes through Home Assistant: these integrations can play a video URL.
+  const CAST_PLATFORMS = ['cast', 'dlna_dmr', 'kodi', 'apple_tv'];
+  const CAST_CHUNK = 8 * 1024 * 1024;
+  const CAST_DRIFT = 0.4;          // s: re-align the video here when the TV is further off
+  const CAST_GRACE = 3500;         // ms after a command from here before the TV's state is followed again
   const VIDEO_OFFSET_KEY = 'oggstudio_video_offset';
   const PARTS = ['record', 'stroke', 'take', 'library', 'video', 'import'];
   const NO_DEVICE = 'none';           // record without a device
@@ -1139,6 +1144,7 @@
       this._hass = hass;
       if (!this._registryLoaded) { this._registryLoaded = true; this._loadRegistry(); }
       this._update();
+      if (this._cast) this._castSync();
     }
 
     async _loadRegistry() {
@@ -1157,6 +1163,7 @@
         for (const e of entities) {
           if (e.disabled_by) continue;
           const uid = String(e.unique_id || '');
+          if (e.entity_id.startsWith('media_player.')) { (this._mpPlatform = this._mpPlatform || {})[e.entity_id] = e.platform; continue; }
           if (e.platform === 'oggstudio') {
             if (uid.endsWith(':saved_script')) this._studio.saved = e.entity_id;
             if (uid.endsWith(':speed')) this._studio.speed = e.entity_id;
@@ -1394,18 +1401,19 @@
           </section>
           <section id="videobox" data-part="video">
             <h3>Video sync</h3>
-            <div class="hint" style="margin-top:0">The video plays from this phone or computer only. It is never uploaded to Home Assistant.</div>
+            <div class="hint" style="margin-top:0">The video plays from this phone or computer. Only 📺 Cast uploads it to Home Assistant, so a TV can play it (the last 3 are kept).</div>
             <label>Video</label><input id="vfile" type="file" accept="video/*">
             <label>Script</label><select id="vsrc"></select>
             <div id="vfilebox"><input id="vscriptfile" type="file" accept=".funscript,.json,application/json" multiple style="margin-top:6px"></div>
-            <video id="video" controls playsinline preload="metadata" hidden></video>
+            <video id="video" controls playsinline preload="metadata" disableremoteplayback hidden></video>
             <div class="hbar" id="hb1" role="slider" tabindex="0" aria-label="Motor 1 level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill"></div><span class="lab">Motor 1</span><span class="pct">0%</span></div>
             <div class="hbar m2" id="hb2" role="slider" tabindex="0" aria-label="Motor 2 level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><div class="fill"></div><span class="lab">Motor 2</span><span class="pct">0%</span></div>
             <div class="vrecrow"><button id="vrec" class="vrec" type="button">● Rec</button><label class="check"><input id="vspring" type="checkbox" checked> Drop to 0 on release</label><span class="vrecinfo" id="vrecinfo"></span></div>
             <div class="stlive"><span class="gpslot"></span></div>
             <div class="row" id="vrecdone" style="margin-top:6px" hidden><button id="vrecuse">Use as take</button><button id="vrecdl">Download .funscript</button><button id="vrecclear" class="stop">Clear</button></div>
             <div class="vstat" id="vstat"></div>
-            <div class="row" style="margin-top:8px"><button id="vgo" class="go">▶ Go</button><button id="vcast" type="button" style="flex:0 0 96px" title="Play the video on a Chromecast (Chrome's built-in cast)">📺 Cast</button><button id="vstop" class="stop" style="flex:0 0 96px">■ Stop</button></div>
+            <div class="row" style="margin-top:8px"><button id="vgo" class="go">▶ Go</button><button id="vcast" type="button" style="flex:0 0 96px" title="Play the video on a TV or Chromecast through Home Assistant">📺 Cast</button><button id="vstop" class="stop" style="flex:0 0 96px">■ Stop</button></div>
+            <div style="position:relative"><div class="rppop" id="castpop" style="top:4px" hidden><div id="castlist"></div></div></div>
             <label>Sync offset <span id="voffv"></span></label>
             <input id="voff" type="range" min="-1000" max="1000" step="25" value="150">
             <div class="hint">Positive values send each moment slightly early to make up for Bluetooth delay. Pause, seek and playback speed all stay in sync.</div>
@@ -2161,6 +2169,8 @@
       $('vfile').addEventListener('change', () => {
         const file = $('vfile').files[0];
         this._vname = file ? file.name.replace(/\.[^.]+$/, '') : '';
+        this._vfileObj = file || null;
+        if (this._cast) this._castEnd(true);
         this._videoHalt();
         if (this._vrec) this._vrecToggle();
         if (this._vrecHas()) this._vrecReset();
@@ -2173,7 +2183,13 @@
       $('vsrc').addEventListener('change', () => this._loadVideoScript());
       $('vscriptfile').addEventListener('change', () => this._loadVideoScript());
       $('vgo').addEventListener('click', () => this._videoGo());
-      $('vstop').addEventListener('click', () => { video.pause(); try { video.currentTime = 0; } catch (_) { /* not loaded */ } this._videoHalt(); });
+      $('vstop').addEventListener('click', () => {
+        if (this._cast) this._castEnd(true);      // Stop also stops the TV
+        video.pause(); try { video.currentTime = 0; } catch (_) { /* not loaded */ } this._videoHalt();
+      });
+      video.addEventListener('play', () => this._castCmd('media_play'));
+      video.addEventListener('pause', () => { if (!video.ended) this._castCmd('media_pause'); });
+      video.addEventListener('seeked', () => this._castCmd('media_seek', { seek_position: Math.round(video.currentTime * 10) / 10 }));
       video.addEventListener('play', () => this._videoRun());
       video.addEventListener('playing', () => this._videoRun());
       video.addEventListener('pause', () => this._videoHalt());
@@ -2192,44 +2208,238 @@
       $('vrecuse').addEventListener('click', () => this._vrecUse());
       $('vrecdl').addEventListener('click', () => this._vrecDownload());
       $('vrecclear').addEventListener('click', () => { if (confirm('Discard this recording?')) this._vrecReset(); });
-      this._bindCast(video);
+      this._bindCast();
     }
 
-    // Cast the video with Chrome's built-in cast (Remote Playback API). The
-    // video element stays in charge: its time and play/pause follow the
-    // Chromecast, so the devices keep syncing as usual. Chrome may refuse a
-    // local file; then the button says so.
-    _bindCast(video) {
+    // Casting. A TV fetches what it plays, so a video that only exists in this
+    // browser cannot be cast directly (Chrome's own cast refuses it, and the
+    // Home Assistant app has no cast at all). Instead the video is uploaded to
+    // Home Assistant in chunks (resumed if interrupted; the same file is not
+    // sent twice) and the TV's media player (Google Cast, DLNA, ...) plays it
+    // from there. The video here stays the clock: muted, it follows where the
+    // TV says it is, and the devices sync to it as usual. Play, pause and seek
+    // here are sent to the TV; pausing on the TV pauses here too.
+    _bindCast() {
       const $ = this._el;
-      const btn = $('vcast');
-      const remote = video.remote;
-      if (!remote || typeof remote.prompt !== 'function') {
-        btn.disabled = true;
-        btn.title = 'This browser cannot cast videos (use Chrome on Android or a computer)';
+      $('vcast').addEventListener('click', () => this._castPicker($('castpop').hidden));
+      this.shadowRoot.addEventListener('pointerdown', (e) => {
+        if ($('castpop').hidden) return;
+        const path = e.composedPath();
+        if (!path.includes($('castpop')) && !path.includes($('vcast'))) this._castPicker(false);
+      });
+      this._castShow();
+    }
+
+    _castTargets() {
+      const plat = this._mpPlatform || {};
+      const states = (this._hass && this._hass.states) || {};
+      return Object.entries(states).map(([id, st]) => ({ ...st, entity_id: id }))
+        .filter((st) => st.entity_id.startsWith('media_player.') && CAST_PLATFORMS.includes(plat[st.entity_id])
+          && st.state !== 'unavailable' && ((st.attributes.supported_features || 0) & 512))
+        .sort((x, y) => CAST_PLATFORMS.indexOf(plat[x.entity_id]) - CAST_PLATFORMS.indexOf(plat[y.entity_id])
+          || String(x.attributes.friendly_name || x.entity_id).localeCompare(String(y.attributes.friendly_name || y.entity_id)));
+    }
+
+    _castName(entity) {
+      const st = this._hass && this._hass.states[entity];
+      return (st && st.attributes.friendly_name) || entity;
+    }
+
+    _castPicker(open) {
+      const $ = this._el;
+      if (!open) { $('castpop').hidden = true; return; }
+      if (!this._vurl) { this._toast('Choose a video first'); return; }
+      const item = (label, tag, fn) => { const b = document.createElement('button'); b.type = 'button'; b.innerHTML = `<span>${esc(label)}</span><small>${esc(tag)}</small>`; b.addEventListener('click', fn); return b; };
+      const items = [];
+      if (this._cast) items.push(item(`■ Stop casting to ${this._castName(this._cast.entity)}`, '', () => { this._castPicker(false); this._castEnd(true); }));
+      const plat = this._mpPlatform || {};
+      for (const st of this._castTargets()) {
+        if (this._cast && this._cast.entity === st.entity_id) continue;
+        const kind = { cast: 'Cast', dlna_dmr: 'DLNA', kodi: 'Kodi', apple_tv: 'Apple TV' }[plat[st.entity_id]] || '';
+        items.push(item(st.attributes.friendly_name || st.entity_id, `${kind} · ${st.state}`, () => this._castStart(st.entity_id)));
+      }
+      if (!items.length) {
+        const d = document.createElement('div'); d.className = 'hint';
+        d.textContent = 'No TV found: add your Chromecast or TV to Home Assistant (the Google Cast or DLNA integration) and it shows here.';
+        items.push(d);
+      }
+      $('castlist').replaceChildren(...items);
+      $('castpop').hidden = false;
+    }
+
+    // Upload the chosen file (or what is missing of it); returns its URL on Home Assistant.
+    async _castUpload(file, cast) {
+      const base = `/api/oggstudio/video?name=${encodeURIComponent(file.name)}&size=${file.size}`;
+      const call = async (offset, body) => {
+        for (let attempt = 0; ; attempt += 1) {
+          try {
+            const r = await this._hass.fetchWithAuth(body ? `${base}&offset=${offset}` : base, body ? { method: 'POST', body } : {});
+            if (!r.ok) throw new Error(`Home Assistant said ${r.status}: ${(await r.text()).slice(0, 120)}`);
+            return await r.json();
+          } catch (e) {
+            if (attempt >= 2 || cast.cancelled) throw e;
+            await new Promise((ok) => setTimeout(ok, 1000 * (attempt + 1)));
+          }
+        }
+      };
+      let st = await call(0, null);
+      while (!st.done) {
+        if (cast.cancelled) throw new Error('cancelled');
+        const end = Math.min(file.size, st.received + CAST_CHUNK);
+        st = await call(st.received, file.slice(st.received, end));
+        cast.pct = st.received / file.size;
+        this._castShow();
+      }
+      cast.file = st.file;
+      return st.url;
+    }
+
+    async _castStart(entity) {
+      this._castPicker(false);
+      const file = this._vfileObj;
+      if (!file) { this._toast('Choose a video first'); return; }
+      if (this._cast) this._castEnd(this._cast.entity !== entity);
+      const video = this._el('video');
+      const cast = { entity, phase: 'upload', pct: 0, startAt: video.currentTime || 0, since: performance.now() };
+      this._cast = cast;
+      this._castShow();
+      try {
+        const url = await this._castUpload(file, cast);
+        if (this._cast !== cast) return;
+        cast.phase = 'starting';
+        cast.since = performance.now();
+        this._castShow();
+        this._castWasMuted = video.muted;
+        video.muted = true;                   // the sound comes from the TV
+        this._castQuiet('pause');
+        await this._hass.callService('media_player', 'play_media', {
+          entity_id: entity, media_content_id: url, media_content_type: file.type || 'video/mp4',
+        });
+        if (!this._castTimer) this._castTimer = setInterval(() => this._castSync(), 250);
+      } catch (e) {
+        if (this._cast !== cast) return;
+        this._cast = null;
+        this._castShow();
+        if (!cast.cancelled) this._toast('Could not cast: ' + ((e && e.message) || e));
+      }
+    }
+
+    // Stop casting (and the TV, if asked).
+    _castEnd(stopTv, message) {
+      const cast = this._cast;
+      if (!cast) return;
+      cast.cancelled = true;
+      this._cast = null;
+      clearInterval(this._castTimer);
+      this._castTimer = null;
+      const video = this._el && this._el('video');
+      if (video && this._castWasMuted !== undefined) { video.muted = this._castWasMuted; this._castWasMuted = undefined; }
+      if (stopTv && cast.phase !== 'upload' && this._hass) this._hass.callService('media_player', 'media_stop', { entity_id: cast.entity }, undefined, false).catch(() => {});
+      this._toast(message || 'Casting stopped.');
+      this._castShow();
+    }
+
+    // Change the video here without it being sent back to the TV: the event
+    // each change causes (play, pause, seeked) is expected and skipped once.
+    _castQuiet(kind) {
+      const cast = this._cast;
+      const video = this._el('video');
+      if (kind === 'play' ? !video.paused : kind === 'pause' ? video.paused : false) return;
+      const key = typeof kind === 'string' ? kind : 'seek';
+      if (cast) { cast.expect = cast.expect || {}; cast.expect[key] = { n: ((cast.expect[key] && cast.expect[key].n) || 0) + 1, until: performance.now() + 2000 }; }
+      try {
+        const r = kind === 'play' ? video.play() : kind === 'pause' ? video.pause() : (video.currentTime = kind.seek);
+        if (r && r.catch) r.catch(() => {});
+      } catch (_) { /* not loaded yet */ }
+    }
+
+    _castExpected(kind) {
+      const e = this._cast && this._cast.expect && this._cast.expect[kind];
+      if (!e || !e.n || performance.now() > e.until) return false;
+      e.n -= 1;
+      return true;
+    }
+
+    // Play, pause or seek here: tell the TV.
+    _castCmd(service, data) {
+      const cast = this._cast;
+      if (!cast) return;
+      if (this._castExpected(service === 'media_play' ? 'play' : service === 'media_pause' ? 'pause' : 'seek') || cast.phase !== 'on') return;
+      cast.cmdUntil = performance.now() + CAST_GRACE;
+      if (service === 'media_seek') cast.pos = null;
+      this._hass.callService('media_player', service, { entity_id: cast.entity, ...(data || {}) }, undefined, false)
+        .catch((e) => this._toast('The TV did not take that: ' + ((e && e.message) || e)));
+    }
+
+    // Where the TV is now, from what Home Assistant last heard from it.
+    _castTvPos(st) {
+      const cast = this._cast;
+      const a = st.attributes;
+      if (!Number.isFinite(a.media_position)) return null;
+      if (a.media_position_updated_at !== cast.stamp) {
+        cast.fresh = cast.stamp !== undefined;    // seen arriving: time it from now
+        cast.stamp = a.media_position_updated_at;
+        cast.seenAt = Date.now();
+      }
+      if (st.state !== 'playing') return a.media_position;
+      const since = cast.fresh ? Date.now() - cast.seenAt : Math.max(0, Date.now() - Date.parse(a.media_position_updated_at));
+      return a.media_position + (Number.isFinite(since) ? since : 0) / 1000;
+    }
+
+    _castSync() {
+      const cast = this._cast;
+      if (!cast || cast.phase === 'upload' || !this._el) return;
+      const st = this._hass.states[cast.entity];
+      const video = this._el('video');
+      if (!st) return;
+      const now = performance.now();
+      const ours = cast.file && String(st.attributes.media_content_id || '').includes(cast.file);
+      if (cast.phase === 'starting') {
+        if (ours && (st.state === 'playing' || st.state === 'paused')) {
+          cast.phase = 'on';
+          cast.lostAt = 0;
+          this._toast(`Casting to ${this._castName(cast.entity)}. The devices follow the TV.`);
+          if (cast.startAt > 1) {
+            this._hass.callService('media_player', 'media_seek', { entity_id: cast.entity, seek_position: Math.round(cast.startAt * 10) / 10 }, undefined, false).catch(() => {});
+            cast.cmdUntil = now + CAST_GRACE;
+            this._castQuiet({ seek: cast.startAt });
+          }
+          this._castQuiet('play');
+          this._castShow();
+        } else if (now - cast.since > 30000) {
+          this._castEnd(false, `${this._castName(cast.entity)} did not start the video. Chromecasts play MP4 (H.264) and WebM; check Home Assistant can reach the TV.`);
+        }
         return;
       }
-      const show = () => {
-        const st = remote.state;
-        btn.textContent = st === 'connected' ? '📺 Casting' : st === 'connecting' ? '📺 …' : '📺 Cast';
-        btn.classList.toggle('on', st === 'connected');
-        this._videoStatus();
-      };
-      for (const type of ['connecting', 'connect', 'disconnect']) remote.addEventListener(type, show);
-      remote.addEventListener('connect', () => this._toast('Casting: the video plays on the Chromecast; devices stay in sync with it.'));
-      remote.addEventListener('disconnect', () => this._toast('Casting stopped.'));
-      btn.addEventListener('click', async () => {
-        if (!this._vurl) { this._toast('Choose a video first'); return; }
-        try {
-          await remote.prompt();      // Chrome's own device picker (also used to stop casting)
-        } catch (e) {
-          const name = e && e.name;
-          if (name === 'NotAllowedError' || name === 'AbortError') return;   // picker closed
-          if (name === 'NotSupportedError') this._toast(`Chrome cannot cast this video (local files often cannot be cast). Try casting the whole tab from Chrome's ⋮ menu instead.`);
-          else if (name === 'NotFoundError') this._toast('No Chromecast found on this network.');
-          else this._toast('Could not cast: ' + ((e && e.message) || e));
+      // Something else on the TV now, or it was turned off.
+      if (!ours || ['off', 'idle', 'standby', 'unavailable'].includes(st.state)) {
+        if (!cast.lostAt) cast.lostAt = now;
+        if (now - cast.lostAt > 4000) {
+          this._castQuiet('pause');
+          this._castEnd(false, `${this._castName(cast.entity)} stopped playing the video.`);
         }
-      });
-      show();
+        return;
+      }
+      cast.lostAt = 0;
+      if (now < (cast.cmdUntil || 0)) { this._castShow(); return; }   // the TV is still catching up with us
+      const pos = this._castTvPos(st);
+      const playing = st.state === 'playing';
+      if (playing && video.paused && !video.ended) this._castQuiet('play');
+      if (!playing && !video.paused) this._castQuiet('pause');
+      if (pos !== null && Number.isFinite(video.duration) && Math.abs(video.currentTime - pos) > CAST_DRIFT && pos < video.duration) {
+        this._castQuiet({ seek: pos });
+      }
+      this._castShow();
+    }
+
+    _castShow() {
+      if (!this._el) return;
+      const btn = this._el('vcast');
+      const cast = this._cast;
+      const text = !cast ? '📺 Cast' : cast.phase === 'upload' ? `📺 ${Math.round((cast.pct || 0) * 100)}%` : cast.phase === 'starting' ? '📺 …' : '📺 On TV';
+      if (btn.textContent !== text) btn.textContent = text;
+      btn.classList.toggle('on', Boolean(cast && cast.phase === 'on'));
+      this._videoStatus();
     }
 
     async _loadVideoScript() {
@@ -2538,7 +2748,13 @@
       if (labEl.textContent !== lab) labEl.textContent = lab;
       if (levels && !this._vrec && !this._hbActive && !this._outsHere && !(this._vsyncTimer && this._vscript)) this._showHBar(0, (levels[0] || 0) * 100);
       const parts = [];
-      if (video.remote && video.remote.state === 'connected') parts.push('📺 casting');
+      if (this._cast) {
+        const c = this._cast;
+        const tv = this._castName(c.entity);
+        const st = this._hass && this._hass.states[c.entity];
+        parts.push(c.phase === 'upload' ? `📺 sending to Home Assistant ${Math.round((c.pct || 0) * 100)}%`
+          : c.phase === 'starting' ? `📺 starting on ${tv}…` : `📺 ${tv}: ${st ? st.state : '?'}`);
+      }
       if (this._vscript) parts.push(`Script ${fmt(duration(this._vscript))}`);
       if (this._vurl && Number.isFinite(video.duration)) parts.push(`video ${fmt(video.duration * 1000)}`);
       if (this._vsyncTimer && levels) parts.push(`now ${levels.map((v) => Math.round(v * 100) + '%').join(' / ')}`);
@@ -3476,6 +3692,7 @@
       this._stHalt();
       this._gpDetach();
       if (this._vsyncTimer) this._videoHalt();
+      if (this._cast) this._castEnd(false);      // the TV plays on
       if (this._vurl) { URL.revokeObjectURL(this._vurl); this._vurl = null; }
       this._outStop();
     }
