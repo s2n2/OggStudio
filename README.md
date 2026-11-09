@@ -44,8 +44,8 @@ title: Bedroom studio
 sections: [library, video, take]
 ```
 
-The playback device (shown on cards that play the library, video or imports) is remembered
-for all cards.
+There is one device choice per card: the **Devices** box (see below). Record, Replay, the
+take and library ▶ Play buttons and the video all use it.
 
 ## Record and replay
 
@@ -63,19 +63,23 @@ press **▶ Replay**, with a speed (0.5x to 2x) and Loop. Tap the progress bar t
   run mode is used for the first device, and replaying remembers it again.
 
 Replay is driven from the browser about 10 times a second (strokers get each move as it
-starts). The Library's ▶ Play runs a script inside Ogg's own frame loop instead.
+starts). The take's **▶ Play now** and the Library's **▶ Play** use Replay too, with the
+library's speed and Loop. Automations can still play inside Ogg's own frame loop with the
+`oggstudio.play` service.
 
-## Devices that follow a recording
+## Devices
 
-Under the Record button, **Devices that follow** lists up to two outputs. Each can be a
+Under the Record button (at the top on cards without one), the **Devices** box lists up to two
+outputs, used for everything on the card. Each can be a
 device, one motor of a two-motor device, or a stroker, so you can mix: two motors of one toy,
 two toys, or a stroker and a vibrator. Pick **No device (record only)** to record without one.
 
 * **Vibrate recorder:** choosing a second output adds a second pad, and the take gets two tracks
   (the second is played on motor 2).
-* **Stroke recorder:** each output has its own way of following: a vibrator by Speed,
-  Position, Speed + position, downstrokes or upstrokes (see [Run modes](#run-modes)), and
-  a stroker by position (**Stroker**).
+* **Stroke recorder, and any stroke script being played** (Replay, library, take or video,
+  in either view): each output has its own follow type: a vibrator by one of the
+  [Run modes](#run-modes), a stroker by position (**Stroker**). A saved script's remembered
+  run mode is used for the first output.
 
 The choices are remembered per browser.
 
@@ -123,8 +127,7 @@ toggle at the top of the Record section switches between the pads and this strok
 * **Record** starts and stops. The take is a stroke script: save it, copy its code, or press
   **Download** for a `.funscript` to load onto a Handy.
 
-The devices that follow, and how, are chosen under the Record button (see
-[Devices that follow a recording](#devices-that-follow-a-recording)).
+The devices that follow, and how, are chosen in the [Devices](#devices) box.
 
 On a game controller the defaults are: D-pad left, down and right for slow, medium and fast,
 D-pad up or X for Set limit, B for Reset limits and A for Record. **Learn controls** on this
@@ -168,15 +171,15 @@ Under the video there is one simple slider and a small **● Rec** button. The s
 same thing as the control above: the position in the Stroke view, the intensity in Vibrate.
 Press Rec, play the video and drag it. The devices follow, and each value is recorded
 against the video's own time, so the script lines up with that video (a stroke script in the
-Stroke view). While a script plays with the video, the slider shows what it is doing; hold
-the slider to take over until you let go. On cards with a Record section the video drives the
-devices chosen there, with their follow modes. You can pause,
+Stroke view). While a script plays with the video it is handled exactly like Replay, just on
+the video's clock: the devices follow their follow types, the pads or stroke bar and the
+slider show it, and holding the slider takes over until you let go. You can pause,
 scrub back and record a section again: the newer pass replaces what was there. When you're
 done, press **Use as take** (it replays with the video straight away, and you can save it to
 the library) or **Download .funscript** (saved with the video's name).
 
-Script files are run with the **Run as** mode: Speed suits stroke funscripts made for videos,
-Position suits scripts that already describe intensity.
+Script files are treated as stroke scripts and mapped per device; choose Position for a device
+if the file already describes intensity.
 
 ## Game controller
 

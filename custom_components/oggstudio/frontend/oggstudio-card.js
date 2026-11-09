@@ -6,7 +6,7 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.8.3';
+  const VERSION = '0.9.0';
   const DEVICE_KEY = 'oggstudio_device';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
@@ -546,8 +546,12 @@
       (slot || this._el('outhome')).appendChild(box);
       const cslot = rec && this.shadowRoot.querySelector(`[data-part="${rec}"] .ctlslot`);
       (cslot || this._el('outhome')).insertBefore(this._el('ctlbox'), cslot ? null : box);
+      // No recorder on this card: the devices box sits at the top on its own.
+      this._el('outhome').classList.toggle('off', Boolean(rec));
+      this._el('outhome').style.order = '0';
+      this._el('ctlbox').hidden = !rec;
       if (this._rp) this._ctlShow();
-      this._el('devbox').hidden = !parts.some((x) => ['library', 'video', 'import'].includes(x));
+      this._el('devbox').hidden = true;      // one device choice for everything: the devices box
       if (this._outs) this._outRender();
     }
 
@@ -773,7 +777,7 @@
               </div>
             </div>
             <div class="outbox" id="outbox">
-              <label>Devices that follow</label>
+              <label>Devices (record, replay, library and video all use these)</label>
               <div class="outrow" data-row="0"><select class="outt" aria-label="First device"></select><select class="outm" aria-label="How the first device follows"></select><button class="outtake" type="button" hidden>Take control</button></div>
               <div class="outrow" data-row="1"><select class="outt" aria-label="Second device"></select><select class="outm" aria-label="How the second device follows"></select><button class="outtake" type="button" hidden>Take control</button></div>
               <div class="outnote" id="outnote"></div>
@@ -798,7 +802,6 @@
             <label>Video</label><input id="vfile" type="file" accept="video/*">
             <label>Script</label><select id="vsrc"></select>
             <div id="vfilebox"><input id="vscriptfile" type="file" accept=".funscript,.json,application/json" multiple style="margin-top:6px"></div>
-            <div id="vmodebox"><label>Run as vibration using</label><select id="vmode">${runModeOptions()}</select></div>
             <video id="video" controls playsinline preload="metadata" hidden></video>
             <div class="hbar" id="hb1" role="slider" tabindex="0" aria-label="Motor 1 level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill"></div><span class="lab">Motor 1</span><span class="pct">0%</span></div>
             <div class="hbar m2" id="hb2" role="slider" tabindex="0" aria-label="Motor 2 level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><div class="fill"></div><span class="lab">Motor 2</span><span class="pct">0%</span></div>
@@ -1325,9 +1328,7 @@
     }
 
     _gpMotors() {
-      if (this._gpTarget() === 'video') {
-        if (!(this._device && this._device.dual)) return [0];
-      } else if (!this._twoPads) return [0];
+      if (this._gpTarget() === 'video' || !this._twoPads) return [0];
       return this._gpMotor === 2 ? [0, 1] : [this._gpMotor];
     }
 
@@ -1356,7 +1357,7 @@
     }
 
     _gpCycleMotor() {
-      if (!(this._gpTarget() === 'video' ? this._device && this._device.dual : this._twoPads)) return;
+      if (this._gpTarget() === 'video' || !this._twoPads) return;
       this._gpMotor = (this._gpMotor + 1) % 3;
       this._gpFloat = [null, null];
     }
@@ -1396,7 +1397,7 @@
         html = bits.join(' · ');
       } else {
         const bits = [`Speed <b>${this._gpSpeed + 1}/${GP_SPEEDS.length}</b> (${GP_SPEEDS[this._gpSpeed]}%/s)`];
-        if (this._gpTarget() === 'video' ? this._device && this._device.dual : this._twoPads) bits.push(['Pad 1', 'Pad 2', 'Both pads'][this._gpMotor]);
+        if (this._gpTarget() !== 'video' && this._twoPads) bits.push(['Pad 1', 'Pad 2', 'Both pads'][this._gpMotor]);
         const target = this._gpTarget();
         bits.push(target === 'video' ? '→ video' : target === 'record' ? '→ pads' : '');
         if (this._gpPadId) bits.push(esc(this._gpPadId.replace(/\s*\(.*$/, '').slice(0, 28)) + (this._gpPadCount > 1 && this._gpActive === undefined ? ` (1 of ${this._gpPadCount}: press a button to choose)` : ''));
@@ -1564,18 +1565,8 @@
         if (file) { video.src = this._vurl; video.load(); } else { video.removeAttribute('src'); }
         this._videoStatus();
       });
-      $('vsrc').addEventListener('change', () => {
-        const info = $('vsrc').value === TAKE_SRC ? null : this._scriptInfo($('vsrc').value);
-        if (info && info.kind === 'stroke') $('vmode').value = info.mode || RUN_MODE_DEFAULT;
-        if ($('vsrc').value === TAKE_SRC && this._take && isStroke(this._take)) $('vmode').value = $('takemode').value;
-        this._loadVideoScript();
-      });
+      $('vsrc').addEventListener('change', () => this._loadVideoScript());
       $('vscriptfile').addEventListener('change', () => this._loadVideoScript());
-      $('vmode').addEventListener('change', () => {
-        const name = $('vsrc').value;
-        if (name && name !== TAKE_SRC && this._vraw && isStroke(this._vraw)) this._setMode(name, $('vmode').value);
-        this._loadVideoScript();
-      });
       $('vgo').addEventListener('click', () => this._videoGo());
       $('vstop').addEventListener('click', () => { video.pause(); try { video.currentTime = 0; } catch (_) { /* not loaded */ } this._videoHalt(); });
       video.addEventListener('play', () => this._videoRun());
@@ -1621,8 +1612,10 @@
           this._vraw = await this._getSaved($('vsrc').value);
           this._vscriptName = $('vsrc').value;
         }
-        $('vmodebox').hidden = !(fromFile || isStroke(this._vraw));
-        this._vscript = runScript(this._vraw, $('vmode').value);
+        this._vscript = this._vraw;      // mapped per device as it plays
+        this._vconvs = {};
+        if (!fromFile && $('vsrc').value !== TAKE_SRC) this._useRemembered($('vsrc').value, this._vraw);
+        this._outRender();
         this._videoSend(true);
       } catch (e) {
         this._vscript = null;
@@ -1631,22 +1624,6 @@
       this._videoStatus();
     }
 
-    _videoLevels() {
-      const video = this._el('video');
-      const dual = Boolean(this._device && this._device.dual);
-      const held = this._vrec || this._hbActive;     // the slider (recording, or taking over the script)
-      if (held) return dual ? [this._hvals[0] / 100, this._hvals[0] / 100] : [this._hvals[0] / 100];
-      const s = this._vscript;
-      if (!s) return null;
-      const ms = video.currentTime * 1000 + Number(this._el('voff').value || 0);
-      const main = sampleAt(s.actions, ms) / 100;
-      const levels = [main];
-      if (this._device && this._device.dual) {
-        const v1 = s.channels && s.channels.V1 && s.channels.V1.actions;
-        levels.push(v1 && v1.length ? sampleAt(v1, ms) / 100 : main);
-      }
-      return levels.map((v) => Math.round(Math.min(1, Math.max(0, v)) * 100) / 100);
-    }
 
     // Is the outputs box in a recorder on this card? Then the video drives
     // those devices (with their follow modes); else the playback device.
@@ -1658,8 +1635,9 @@
       if (this._vrec || this._hbActive) return this._hvals[0];
       const video = this._el('video');
       const ms = video.currentTime * 1000 + Number(this._el('voff').value || 0);
-      if (this._strokeKindRec && this._vraw && isStroke(this._vraw)) return sampleAt(this._vraw.actions, ms);
-      return this._vscript ? sampleAt(this._vscript.actions, ms) : 0;
+      if (!this._vraw) return 0;
+      if (this._strokeKindRec && isStroke(this._vraw)) return sampleAt(this._vraw.actions, ms);
+      return this._mapScript(this._vraw, ms, this._vconvs || (this._vconvs = {}))[0];
     }
 
     get _strokeKindRec() { return this._recKind === 'stroke'; }
@@ -1687,34 +1665,38 @@
           return Math.min(100, Math.max(0, liveIntensity(o.m, value, this._vVel)));
         });
         this._outApply(values, 0.6);
+        // The stroke bar shows it too (unless you are moving it).
+        const st = this._st;
+        if (st && st.drag === null && this._stSpeed() === null) { st.pos = value; this._stShow(); }
       } else {
-        const levels = this._videoLevels() || [0];
-        this._outApply([levels[0] * 100, this._twoPads ? (levels[1] ?? levels[0]) * 100 : null], 0.6);
+        const held = this._vrec || this._hbActive;
+        const vals = held ? [this._hvals[0], this._hvals[0]] : this._mapScript(this._vraw || { actions: [] }, ms, this._vconvs || (this._vconvs = {}));
+        for (const i of [0, 1]) if (!this._padActive || !this._padActive[i]) this._setPad(i, vals[i]);
+        const out = [0, 1].map((i) => {
+          if (i && !this._twoPads) return null;
+          const p = parseTarget(this._outTargetValue(i));
+          if (p && p.motor === 'l') {
+            const next = script && nextAction(this._vraw.actions, ms);
+            return next ? { goal: next.pos, dur: (next.at - ms) / (video.playbackRate || 1) } : { goal: this._vals[i], dur: 150 };
+          }
+          return this._vals[i];
+        });
+        this._outApply(out, 0.6);
       }
     }
 
     _videoSend(force) {
       const video = this._el && this._el('video');
       if (!this._vsyncTimer || !video || video.paused) { this._videoStatus(); return; }
-      const dev = this._device;
       if (this._vrec) this._vrecSample();
       if (!this._vrec && !this._hbActive) this._showHBar(0, this._videoValue());
-      if (this._outsHere) { this._videoOut(); this._videoStatus(); return; }
-      const levels = this._videoLevels();
-      if (!dev || !levels) return;
-      const now = performance.now();
-      const changed = !this._vlast || levels.some((v, i) => Math.abs(v - (this._vlast[i] ?? -1)) >= 0.01);
-      // Refresh unchanged levels too: ogg.live stops by itself if refreshes stop.
-      if (force || changed || now - this._vsentAt > 500) {
-        this._vlast = levels;
-        this._vsentAt = now;
-        this._sendLive(dev, levels, 1.5);
-      }
-      this._videoStatus(levels);
+      this._videoOut();
+      this._videoStatus();
     }
 
     _videoRun() {
       if (this._vsyncTimer || !(this._vscript || this._vrec)) return;
+      if (this._rp) this._rpStop();
       if (this._live) { this._el('live').checked = false; this._setLive(false); }
       this._vlast = null;
       this._vsentAt = 0;
@@ -1728,8 +1710,7 @@
       clearInterval(this._vsyncTimer);
       this._vsyncTimer = null;
       this._vlast = null;
-      if (this._outsHere) this._outStop();
-      else if (this._device) this._quietStop(this._device);
+      this._outStop();
       this._videoStatus([0, 0]);
     }
 
@@ -1868,7 +1849,8 @@
       if (!script) return;
       this._take = script;
       this._vraw = script;
-      this._vscript = runScript(script, this._el('vmode').value);   // replay it with the video straight away
+      this._vscript = script;          // replay it with the video straight away
+      this._vconvs = {};
       this._el('name').value = this._vname || '';
       this._vrecReset();
       this._toast(`Recorded ${fmt(duration(script))}. It is now the current take (save it below) and plays with this video.`);
@@ -1907,7 +1889,6 @@
       if (labEl.textContent !== lab) labEl.textContent = lab;
       if (levels && !this._vrec && !this._hbActive && !this._outsHere && !(this._vsyncTimer && this._vscript)) this._showHBar(0, (levels[0] || 0) * 100);
       const parts = [];
-      if (this._device && !this._online(this._device)) parts.push(`⚠ ${this._device.name} not connected`);
       if (this._vscript) parts.push(`Script ${fmt(duration(this._vscript))}`);
       if (this._vurl && Number.isFinite(video.duration)) parts.push(`video ${fmt(video.duration * 1000)}`);
       if (this._vsyncTimer && levels) parts.push(`now ${levels.map((v) => Math.round(v * 100) + '%').join(' / ')}`);
@@ -1978,9 +1959,7 @@
       if (this._deviceId) sel.value = this._deviceId;
       const dev = this._device;
       const online = dev && (!dev.connected || this._hass.states[dev.connected]?.state === 'on');
-      $('play').disabled = !online;
-      const pd = this._playDevice;
-      $('takeplay').disabled = !(pd && this._online(pd));
+      $('takeplay').disabled = !this._take;
       // Someone else took over a device this card was driving: let it go quietly.
       for (const [stop, d] of this._claimed) {
         const c = this._claimedBy(d);
@@ -1994,7 +1973,7 @@
         const kind = isStroke(this._take) ? 'stroke script' : `${this._take.channels ? 2 : 1} motor${this._take.channels ? 's' : ''}`;
         $('takeinfo').textContent = `${fmt(duration(this._take))} · ${kind} · ${this._take.actions.length} points · not saved`;
       }
-      $('takemodebox').hidden = !isStroke(this._take);
+      $('takemodebox').hidden = true;     // each device has its own follow type now
       const saved = this._studio && this._hass.states[this._studio.saved];
       const opts = (saved && saved.attributes.options) || [];
       const savedKey = JSON.stringify(opts);
@@ -2002,10 +1981,10 @@
       if (saved && this.shadowRoot.activeElement !== $('saved')) $('saved').value = saved.state;
       const hasSaved = saved && saved.attributes.scripts && Object.keys(saved.attributes.scripts).length > 0;
       for (const id of ['code', 'delete']) $(id).disabled = !hasSaved;
-      $('play').disabled = !online || !hasSaved;
+      $('play').disabled = !hasSaved;
       // Stroke scripts: show the run mode, set to the one last used for it.
       const info = this._scriptInfo($('saved').value);
-      $('libmodebox').hidden = !(info && info.kind === 'stroke');
+      $('libmodebox').hidden = true;
       const modeKey = `${$('saved').value}|${info && info.mode}`;
       if (info && info.kind === 'stroke' && $('libmode').dataset.key !== modeKey && this.shadowRoot.activeElement !== $('libmode')) {
         $('libmode').value = info.mode || RUN_MODE_DEFAULT;
@@ -2173,16 +2152,38 @@
       rp.raw = script; rp.name = name; rp.lib = lib; rp.t = 0; rp.len = duration(script);
       const info = lib && this._scriptInfo(lib);
       rp.convs = {};
-      // A saved stroke script's remembered run mode becomes the first device's way of following.
-      if (info && info.mode && RUN_MODES[info.mode] && isStroke(script) && parseTarget(this._outTargetValue(0)) && parseTarget(this._outTargetValue(0)).motor !== 'l') {
-        this._outs[0].m = info.mode; this._outSave();
-      }
+      this._useRemembered(lib, script);
       this._outRender();
       this._rpPicker(false);
       this._rpShow();
     }
 
     // The vibration version (pads in the vibrate view) of the loaded script.
+    // Each output's value for a script at ms (vibrate view): a stroke script
+    // is mapped per device by its follow type; a vibration script plays as
+    // it is (its second track to the second output).
+    _mapScript(raw, ms, cache) {
+      const stroke = isStroke(raw);
+      return [0, 1].map((i) => {
+        if (!stroke) {
+          const v1 = i && raw.channels && raw.channels.V1 && raw.channels.V1.actions;
+          return sampleAt(v1 && v1.length ? v1 : raw.actions, ms);
+        }
+        const p = parseTarget(this._outTargetValue(i));
+        const m = this._outs[i].m;
+        if (m === FOLLOW_STROKER || (p && p.motor === 'l')) return sampleAt(raw.actions, ms);
+        if (!cache[m]) cache[m] = runScript(raw, m);
+        return sampleAt(cache[m].actions, ms);
+      });
+    }
+
+    // A saved stroke script's remembered run mode becomes the first device's follow type.
+    _useRemembered(lib, script) {
+      const info = lib && this._scriptInfo(lib);
+      const p = parseTarget(this._outTargetValue(0));
+      if (info && info.mode && RUN_MODES[info.mode] && isStroke(script) && p && p.motor !== 'l') { this._outs[0].m = info.mode; this._outSave(); }
+    }
+
     // The script converted with one run mode (cached per mode).
     _rpConv(mode) {
       const rp = this._rp;
@@ -2197,8 +2198,11 @@
       const rp = this._rp;
       if (!rp.raw) { this._rpPicker(true); return; }
       if (rp.t >= rp.len) rp.t = 0;
+      const video = this._el('video');
+      if (video && !video.paused) video.pause();     // one thing drives the devices at a time
       if (rp.lib && isStroke(rp.raw) && RUN_MODES[this._outs[0].m]) this._setMode(rp.lib, this._outs[0].m);
       rp.playing = true;
+      this._outRender();
       rp.last = performance.now();
       rp.outAt = 0;
       clearInterval(this._rpTimer);
@@ -2216,6 +2220,7 @@
       this._outStop();
       this._stOutAt = 0;
       if (this._st) this._stRun();     // lets the stroke timer stop if nothing else needs it
+      this._outRender();
       this._rpShow();
     }
 
@@ -2248,16 +2253,8 @@
         // vibration script plays as it is (second track on pad 2).
         const stroke = isStroke(rp.raw);
         const targets = [0, 1].map((i) => parseTarget(this._outTargetValue(i)));
-        const value = (i) => {
-          if (!stroke) {
-            const v1 = i && rp.raw.channels && rp.raw.channels.V1 && rp.raw.channels.V1.actions;
-            return sampleAt(v1 && v1.length ? v1 : rp.raw.actions, rp.t);
-          }
-          const m = this._outs[i].m;
-          if (m === FOLLOW_STROKER || (targets[i] && targets[i].motor === 'l')) return sampleAt(rp.raw.actions, rp.t);
-          return sampleAt(this._rpConv(m).actions, rp.t);
-        };
-        for (const i of [0, 1]) if (!this._padActive || !this._padActive[i]) this._setPad(i, value(i));
+        const vals = this._mapScript(rp.raw, rp.t, rp.convs || (rp.convs = {}));
+        for (const i of [0, 1]) if (!this._padActive || !this._padActive[i]) this._setPad(i, vals[i]);
         if (now - rp.outAt >= 100 || targets.some((t) => t && t.motor === 'l')) {
           if (now - rp.outAt >= 100) rp.outAt = now;
           const out = [0, 1].map((i) => {
@@ -2324,7 +2321,7 @@
       if (p && this._devices.some((d) => d.id === p.id)) return t;
       if (i === 1) return 'off';
       if (!this._registryDone) return 'none';
-      const id = this._device ? this._device.id : null;
+      const id = this._remembered && this._remembered.id;
       const dev = this._devices.find((d) => d.id === id) || this._devices.find((d) => this._online(d)) || this._devices[0];
       return dev ? `${dev.id}|${dev.linear && !dev.vibe ? 'l' : 'b'}` : 'none';
     }
@@ -2461,7 +2458,8 @@
         take.hidden = !owner;
         if (owner) take.textContent = `Take control (${owner.label || 'in use'})`;
         // Follow types apply in the stroke view, and when a stroke script replays in the vibrate view.
-        const mapping = stroke || (this._ctl === 'replay' && this._rp && this._rp.raw && isStroke(this._rp.raw));
+        const mapping = stroke || (this._rp && this._rp.raw && isStroke(this._rp.raw) && (this._ctl === 'replay' || this._rp.playing))
+          || Boolean(this._vraw && isStroke(this._vraw));
         msel.hidden = !mapping || !p || Boolean(owner);
         row.classList.toggle('solo', msel.hidden);
         row.classList.toggle('take', Boolean(owner));
@@ -2477,8 +2475,7 @@
       if (this._el('outnote').textContent !== note) this._el('outnote').textContent = note;
     }
 
-    // Take playback: the playback device where the card shows one, else the first output.
-    get _playDevice() { return this._el('devbox').hidden ? this._outDevice(0) || null : this._device; }
+
 
     _startRecording() {
       const $ = this._el;
@@ -2515,34 +2512,31 @@
       this._update();
     }
 
-    async _play(script) {
-      const dev = this._playDevice;
-      if (!script || !dev) return;
-      try {
-        await this._hass.callService('oggstudio', 'play', { entity_id: dev.stop, script, speed: this._el('speed').value, loop: this._el('loop').checked,
-          ...(isStroke(script) ? { mode: this._el('takemode').value } : {}) });
-      } catch (e) { this._toast(e.message || String(e)); }
-    }
+    // Take and library playback run through Replay: the devices above,
+    // each following its own way, and the pads or bar show it.
+    _play(script) { this._playScript(script, 'Current take', null); }
 
     async _playSaved() {
-      if (!this._device) return;
-      try {
-        const info = this._scriptInfo(this._el('saved').value);
-        await this._hass.callService('oggstudio', 'play', { entity_id: this._device.stop, name: this._el('saved').value, speed: this._el('speed').value, loop: this._el('loop').checked,
-          ...(info && info.kind === 'stroke' ? { mode: this._el('libmode').value } : {}) });
-      } catch (e) { this._toast(e.message || String(e)); }
+      const name = this._el('saved').value;
+      try { this._playScript(await this._getSaved(name), name, name); } catch (e) { this._toast('Could not load the script: ' + (e.message || e)); }
     }
 
-    async _stop() {
-      const dev = this._playDevice;
-      if (dev) await this._hass.callService('oggstudio', 'stop', { entity_id: dev.stop }).catch(() => {});
+    _playScript(script, name, lib) {
+      if (!script) return;
+      this._setCtl('replay');
+      this._rpLoad(script, name, lib);
+      if (SPEEDS.includes(this._el('speed').value)) this._el('rpspeed').value = this._el('speed').value;
+      this._el('rploop').checked = this._el('loop').checked;
+      this._rpPlay();
     }
+
+    _stop() { this._rpStop(); }
 
     async _save() {
       const name = this._el('name').value.trim();
       if (!name) { this._toast('Type a name first'); return; }
       try {
-        await this._hass.callService('oggstudio', 'save', { name, script: this._take, ...(isStroke(this._take) ? { mode: this._el('takemode').value } : {}) });
+        await this._hass.callService('oggstudio', 'save', { name, script: this._take, ...(isStroke(this._take) && RUN_MODES[this._outs[0].m] ? { mode: this._outs[0].m } : {}) });
         this._toast(`Saved "${name}"`);
         this._take = null;
         this._el('name').value = '';
