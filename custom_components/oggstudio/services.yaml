@@ -25,6 +25,12 @@ play:
     speed: {required: false, selector: {select: {options: ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"]}}}
     loop: {required: false, default: false, selector: {boolean: {}}}
     mode: {required: false, selector: {select: {options: ["speed", "position", "combo", "down", "up"]}}}
+claim:
+  fields:
+    entity_id: {required: true, selector: {entity: {integration: ogg}}}
+    owner: {required: true, selector: {text: {}}}
+    label: {required: false, selector: {text: {}}}
+    release: {required: false, default: false, selector: {boolean: {}}}
 stop:
   fields:
     entity_id: {required: true, selector: {entity: {integration: ogg}}}

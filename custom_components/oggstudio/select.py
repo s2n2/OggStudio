@@ -58,7 +58,7 @@ class ScriptSelect(_Base):
         for name, record in self.library.scripts.items():
             details[name] = {**script_info(record["script"]), "saved": record.get("saved"),
                              "mode": record.get("mode")}
-        return {"scripts": details}
+        return {"scripts": details, "controllers": self.library.controllers}
 
     async def async_select_option(self, option: str) -> None:
         self.library.select(option)

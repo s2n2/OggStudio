@@ -44,8 +44,33 @@ title: Bedroom studio
 sections: [library, video, take]
 ```
 
-The device picked in one card is remembered for all of them. Pick **No device (record only)**
-to record without a device: nothing is sent, and the take can be saved or downloaded as usual.
+The playback device (shown on cards that play the library, video or imports) is remembered
+for all cards.
+
+## Devices that follow a recording
+
+Under the Record button, **Devices that follow** lists up to two outputs. Each can be a
+device, one motor of a two-motor device, or a stroker, so you can mix: two motors of one toy,
+two toys, or a stroker and a vibrator. Pick **No device (record only)** to record without one.
+
+* **Vibrate recorder:** choosing a second output adds a second pad, and the take gets two tracks
+  (the second is played on motor 2).
+* **Stroke recorder:** each output has its own way of following: a vibrator by Speed,
+  Position, Speed + position, downstrokes or upstrokes (see [Run modes](#run-modes)), and
+  a stroker by position (**Stroker**).
+
+The choices are remembered per browser.
+
+**One controller per device.** The cards run in each phone's or computer's browser, so two people
+can record at the same time on different devices. While a card drives a device it claims it in
+Home Assistant (`oggstudio.claim`). Another card then shows **Take control (who has it)**
+instead of the follow choice, and sends nothing to that device until you press it. A claim
+lapses about 12 seconds after a card stops refreshing it (closed page, lost connection).
+
+**Strokers through Ogg.** A stroker (for example a Handy connected to Intiface over Bluetooth)
+is driven with "go to this position over this long" moves, sent the moment each stroke turns.
+That needs an `ogg.linear` service in Ogg. Until Ogg has one, OggStudio falls back to Ogg's
+Position control, which moves over a fixed second, so following is coarse.
 
 ## Stroke recorder
 
@@ -55,8 +80,10 @@ toggle at the top of the Record section switches between the pads and this strok
 (remembered per card type):
 
 * **Hold Slow, Medium or Fast** to stroke between the lower and upper limit. Let go and it
-  stops where it is. Each speed is a % of the device's top speed, chosen in the dropdown
-  under it (defaults 30%, 55% and 100%). 100% is a full 0 to 100 stroke in a quarter second.
+  stops where it is. Each speed is a % of the device's top speed. Tap the % under it for a
+  slider (defaults 30%, 55% and 100%). 100% is a full 0 to 100 stroke in a quarter second,
+  about 384 mm/s on a Handy's 96 mm of usable travel, close to its roughly 400 mm/s top
+  speed.
   The device moves at that speed whatever the range, so a short range just makes quicker
   strokes. The choices are remembered per browser.
 * **⟳ Latch** keeps a speed running without holding the button. Latching another speed
@@ -77,7 +104,8 @@ toggle at the top of the Record section switches between the pads and this strok
 * **Record** starts and stops. The take is a stroke script: save it, copy its code, or press
   **Download** for a `.funscript` to load onto a Handy.
 
-With a vibration device chosen, the device follows live using the mode picked under the bar.
+The devices that follow, and how, are chosen under the Record button (see
+[Devices that follow a recording](#devices-that-follow-a-recording)).
 
 On a game controller the defaults are: D-pad left, down and right for slow, medium and fast,
 D-pad up or X for Set limit, B for Reset limits and A for Record. **Learn controls** on this
@@ -202,6 +230,7 @@ it says it is a vibration script.
 |---|---|
 | `oggstudio.play` | Play a saved script (`name`) or a given `script` on an Ogg device (`entity_id`), with `speed`, `loop` and, for stroke scripts, `mode` (speed, position, combo, down, up) |
 | `oggstudio.set_mode` | Remember the run mode for a saved stroke script |
+| `oggstudio.claim` | Claim, refresh or release live control of a device (used by the cards) |
 | `oggstudio.stop` | Stop playback on a device |
 | `oggstudio.save` / `delete` / `rename` | Manage the library |
 | `oggstudio.get_script` | Return a saved script (for export) |

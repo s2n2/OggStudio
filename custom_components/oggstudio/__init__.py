@@ -42,6 +42,14 @@ PLAY_SCHEMA = vol.Schema(
     }
 )
 STOP_SCHEMA = vol.Schema({vol.Required("entity_id"): cv.entity_id})
+CLAIM_SCHEMA = vol.Schema(
+    {
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("owner"): vol.All(cv.string, vol.Length(min=1, max=80)),
+        vol.Optional("label", default=""): cv.string,
+        vol.Optional("release", default=False): cv.boolean,
+    }
+)
 
 
 def _library(hass: HomeAssistant) -> Library:
@@ -60,6 +68,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     async def save(call: ServiceCall) -> ServiceResponse:
         name = _library(hass).save(call.data["name"], call.data["script"], call.data.get("mode"))
         return {"name": name}
+
+    async def claim(call: ServiceCall) -> None:
+        _library(hass).claim(call.data["entity_id"], call.data["owner"], call.data["label"],
+                             call.data["release"])
 
     async def set_mode(call: ServiceCall) -> None:
         _library(hass).set_mode(call.data["name"], call.data["mode"])
@@ -109,6 +121,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                                  supports_response=SupportsResponse.OPTIONAL)
     hass.services.async_register(DOMAIN, "delete", delete, schema=NAME_SCHEMA)
     hass.services.async_register(DOMAIN, "set_mode", set_mode, schema=MODE_SCHEMA)
+    hass.services.async_register(DOMAIN, "claim", claim, schema=CLAIM_SCHEMA)
     hass.services.async_register(DOMAIN, "rename", rename, schema=RENAME_SCHEMA)
     hass.services.async_register(DOMAIN, "get_script", get_script, schema=NAME_SCHEMA,
                                  supports_response=SupportsResponse.ONLY)

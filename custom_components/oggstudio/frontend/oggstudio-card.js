@@ -6,7 +6,7 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.6.3';
+  const VERSION = '0.7.0';
   const DEVICE_KEY = 'oggstudio_device';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
@@ -148,7 +148,8 @@
   // (400 units/s, the same scale as the Speed run mode).
   const STROKE_TOP = 400;   // position units per second at 100%
   const STROKE_SPEEDS = [{ name: 'Slow', pct: 30 }, { name: 'Medium', pct: 55 }, { name: 'Fast', pct: 100 }];
-  const STROKE_PCTS = Array.from({ length: 20 }, (_, i) => (i + 1) * 5);   // 5..100
+  const STROKE_PCT_MIN = 5;   // the Handy's slowest smooth speed is about 8% (32 mm/s)
+  const okPct = (v) => Number.isInteger(v) && v >= STROKE_PCT_MIN && v <= 100;
   const STROKE_SPEED_KEY = 'oggstudio_stroke_speeds';
   const strokeVel = (pct) => pct / 100 * STROKE_TOP / 1000;               // units per ms
   const STROKE_MODE_KEY = 'oggstudio_stroke_mode';
@@ -184,6 +185,34 @@
     return p > keep ? { lower: keep, upper: p, last: 'upper' } : { lower: p, upper: keep, last: 'lower' };
   }
   const STROKE_LIMITS_RESET = { lower: 0, upper: 100, last: null };
+
+  // Outputs: up to two devices (or motors) follow a recorder live. A target
+  // is "deviceId|motor": motor 0 or 1, b = both motors, l = linear (stroker).
+  // "none" = record only, "off" = no second output.
+  const OUT_KEY = 'oggstudio_outputs';
+  const FOLLOW_STROKER = 'stroker';
+  const parseTarget = (t) => { const m = /^(.+)\|([01bl])$/.exec(t || ''); return m ? { id: m[1], motor: m[2] } : null; };
+
+  // Per-device levels from output values: two outputs on one device become
+  // one command (motor 1 and motor 2), "both" drives every motor.
+  function outLevels(targets, values, devices) {
+    const out = new Map();
+    targets.forEach((t, i) => {
+      const p = parseTarget(t);
+      const dev = p && devices.find((d) => d.id === p.id);
+      const v = values[i];
+      if (!dev || v === null || v === undefined) return;
+      const e = out.get(dev.id) || { dev, levels: dev.dual ? [0, 0] : [0], vibe: false, linear: null };
+      if (p.motor === 'l') e.linear = v;
+      else {
+        e.vibe = true;
+        if (p.motor === 'b') e.levels = e.levels.map((x) => Math.max(x, v));
+        else { const m = Math.min(Number(p.motor), e.levels.length - 1); e.levels[m] = Math.max(e.levels[m], v); }
+      }
+      out.set(dev.id, e);
+    });
+    return [...out.values()];
+  }
   const STROKE_MIN_SPAN = 2;
 
   // Range rail: what a touch at v grabs. Near a limit = that limit, inside
@@ -434,6 +463,12 @@
       this._gpPrev = {};
       this._gpFloat = [null, null];
       this._gpMotor = 0;
+      // Who this card is, for control claims (one controller per device).
+      this._owner = (window.crypto && crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2));
+      this._claimed = new Map();     // stop entity -> device, while this card drives it
+      this._claimAt = {};
+      this._outLast = {};
+      this._linLast = {};
       this.shadowRoot.addEventListener('pointerdown', () => { gpOwner = this; }, true);
     }
 
@@ -488,7 +523,15 @@
         tog.hidden = !this._canToggleKind;
         for (const b of tog.querySelectorAll('button')) b.classList.toggle('on', b.dataset.kind === this._recKind);
       }
+      const rec = parts.includes('stroke') ? 'stroke' : parts.includes('record') ? 'record' : null;
+      const slot = rec && this.shadowRoot.querySelector(`[data-part="${rec}"] .outslot`);
+      const box = this._el('outbox');
+      (slot || this._el('outhome')).appendChild(box);
+      this._el('devbox').hidden = !parts.some((x) => ['library', 'video', 'import'].includes(x));
+      if (this._outs) this._outRender();
     }
+
+    get _strokeKind() { return this._parts.includes('stroke'); }
 
     setConfig(config) { this._config = config || {}; this._render(); }
     getCardSize() { return this._variant.size; }
@@ -526,6 +569,8 @@
           if (uid.endsWith(':stop')) d.stop = e.entity_id;
           if (uid.endsWith(':connected')) d.connected = e.entity_id;
           if (uid.endsWith(':motor_level_1')) d.dual = true;
+          if (uid.endsWith(':linear_0')) d.linear = e.entity_id;
+          if (uid.endsWith(':intensity') || uid.endsWith(':motor_level_0')) d.vibe = true;
           byDevice.set(e.device_id, d);
         }
         this._devices = [...byDevice.values()].filter((d) => d.stop).sort((a, b) => a.name.localeCompare(b.name));
@@ -617,7 +662,19 @@
           .stside button.sthold{flex:1;min-height:46px;font-size:15px;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
           .stside button.sthold.on{background:linear-gradient(110deg,#2fbfa9,#67e0c8);color:#062a24;border-color:transparent}
           .stctl{display:grid;grid-template-columns:1fr 1fr;gap:4px}
-          .stctl select{padding:4px 6px;min-height:32px;font-size:12px;border-radius:9px}
+          .stside button.stpctbtn{min-height:32px;padding:0 6px;font-size:12.5px;border-radius:9px;background:#18233d;font-variant-numeric:tabular-nums}
+          .st{position:relative}
+          .stpop{position:absolute;z-index:5;left:0;right:0;padding:12px;border-radius:14px;border:1px solid #67e0c8;background:#101a30;box-shadow:0 10px 30px rgba(0,0,0,.6)}
+          .stpop .row{align-items:center}
+          .stpop b{font-size:22px;font-variant-numeric:tabular-nums;flex:0 0 auto;min-width:64px;text-align:right}
+          .stpop .hint{margin-top:2px}
+          .outbox{margin-top:10px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.025)}
+          .outbox > label{margin-top:0}
+          .outrow{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;align-items:center}
+          .outrow.solo{grid-template-columns:1fr}
+          .outrow.solo.take{grid-template-columns:1fr auto}
+          .outrow button.outtake{min-height:38px;background:rgba(255,207,138,.12);border-color:rgba(255,207,138,.45);color:#ffcf8a}
+          .outnote{font-size:11px;color:var(--muted);margin-top:4px}
           .stside button.stlatch{min-height:32px;padding:0 6px;font-size:11.5px;border-radius:9px;background:#141d33;color:var(--muted)}
           .stside button.stlatch.on{background:linear-gradient(110deg,#ff5c7a,#ff8aa0);color:#2a0710;border-color:transparent}
           .stside .row button{min-height:46px}
@@ -631,7 +688,7 @@
         </style>
         <ha-card>
           <h2>${esc(this._config.title || this._variant.name)}</h2><div class="sub">${esc(this._variant.sub)} · v${VERSION}</div>
-          <label>Device</label><select id="device"></select>
+          <div id="devbox"><label>Playback device</label><select id="device"></select></div>
           <div class="gp" id="gp">
             <label class="check"><input id="gpon" type="checkbox"> 🎮 Controller</label>
             <span class="gpstat" id="gpstat"></span>
@@ -648,16 +705,21 @@
                 <div class="stlane" id="stlane" role="slider" tabindex="0" aria-label="Stroke position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><div class="ticks"></div><div class="stshade" id="stshade"></div><div class="stpos" id="stpos"></div><span class="pct" id="stpct">50</span></div>
               </div></div>
               <div class="stside">
-                <div class="stspd"><button class="sthold" type="button" data-speed="2">Fast</button><div class="stctl"><select class="stpct" data-speed="2" aria-label="Fast speed">${STROKE_PCTS.map((v) => `<option value="${v}">${v}%</option>`).join('')}</select><button class="stlatch" type="button" data-speed="2" aria-pressed="false" title="Keep running at this speed">⟳ Latch</button></div></div>
-                <div class="stspd"><button class="sthold" type="button" data-speed="1">Medium</button><div class="stctl"><select class="stpct" data-speed="1" aria-label="Medium speed">${STROKE_PCTS.map((v) => `<option value="${v}">${v}%</option>`).join('')}</select><button class="stlatch" type="button" data-speed="1" aria-pressed="false" title="Keep running at this speed">⟳ Latch</button></div></div>
-                <div class="stspd"><button class="sthold" type="button" data-speed="0">Slow</button><div class="stctl"><select class="stpct" data-speed="0" aria-label="Slow speed">${STROKE_PCTS.map((v) => `<option value="${v}">${v}%</option>`).join('')}</select><button class="stlatch" type="button" data-speed="0" aria-pressed="false" title="Keep running at this speed">⟳ Latch</button></div></div>
+                <div class="stspd"><button class="sthold" type="button" data-speed="2">Fast</button><div class="stctl"><button class="stpctbtn" type="button" data-speed="2" aria-label="Fast speed, tap to change"></button><button class="stlatch" type="button" data-speed="2" aria-pressed="false" title="Keep running at this speed">⟳ Latch</button></div></div>
+                <div class="stspd"><button class="sthold" type="button" data-speed="1">Medium</button><div class="stctl"><button class="stpctbtn" type="button" data-speed="1" aria-label="Medium speed, tap to change"></button><button class="stlatch" type="button" data-speed="1" aria-pressed="false" title="Keep running at this speed">⟳ Latch</button></div></div>
+                <div class="stspd"><button class="sthold" type="button" data-speed="0">Slow</button><div class="stctl"><button class="stpctbtn" type="button" data-speed="0" aria-label="Slow speed, tap to change"></button><button class="stlatch" type="button" data-speed="0" aria-pressed="false" title="Keep running at this speed">⟳ Latch</button></div></div>
                 <div class="row"><button id="stlimit" type="button">Set limit</button><button id="streset" type="button">Reset limits</button></div>
+              </div>
+              <div class="stpop" id="stpop" hidden>
+                <div class="row"><label id="stpoplab" style="margin:0">Speed</label><b id="stpopval"></b></div>
+                <input id="stpoprange" type="range" min="${STROKE_PCT_MIN}" max="100" step="1">
+                <div class="row"><span class="hint" id="stpophint"></span><button id="stpopdone" type="button" style="flex:0 0 auto">Done</button></div>
               </div>
             </div>
             <button id="strec" class="rec" type="button">● Record</button><div class="stinfo" id="stinfo"></div>
-            <label>The device follows as</label><select id="stmode">${runModeOptions()}</select>
-            <label class="check" style="margin-top:6px"><input id="stlive" type="checkbox"> Device follows without recording</label>
-            <div class="hint">Hold Slow, Medium or Fast to stroke between the limits at that speed (% of the device's top speed); let go to stop where you are. ⟳ Latch keeps a speed running without holding; pressing any speed button, or latching another, takes over. Touching the position bar overrides a latch only while your finger is down. Drag the range on the left: a limit to move it, the middle to move the whole range. Touch the position bar to move there: it travels at the last speed you used until it reaches your finger, then follows it. Or stop at a spot and press Set limit: above the other limit it becomes the upper one, below it the lower one. Reset limits goes back to the full range. A vibration device follows using the mode above.</div>
+            <div class="outslot"></div>
+            <label class="check" style="margin-top:6px"><input id="stlive" type="checkbox"> Devices follow without recording</label>
+            <div class="hint">Hold Slow, Medium or Fast to stroke between the limits at that speed (% of the device's top speed); let go to stop where you are. ⟳ Latch keeps a speed running without holding; pressing any speed button, or latching another, takes over. Touching the position bar overrides a latch only while your finger is down. Drag the range on the left: a limit to move it, the middle to move the whole range. Touch the position bar to move there: it travels at the last speed you used until it reaches your finger, then follows it. Or stop at a spot and press Set limit: above the other limit it becomes the upper one, below it the lower one. Reset limits goes back to the full range. Each device below follows in its own way: a vibrator by speed, position or both, a stroker by position.</div>
           </section>
           <section data-part="record">
             <div class="rechead"><h3>Record</h3><div class="kind" role="group" aria-label="Recording type"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div></div>
@@ -666,8 +728,17 @@
               <div class="pad" id="pad2" role="slider" tabindex="0" aria-label="Motor 2 level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><div class="ticks"></div><div class="fill"></div><span class="lab">Motor 2</span><span class="pct">0%</span></div>
             </div>
             <button id="rec" class="rec">● Record</button><div class="val" id="timer" style="text-align:center;margin-top:4px"></div>
+            <div class="outslot"></div>
             <div class="row" style="margin-top:6px"><label class="check"><input id="live" type="checkbox"> Live pads</label><label class="check"><input id="spring" type="checkbox"> Drop to 0 when released</label></div>
-            <div class="hint">Touch a pad and slide up or down: the level follows your finger. While recording, the pads drive the device live; tick "Live pads" to play with them without recording.</div>
+            <div class="hint">Touch a pad and slide up or down: the level follows your finger. While recording, the pads drive the devices below live; tick "Live pads" to play with them without recording. Choose a second device (or a device's other motor) to get a second pad.</div>
+          </section>
+          <section data-part="outputs" id="outhome" class="off">
+            <div class="outbox" id="outbox">
+              <label>Devices that follow</label>
+              <div class="outrow" data-row="0"><select class="outt" aria-label="First device"></select><select class="outm" aria-label="How the first device follows"></select><button class="outtake" type="button" hidden>Take control</button></div>
+              <div class="outrow" data-row="1"><select class="outt" aria-label="Second device"></select><select class="outm" aria-label="How the second device follows"></select><button class="outtake" type="button" hidden>Take control</button></div>
+              <div class="outnote" id="outnote"></div>
+            </div>
           </section>
           <section id="takebox" data-part="take" hidden>
             <h3>Current take</h3><div class="take" id="takeinfo"></div>
@@ -742,6 +813,7 @@
       $('speed').addEventListener('change', () => this._hass.callService('select', 'select_option', { entity_id: this._studio.speed, option: $('speed').value }));
       $('load').addEventListener('click', () => this._import());
       this._bindStroke();
+      this._bindOutputs();
       this._bindVideo();
       this._bindGamepad();
       this._update();
@@ -757,20 +829,45 @@
       this._st = { pos: 50, dir: 1, vel: 0, pad: null, touch: null, latch: null, drag: null, moving: null,
         ...(okLim ? { lower: lim.lower, upper: lim.upper, last: lim.last || null } : { ...STROKE_LIMITS_RESET }) };
       this._stRecording = false;
-      const mode = load(STROKE_MODE_KEY, RUN_MODE_DEFAULT);
-      $('stmode').value = RUN_MODES[mode] ? mode : RUN_MODE_DEFAULT;
-      $('stmode').addEventListener('change', () => { this._gpSave(STROKE_MODE_KEY, $('stmode').value); this._stLiveSent = null; });
       $('stlive').addEventListener('change', () => { if ($('stlive').checked) this._stRun(); });
       $('strec').addEventListener('click', () => (this._stRecording ? this._stStop() : this._stStart()));
       $('stlimit').addEventListener('click', () => this._stSetLimit());
       $('streset').addEventListener('click', () => this._stReset());
       const pcts = load(STROKE_SPEED_KEY, null);
-      this._stPcts = STROKE_SPEEDS.map((sp, i) => (Array.isArray(pcts) && STROKE_PCTS.includes(pcts[i]) ? pcts[i] : sp.pct));
-      for (const sel of this.shadowRoot.querySelectorAll('.stpct')) {
-        const i = Number(sel.dataset.speed);
-        sel.value = String(this._stPcts[i]);
-        sel.addEventListener('change', () => { this._stPcts[i] = Number(sel.value); this._gpSave(STROKE_SPEED_KEY, this._stPcts); this._stShow(); this._gpStatus(); });
+      this._stPcts = STROKE_SPEEDS.map((sp, i) => (Array.isArray(pcts) && okPct(pcts[i]) ? pcts[i] : sp.pct));
+      // Speed: tap the % to open a slider (changes apply straight away).
+      const pop = $('stpop');
+      let popFor = null;
+      const closePop = () => { if (popFor === null) return; popFor = null; pop.hidden = true; this._gpSave(STROKE_SPEED_KEY, this._stPcts); };
+      const showVal = () => {
+        const v = this._stPcts[popFor];
+        $('stpopval').textContent = `${v}%`;
+        $('stpophint').textContent = `≈ ${Math.round(v / 100 * 384)} mm/s on a Handy · full stroke ${(100 / (v / 100 * STROKE_TOP)).toFixed(2)} s`;
+      };
+      for (const btn of this.shadowRoot.querySelectorAll('.stpctbtn')) {
+        const i = Number(btn.dataset.speed);
+        btn.addEventListener('click', () => {
+          if (popFor === i) { closePop(); return; }
+          popFor = i;
+          $('stpoplab').textContent = `${STROKE_SPEEDS[i].name} speed`;
+          $('stpoprange').value = String(this._stPcts[i]);
+          const block = btn.closest('.stspd');
+          pop.style.top = `${block.offsetTop + block.offsetHeight + 4}px`;
+          pop.hidden = false;
+          showVal();
+        });
       }
+      $('stpoprange').addEventListener('input', () => {
+        if (popFor === null) return;
+        this._stPcts[popFor] = Number($('stpoprange').value);
+        showVal(); this._stShow(); this._gpStatus();
+      });
+      $('stpopdone').addEventListener('click', closePop);
+      this.shadowRoot.addEventListener('pointerdown', (e) => {
+        if (popFor === null) return;
+        const path = e.composedPath();
+        if (!path.includes(pop) && !path.some((n) => n.classList && n.classList.contains('stpctbtn'))) closePop();
+      });
       for (const btn of this.shadowRoot.querySelectorAll('.stlatch')) {
         const i = Number(btn.dataset.speed);
         btn.addEventListener('click', () => { this._st.latch = this._st.latch === i ? null : i; this._stRun(); });
@@ -893,21 +990,34 @@
     _stHalt() {
       clearInterval(this._stTimer);
       this._stTimer = null;
-      if (this._stLiveSent) { this._stLiveSent = null; this._quietStop(this._device); }
+      if (this._stOutAt) { this._stOutAt = 0; this._outStop(); }
     }
 
     // Live feedback: a vibration device follows the stroke using the chosen
     // run mode, sent at most every 100 ms (and refreshed every 500 ms).
+    // Live: every output follows the stroke its own way, at most every 100 ms.
+    // A vibrator gets an intensity from its run mode; a stroker gets the next
+    // limit and how long to take (or the bar position when moved by hand).
     _stLive(now) {
-      const dev = this._device;
       const on = this._stRecording || this._el('stlive').checked;
-      if (!dev || !on) { if (this._stLiveSent) { this._stLiveSent = null; this._quietStop(dev); } return; }
-      if (this._stLiveSent && now - this._stLiveSent.at < 100) return;
+      if (!on) { if (this._stOutAt) { this._stOutAt = 0; this._outStop(); } return; }
+      // Vibrators every 100 ms; a stroker's next target as soon as it turns (every tick).
+      const full = !this._stOutAt || now - this._stOutAt >= 100;
+      if (full) this._stOutAt = now;
       const st = this._st;
-      const v = Math.round(Math.min(100, Math.max(0, liveIntensity(this._el('stmode').value, st.pos, st.vel)))) / 100;
-      if (this._stLiveSent && Math.abs(v - this._stLiveSent.v) < 0.01 && now - this._stLiveSent.at < 500) return;
-      this._stLiveSent = { at: now, v };
-      this._sendLive(dev, dev.dual ? [v, v] : [v], 0.6);
+      const speed = this._stSpeed();
+      const values = this._outs.map((o, i) => {
+        const p = parseTarget(this._outTargetValue(i));
+        if (!p || (!full && p.motor !== 'l')) return null;
+        if (p.motor === 'l' || o.m === FOLLOW_STROKER) {
+          if (p.motor !== 'l') return Math.round(st.pos);   // stroker mode on a vibrator: position
+          if (speed === null) return { goal: st.pos, dur: 120 };
+          const goal = st.dir > 0 ? st.upper : st.lower;
+          return { goal, dur: Math.abs(goal - st.pos) / strokeVel(this._stPcts[speed]) };
+        }
+        return Math.min(100, Math.max(0, liveIntensity(o.m, st.pos, st.vel)));
+      });
+      this._outApply(values, 0.6);
     }
 
     _stMark(when, pos) {
@@ -937,7 +1047,8 @@
       this._stActs = [];
       if (acts.length < 2 || acts[acts.length - 1].at < 200) { this._toast('Nothing recorded.'); this._stShow(); return; }
       this._take = { version: '1.0', inverted: false, range: 100, actions: acts, metadata: { creator: 'OggStudio', type: 'stroke' } };
-      this._el('takemode').value = this._el('stmode').value;
+      const m = this._outs[0].m;
+      this._el('takemode').value = RUN_MODES[m] ? m : RUN_MODE_DEFAULT;
       this._toast(`Recorded ${fmt(duration(this._take))} of strokes. Save it below, or download the .funscript for a Handy.`);
       this._update();
       this._stRun();   // stops live feedback if nothing else needs it
@@ -980,6 +1091,7 @@
       $('strail').setAttribute('aria-valuetext', `range ${st.lower} to ${st.upper}`);
       const speed = this._stSpeed();
       for (const b of this.shadowRoot.querySelectorAll('.sthold')) b.classList.toggle('on', Number(b.dataset.speed) === speed);
+      for (const b of this.shadowRoot.querySelectorAll('.stpctbtn')) { const t = `${this._stPcts[Number(b.dataset.speed)]}%`; if (b.textContent !== t) b.textContent = t; }
       for (const b of this.shadowRoot.querySelectorAll('.stlatch')) {
         const on = Number(b.dataset.speed) === st.latch;
         if (b.classList.contains('on') !== on) { b.classList.toggle('on', on); b.textContent = on ? '■ Latched' : '⟳ Latch'; b.setAttribute('aria-pressed', String(on)); }
@@ -989,8 +1101,7 @@
       const bits = [`Range ${st.lower}–${st.upper}`];
       if (speed !== null) bits.push(`${STROKE_SPEEDS[speed].name} ${this._stPcts[speed]}%${st.latch === speed && st.touch === null && st.pad === null ? ' (latched)' : ''}`);
       if (this._stRecording) bits.push(`● ${fmt(performance.now() - this._st0)}`);
-      if (!this._device) bits.push('no device: recording only');
-      else if (this._stLiveSent) bits.push(`device ${Math.round(this._stLiveSent.v * 100)}%`);
+      if (this._outs && !this._outs.some((o, i) => parseTarget(this._outTargetValue(i)))) bits.push('no device: recording only');
       const text = bits.join(' · ');
       if ($('stinfo').textContent !== text) $('stinfo').textContent = text;
     }
@@ -1191,8 +1302,9 @@
     }
 
     _gpMotors() {
-      const dual = Boolean(this._device && this._device.dual);
-      if (!dual) return [0];
+      if (this._gpTarget() === 'video') {
+        if (!(this._device && this._device.dual)) return [0];
+      } else if (!this._twoPads) return [0];
       return this._gpMotor === 2 ? [0, 1] : [this._gpMotor];
     }
 
@@ -1221,7 +1333,7 @@
     }
 
     _gpCycleMotor() {
-      if (!(this._device && this._device.dual)) return;
+      if (!(this._gpTarget() === 'video' ? this._device && this._device.dual : this._twoPads)) return;
       this._gpMotor = (this._gpMotor + 1) % 3;
       this._gpFloat = [null, null];
     }
@@ -1259,7 +1371,7 @@
         html = bits.join(' · ');
       } else {
         const bits = [`Speed <b>${this._gpSpeed + 1}/${GP_SPEEDS.length}</b> (${GP_SPEEDS[this._gpSpeed]}%/s)`];
-        if (this._device && this._device.dual) bits.push(['Motor 1', 'Motor 2', 'Both motors'][this._gpMotor]);
+        if (this._gpTarget() === 'video' ? this._device && this._device.dual : this._twoPads) bits.push(['Pad 1', 'Pad 2', 'Both pads'][this._gpMotor]);
         const target = this._gpTarget();
         bits.push(target === 'video' ? '→ video' : target === 'record' ? '→ pads' : '');
         if (this._gpPadId) bits.push(esc(this._gpPadId.replace(/\s*\(.*$/, '').slice(0, 28)) + (this._gpPadCount > 1 && this._gpActive === undefined ? ` (1 of ${this._gpPadCount}: press a button to choose)` : ''));
@@ -1785,11 +1897,15 @@
       if (this._deviceId) sel.value = this._deviceId;
       const dev = this._device;
       const online = dev && (!dev.connected || this._hass.states[dev.connected]?.state === 'on');
-      const dual = Boolean(dev && dev.dual);
-      $('pad2').hidden = !dual;
-      $('pads').classList.toggle('dual', dual);
-      for (const id of ['takeplay', 'play']) $(id).disabled = !online;
-      $('rec').disabled = !online && !this._noDevice;   // no device: record only
+      $('play').disabled = !online;
+      const pd = this._playDevice;
+      $('takeplay').disabled = !(pd && this._online(pd));
+      // Someone else took over a device this card was driving: let it go quietly.
+      for (const [stop, d] of this._claimed) {
+        const c = this._claimedBy(d);
+        if (c) { this._claimed.delete(stop); this._toast(`${c.label || 'Another controller'} took control of ${d.name}.`); }
+      }
+      this._outRender();
       $('rec').textContent = this._recording ? '■ Stop recording' : '● Record';
       $('rec').classList.toggle('on', this._recording);
       $('takebox').hidden = !this._take;
@@ -1859,10 +1975,12 @@
       });
     }
 
+    // Pads: one, or two when a second output is chosen (one track each).
+    get _twoPads() { return Boolean(this._outs) && this._outTargetValue(1) !== 'off'; }
+
     _levels() {
-      const $ = this._el;
       const levels = [this._vals[0] / 100];
-      if (this._device && this._device.dual) levels.push(this._vals[1] / 100);
+      if (this._twoPads) levels.push(this._vals[1] / 100);
       return levels;
     }
 
@@ -1871,17 +1989,205 @@
       clearInterval(this._liveTimer);
       this._liveTimer = null;
       if (on || this._recording) {
-        const send = () => {
-          const dev = this._device;
-          if (!dev) return;
-          this._sendLive(dev, this._levels(), 1.0);
-        };
+        const send = () => this._outApply([this._vals[0], this._twoPads ? this._vals[1] : null], 1.0);
         send();
         this._liveTimer = setInterval(send, LIVE_MS);
-      } else if (this._device) {
-        this._quietStop(this._device);
+      } else {
+        this._outStop();
       }
     }
+
+    // ---------------------------------------------------------- outputs
+    _bindOutputs() {
+      const $ = this._el;
+      let saved = null;
+      try { saved = JSON.parse(localStorage.getItem(OUT_KEY) || 'null'); } catch (_) { /* private mode */ }
+      const t = saved && Array.isArray(saved.t) ? saved.t : [];
+      const m = saved && Array.isArray(saved.m) ? saved.m : [];
+      this._outs = [0, 1].map((i) => ({ t: typeof t[i] === 'string' ? t[i] : (i ? 'off' : null), m: typeof m[i] === 'string' ? m[i] : RUN_MODE_DEFAULT }));
+      for (const row of this.shadowRoot.querySelectorAll('.outrow')) {
+        const i = Number(row.dataset.row);
+        row.querySelector('.outt').addEventListener('change', (e) => { this._outSwitch(i, { t: e.target.value }); });
+        row.querySelector('.outm').addEventListener('change', (e) => { this._outSwitch(i, { m: e.target.value }); });
+        row.querySelector('.outtake').addEventListener('click', () => this._outTake(i));
+      }
+      this._outRender();
+    }
+
+    _outSave() {
+      try { localStorage.setItem(OUT_KEY, JSON.stringify({ t: this._outs.map((o) => o.t), m: this._outs.map((o) => o.m) })); } catch (_) { /* private mode */ }
+    }
+
+    _outSwitch(i, change) {
+      // A device that stops being an output goes quiet (and is released).
+      this._outStop();
+      Object.assign(this._outs[i], change);
+      this._outSave();
+      this._outRender();
+      this._update();
+    }
+
+    // The saved target if it still exists, else a sensible default.
+    _outTargetValue(i) {
+      const t = this._outs[i].t;
+      if (t === 'none' || t === 'off') return t;
+      const p = parseTarget(t);
+      if (p && this._devices.some((d) => d.id === p.id)) return t;
+      if (i === 1) return 'off';
+      if (!this._registryDone) return 'none';
+      const id = this._device ? this._device.id : null;
+      const dev = this._devices.find((d) => d.id === id) || this._devices.find((d) => this._online(d)) || this._devices[0];
+      return dev ? `${dev.id}|${dev.linear && !dev.vibe ? 'l' : 'b'}` : 'none';
+    }
+
+    _outDevice(i) { const p = parseTarget(this._outTargetValue(i)); return p ? this._devices.find((d) => d.id === p.id) : null; }
+
+    _controllers() {
+      const saved = this._studio && this._hass && this._hass.states[this._studio.saved];
+      return (saved && saved.attributes.controllers) || {};
+    }
+
+    // Driven by another OggStudio card (another phone or browser) right now?
+    _claimedBy(dev) {
+      const c = dev && this._controllers()[dev.stop];
+      if (!c || c.owner === this._owner) return null;
+      if (this._tookAt && this._tookAt[dev.stop] && performance.now() - this._tookAt[dev.stop] < 3000) return null;   // we just took it
+      return c;
+    }
+
+    _outLabel() {
+      const ua = navigator.userAgent;
+      const where = /Android/i.test(ua) ? 'Android' : /iPhone|iPad/i.test(ua) ? 'iPhone' : /Windows/i.test(ua) ? 'Windows' : /Mac/i.test(ua) ? 'Mac' : 'a browser';
+      return `${(this._hass && this._hass.user && this._hass.user.name) || 'Someone'} on ${where}`;
+    }
+
+    _outClaim(dev) {
+      if (this._claimedBy(dev)) return false;
+      const now = performance.now();
+      this._claimed.set(dev.stop, dev);
+      if (!(now - (this._claimAt[dev.stop] || -1e9) < 4000)) {
+        this._claimAt[dev.stop] = now;
+        this._hass.callService('oggstudio', 'claim', { entity_id: dev.stop, owner: this._owner, label: this._outLabel() }, undefined, false).catch(() => {});
+      }
+      return true;
+    }
+
+    _outTake(i) {
+      const dev = this._outDevice(i);
+      if (!dev) return;
+      this._tookAt = this._tookAt || {};
+      this._tookAt[dev.stop] = performance.now();
+      this._claimAt[dev.stop] = performance.now();
+      this._hass.callService('oggstudio', 'claim', { entity_id: dev.stop, owner: this._owner, label: this._outLabel() }, undefined, false).catch(() => {});
+      this._toast(`You now control ${dev.name}.`);
+      this._outRender();
+    }
+
+    // Send output values (0-100; a stroker may get {goal, dur}) to the devices.
+    _outApply(values, seconds) {
+      if (!this._hass || !this._outs) return;
+      const now = performance.now();
+      const targets = this._outs.map((o, i) => this._outTargetValue(i));
+      let blocked = false;
+      for (const e of outLevels(targets, values, this._devices)) {
+        if (!this._outClaim(e.dev)) { blocked = true; continue; }
+        if (e.vibe) {
+          const lv = e.levels.map((x) => Math.round(Math.min(100, Math.max(0, x))) / 100);
+          const last = this._outLast[e.dev.id];
+          if (!last || lv.some((x, j) => Math.abs(x - last.lv[j]) >= 0.01) || now - last.at > 500) {
+            this._outLast[e.dev.id] = { lv, at: now };
+            this._sendLive(e.dev, lv, seconds);
+          }
+        }
+        if (e.linear !== null) this._outLinear(e.dev, typeof e.linear === 'object' ? e.linear : { goal: e.linear, dur: 150 }, now);
+      }
+      if (blocked !== Boolean(this._outBlocked)) { this._outBlocked = blocked; this._outRender(); }
+    }
+
+    // Strokers take "go to this position over this long" moves. Ogg's
+    // ogg.linear does that live; without it, Ogg's Position control is used
+    // (coarse: it moves over a fixed second).
+    _outLinear(dev, move, now) {
+      const goal = Math.round(Math.min(100, Math.max(0, move.goal)));
+      const last = this._linLast[dev.id];
+      if (last && last.goal === goal && now - last.at < 1000) return;
+      const live = Boolean(this._hass.services && this._hass.services.ogg && this._hass.services.ogg.linear);
+      if (last && now - last.at < (live ? 80 : 400)) return;
+      this._linLast[dev.id] = { goal, at: now };
+      if (live) this._hass.callService('ogg', 'linear', { entity_id: dev.stop, position: goal, duration: Math.max(50, Math.round(move.dur)) }, undefined, false).catch(() => {});
+      else if (dev.linear) this._hass.callService('number', 'set_value', { entity_id: dev.linear, value: goal }, undefined, false).catch(() => {});
+    }
+
+    // Stop and release every device this card was driving (not ones another
+    // controller has since taken over).
+    _outStop() {
+      for (const [stop, dev] of this._claimed) {
+        if (this._claimedBy(dev)) continue;
+        this._quietStop(dev);
+        if (this._hass) this._hass.callService('oggstudio', 'claim', { entity_id: stop, owner: this._owner, release: true }, undefined, false).catch(() => {});
+      }
+      this._claimed.clear();
+      this._claimAt = {};
+      this._outLast = {};
+      this._linLast = {};
+    }
+
+    _outRender() {
+      if (!this._el || !this._outs) return;
+      const stroke = this._strokeKind;
+      const devs = [...this._devices].sort((a, b) => Number(this._online(b)) - Number(this._online(a)) || a.name.localeCompare(b.name));
+      const opts = (i) => {
+        const list = i ? [['off', stroke ? '— No second device —' : '— No second pad —'], ...(stroke ? [] : [['none', 'Second pad, no device']])] : [['none', 'No device (record only)']];
+        for (const d of devs) {
+          const name = this._online(d) ? d.name : `${d.name} (offline)`;
+          const vibe = d.vibe || !d.linear;   // a stroker-only device has no vibration
+          if (vibe && !d.dual) list.push([`${d.id}|b`, name]);
+          if (vibe && d.dual) list.push([`${d.id}|b`, `${name} · both motors`], [`${d.id}|0`, `${name} · motor 1`], [`${d.id}|1`, `${name} · motor 2`]);
+          if (d.linear) list.push([`${d.id}|l`, `${name} · stroker`]);
+        }
+        return list;
+      };
+      const labels = [];
+      for (const row of this.shadowRoot.querySelectorAll('.outrow')) {
+        const i = Number(row.dataset.row);
+        const sel = row.querySelector('.outt');
+        const list = opts(i);
+        const key = JSON.stringify([stroke, list]);
+        if (sel.dataset.key !== key) { sel.replaceChildren(...list.map(([v, t]) => new Option(t, v))); sel.dataset.key = key; }
+        const value = this._outTargetValue(i);
+        if ([...sel.options].some((o) => o.value === value)) sel.value = value;
+        const p = parseTarget(value);
+        const dev = p && this._devices.find((d) => d.id === p.id);
+        labels.push(dev ? (p.motor === 'b' ? dev.name : p.motor === 'l' ? `${dev.name} (stroker)` : `${dev.name} m${Number(p.motor) + 1}`) : `Pad ${i + 1}`);
+        // How it follows (stroke recorder): a stroker by position, a vibrator by a run mode.
+        const msel = row.querySelector('.outm');
+        const modes = p && p.motor === 'l' ? [[FOLLOW_STROKER, 'Stroker: follows the position']]
+          : [...Object.entries(RUN_MODES).map(([v, t]) => [v, t.replace(/ \(vibration scripts\)/, '')]), [FOLLOW_STROKER, 'Stroker: level = position']];
+        const mkey = JSON.stringify(modes);
+        if (msel.dataset.key !== mkey) { msel.replaceChildren(...modes.map(([v, t]) => new Option(t, v))); msel.dataset.key = mkey; }
+        if (!modes.some(([v]) => v === this._outs[i].m)) this._outs[i].m = modes[0][0];
+        msel.value = this._outs[i].m;
+        const owner = dev && this._claimedBy(dev);
+        const take = row.querySelector('.outtake');
+        take.hidden = !owner;
+        if (owner) take.textContent = `Take control (${owner.label || 'in use'})`;
+        msel.hidden = !stroke || !p || Boolean(owner);
+        row.classList.toggle('solo', msel.hidden);
+        row.classList.toggle('take', Boolean(owner));
+      }
+      this._padLabels = labels;
+      for (const [i, id] of [[0, 'pad1'], [1, 'pad2']]) { const lab = this._el(id).querySelector('.lab'); if (lab.textContent !== labels[i]) lab.textContent = labels[i]; }
+      const two = this._twoPads;
+      this._el('pad2').hidden = !two;
+      this._el('pads').classList.toggle('dual', two);
+      const busy = this._devices.some((d) => this._claimedBy(d));
+      const note = this._outBlocked ? 'A device is being controlled from another phone or browser: it does not follow here until you take control.'
+        : busy ? 'Some devices are in use elsewhere.' : '';
+      if (this._el('outnote').textContent !== note) this._el('outnote').textContent = note;
+    }
+
+    // Take playback: the playback device where the card shows one, else the first output.
+    get _playDevice() { return this._el('devbox').hidden ? this._outDevice(0) || null : this._device; }
 
     _startRecording() {
       const $ = this._el;
@@ -1911,7 +2217,7 @@
       this._setLive($('live').checked);
       for (const i of [0, 1]) if (this._samples[i].length) { this._samples[i].push({ at: t, pos: this._last[i] }); this._samples[i].push({ at: t + 1, pos: 0 }); }
       const take = { version: '1.0', inverted: false, range: 100, actions: this._samples[0], metadata: { creator: 'OggStudio', type: 'vibration' } };
-      if (this._device && this._device.dual && this._samples[1].length) take.channels = { V1: { actions: this._samples[1] } };
+      if (this._twoPads && this._samples[1].length) take.channels = { V1: { actions: this._samples[1] } };
       this._take = take.actions.length ? take : null;
       $('timer').textContent = '';
       this._setPad(0, 0); this._setPad(1, 0);
@@ -1919,9 +2225,10 @@
     }
 
     async _play(script) {
-      if (!script || !this._device) return;
+      const dev = this._playDevice;
+      if (!script || !dev) return;
       try {
-        await this._hass.callService('oggstudio', 'play', { entity_id: this._device.stop, script, speed: this._el('speed').value, loop: this._el('loop').checked,
+        await this._hass.callService('oggstudio', 'play', { entity_id: dev.stop, script, speed: this._el('speed').value, loop: this._el('loop').checked,
           ...(isStroke(script) ? { mode: this._el('takemode').value } : {}) });
       } catch (e) { this._toast(e.message || String(e)); }
     }
@@ -1936,7 +2243,8 @@
     }
 
     async _stop() {
-      if (this._device) await this._hass.callService('oggstudio', 'stop', { entity_id: this._device.stop }).catch(() => {});
+      const dev = this._playDevice;
+      if (dev) await this._hass.callService('oggstudio', 'stop', { entity_id: dev.stop }).catch(() => {});
     }
 
     async _save() {
@@ -2074,7 +2382,7 @@
       this._gpDetach();
       if (this._vsyncTimer) this._videoHalt();
       if (this._vurl) { URL.revokeObjectURL(this._vurl); this._vurl = null; }
-      if (this._recording || this._live) this._quietStop(this._device);
+      this._outStop();
     }
   }
 

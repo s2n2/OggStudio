@@ -7,8 +7,8 @@ global.window = globalThis;
 const src = fs.readFileSync(path.join(__dirname, '../custom_components/oggstudio/frontend/oggstudio-card.js'), 'utf8');
 const grab = (start, end) => src.slice(src.indexOf(start), src.indexOf(end));
 // eslint-disable-next-line no-eval
-const { isStroke, STROKE_SPEEDS, STROKE_LIMITS_RESET } = eval(grab('  const b64 =', '  // Run modes:') + grab('  // Run modes:', '  const duration =')
-  + '; globalThis.toIntensity = toIntensity; ({ isStroke, STROKE_SPEEDS, STROKE_LIMITS_RESET })');
+const { isStroke, STROKE_SPEEDS, STROKE_LIMITS_RESET, parseTarget } = eval(grab('  const b64 =', '  // Run modes:') + grab('  // Run modes:', '  const duration =')
+  + '; globalThis.toIntensity = toIntensity; ({ isStroke, STROKE_SPEEDS, STROKE_LIMITS_RESET, parseTarget })');
 
 // Card variants: each tag shows a valid subset of the parts, and every part needs a take box to save into.
 {
@@ -242,6 +242,20 @@ assert.strictEqual(runScript(two, 'speed'), two, 'vibration scripts play unchang
   let p2 = 0, t = 0, caught = false;
   while (!caught && t < 5000) { const q = approachStep(p2, 100, V(30), 20); p2 = q.pos; caught = q.caught; t += 20; }
   assert.ok(t >= 820 && t <= 860, 'a full-range jump at 30% takes about 0.83 s, not an instant');
+}
+
+// Outputs: two outputs become one command per device.
+{
+  const devs = [{ id: 'sync', dual: true }, { id: 'bond' }, { id: 'handy', linear: 'number.handy_linear_0' }];
+  const short = (r) => r.map((e) => `${e.dev.id}:${e.levels.join('/')}${e.linear !== null ? ' lin=' + JSON.stringify(e.linear) : ''}${e.vibe ? '' : ' novibe'}`);
+  assert.deepStrictEqual(parseTarget('sync|1'), { id: 'sync', motor: '1' });
+  assert.strictEqual(parseTarget('none'), null);
+  assert.deepStrictEqual(short(outLevels(['sync|0', 'sync|1'], [40, 70], devs)), ['sync:40/70'], 'two motors of one device: one command');
+  assert.deepStrictEqual(short(outLevels(['sync|b', 'bond|b'], [40, 70], devs)), ['sync:40/40', 'bond:70'], 'two devices');
+  assert.deepStrictEqual(short(outLevels(['sync|0', 'off'], [40, 70], devs)), ['sync:40/0'], 'motor 1 only: motor 2 off');
+  assert.deepStrictEqual(short(outLevels(['handy|l', 'bond|b'], [{ goal: 80, dur: 200 }, 55], devs)), ['handy:0 lin={"goal":80,"dur":200} novibe', 'bond:55'], 'a stroker and a vibrator');
+  assert.deepStrictEqual(short(outLevels(['gone|b', 'none'], [40, 70], devs)), [], 'missing devices and record-only are skipped');
+  assert.deepStrictEqual(short(outLevels(['bond|b', 'sync|1'], [30, null], devs)), ['bond:30'], 'no value: not sent');
 }
 
 // Device choice: remembered > configured > first connected (never an old, offline device).

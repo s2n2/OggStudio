@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import math
+import time
 from collections.abc import Callable
 from typing import Any
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
@@ -15,6 +17,7 @@ from .const import DOMAIN, MAX_NAME_LENGTH, MAX_SCRIPTS, SPEEDS, STORAGE_VERSION
 from .convert import RUN_MODES, is_stroke
 
 MAX_ACTIONS = 200_000
+CLAIM_SECONDS = 12   # a controller refreshes its claim every few seconds
 MAX_MS = 6 * 60 * 60 * 1000
 
 
@@ -77,6 +80,9 @@ class Library:
         self.selected: str | None = None
         self.speed = "1x"
         self._listeners: set[Callable[[], None]] = set()
+        # Which OggStudio card (phone/browser) is driving each device live.
+        # Kept in memory only; a claim lapses if it is not refreshed.
+        self.claims: dict[str, dict[str, Any]] = {}
 
     async def async_load(self) -> None:
         data = await self._store.async_load() or {}
@@ -192,6 +198,38 @@ class Library:
         self.speed = speed
         self._save()
         self._notify()
+
+    def claim(self, entity_id: str, owner: str, label: str = "", release: bool = False) -> None:
+        """Claim (or refresh, or release) live control of a device."""
+        now = time.monotonic()
+        changed = self._prune(now)
+        current = self.claims.get(entity_id)
+        if release:
+            if current and current["owner"] == owner:
+                del self.claims[entity_id]
+                changed = True
+        else:
+            if not current or current["owner"] != owner or current["label"] != label:
+                changed = True
+            self.claims[entity_id] = {"owner": owner, "label": label[:80], "until": now + CLAIM_SECONDS}
+            async_call_later(self.hass, CLAIM_SECONDS + 0.5, self._expire)
+        if changed:
+            self._notify()
+
+    def _prune(self, now: float) -> bool:
+        gone = [k for k, v in self.claims.items() if v["until"] <= now]
+        for key in gone:
+            del self.claims[key]
+        return bool(gone)
+
+    @callback
+    def _expire(self, _now: Any) -> None:
+        if self._prune(time.monotonic()):
+            self._notify()
+
+    @property
+    def controllers(self) -> dict[str, dict[str, str]]:
+        return {k: {"owner": v["owner"], "label": v["label"]} for k, v in self.claims.items()}
 
     @property
     def speed_factor(self) -> float:

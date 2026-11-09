@@ -127,6 +127,28 @@
           "description": "Stroke scripts only: how position becomes vibration. speed, position, combo (speed plus position), down (speed on downstrokes only) or up (upstrokes only)."
         }
       }
+    },
+    "claim": {
+      "name": "Claim live control",
+      "description": "Used by the OggStudio cards so only one phone or browser drives a device live at a time. Lapses after 12 seconds unless refreshed.",
+      "fields": {
+        "entity_id": {
+          "name": "Device",
+          "description": "Any Ogg entity of the device."
+        },
+        "owner": {
+          "name": "Owner",
+          "description": "An id for the controlling card."
+        },
+        "label": {
+          "name": "Label",
+          "description": "Shown to other controllers, for example \"Shane on Android\"."
+        },
+        "release": {
+          "name": "Release",
+          "description": "Give up control."
+        }
+      }
     }
   }
 }
