@@ -47,6 +47,23 @@ sections: [library, video, take]
 The playback device (shown on cards that play the library, video or imports) is remembered
 for all cards.
 
+## Record and replay
+
+The Record section has two tabs, **● Record** and **▶ Replay**. Replay plays a script in the
+card itself, so you can watch it: the pads move in the Vibrate view, the position bar in the
+Stroke view. Tap the script button to pick the current take, a saved script or a file. Then
+press **▶ Replay**, with a speed (0.5x to 2x) and Loop. Tap the progress bar to jump.
+
+* The devices below follow just as they do when recording, each its own way, so you can
+  switch Vibrate / Stroke while it plays to compare. It works with no device too (it just shows).
+* Touching a pad, the position bar or a speed button takes over until you let go, then the
+  script carries on.
+* In the Vibrate view, a stroke script is shown converted with the mode under the player
+  (remembered for saved scripts).
+
+Replay is driven from the browser about 10 times a second (strokers get each move as it
+starts). The Library's ▶ Play runs a script inside Ogg's own frame loop instead.
+
 ## Devices that follow a recording
 
 Under the Record button, **Devices that follow** lists up to two outputs. Each can be a
@@ -145,9 +162,13 @@ seeking and changing playback speed stay in sync, and pausing stops the toy. **S
 
 ### Making a script for a video
 
-Under the video there is one bar per motor and a small **● Rec** button. Press Rec, play the
-video and drag the bars left and right. The toy follows your finger, and each level is
-recorded against the video's own time, so the script lines up with that video. You can pause,
+Under the video there is one simple slider and a small **● Rec** button. The slider is the
+same thing as the control above: the position in the Stroke view, the intensity in Vibrate.
+Press Rec, play the video and drag it. The devices follow, and each value is recorded
+against the video's own time, so the script lines up with that video (a stroke script in the
+Stroke view). While a script plays with the video, the slider shows what it is doing; hold
+the slider to take over until you let go. On cards with a Record section the video drives the
+devices chosen there, with their follow modes. You can pause,
 scrub back and record a section again: the newer pass replaces what was there. When you're
 done, press **Use as take** (it replays with the video straight away, and you can save it to
 the library) or **Download .funscript** (saved with the video's name).

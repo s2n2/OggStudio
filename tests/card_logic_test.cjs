@@ -43,6 +43,12 @@ const { isStroke, STROKE_SPEEDS, STROKE_LIMITS_RESET, parseTarget } = eval(grab(
   assert.strictEqual(sampleAt(acts, 2500), 70);
   assert.strictEqual(sampleAt(acts, 9000), 40, 'holds the last value');
   assert.strictEqual(sampleAt([], 100), 0);
+  // Replay: a stroker heads for the next action.
+  assert.deepStrictEqual(nextAction(acts, 0), { at: 1000, pos: 0 });
+  assert.deepStrictEqual(nextAction(acts, 1500), { at: 2000, pos: 100 });
+  assert.deepStrictEqual(nextAction(acts, 2000), { at: 3000, pos: 40 });
+  assert.strictEqual(nextAction(acts, 3000), null, 'at the end: nothing next');
+  assert.strictEqual(nextAction([], 10), null);
   const many = Array.from({ length: 10000 }, (_, i) => ({ at: i * 10, pos: i % 101 }));
   assert.strictEqual(sampleAt(many, 55555), 0.5, 'binary search finds the right pair in long scripts');
 }
