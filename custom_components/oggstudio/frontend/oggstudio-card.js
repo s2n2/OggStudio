@@ -6,7 +6,7 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.10.1';
+  const VERSION = '0.10.2';
   const DEVICE_KEY = 'oggstudio_device';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
@@ -832,8 +832,6 @@
             <h3>Import</h3>
             <textarea id="paste" placeholder="Paste a funscript, an ogg1: code, or JSON"></textarea>
             <div class="row" style="margin-top:6px"><input id="files" type="file" accept=".funscript,.json,application/json" multiple></div>
-            <label>Script type</label>
-            <select id="mode"><option value="auto">Automatic (stroke unless it says vibration)</option><option value="stroke">Stroke script (Handy, videos): choose how it vibrates when played</option><option value="vibration">Vibration script: position = intensity</option></select>
             <label class="check" style="margin-top:6px"><input id="invert" type="checkbox"> Inverted</label>
             <div class="row" style="margin-top:8px"><button id="load">Load as current take</button></div>
             <div class="hint">Pick two files to give a two-motor device one track per motor (first file = motor 1).</div>
@@ -2681,7 +2679,7 @@
 
     async _import() {
       const $ = this._el;
-      const mode = $('mode').value;
+      const mode = 'auto';      // detected: OggStudio's marker, a .vib.funscript name, else stroke
       const inverted = $('invert').checked;
       try {
         const files = [...$('files').files];

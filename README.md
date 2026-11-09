@@ -249,8 +249,9 @@ vibration, `pos` is the intensity. A second motor is stored as
 `"channels": {"V1": {"actions": [...]}}` (TCode channel naming).
 
 Downloads follow the usual funscript naming: a vibration script is saved as `name.vib.funscript`
-and a stroke script as `name.funscript`. On import, **Automatic** treats a `.vib.funscript`
-file as vibration. Stroke scripts are also marked with `"metadata": {"type": "stroke"}` and kept as positions; see
+and a stroke script as `name.funscript`. On import the type is detected: OggStudio's own marker
+in the file, else a `.vib.funscript` name means vibration, else it is a stroke script (how it
+vibrates is set per device). **Inverted** flips a script authored upside down. Stroke scripts are also marked with `"metadata": {"type": "stroke"}` and kept as positions; see
 [Run modes](#run-modes). When importing, **Automatic** treats a script as a stroke script unless
 it says it is a vibration script.
 
