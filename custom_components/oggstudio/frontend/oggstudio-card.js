@@ -6,7 +6,7 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.12.1';
+  const VERSION = '0.12.2';
   const DEVICE_KEY = 'oggstudio_device';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
@@ -274,20 +274,21 @@
   const VIBE_PATTERNS = {
     breath: (t) => 6 + 6 * Math.sin(2 * Math.PI * 0.15 * t),
     off: () => 0,
-    heartbeat: (t, f, L) => { const per = 1 / clampN(f, 0.75, 1.3); const x = (t % per) / per; return (x < 0.11 ? 1 : x > 0.2 && x < 0.29 ? 0.7 : 0) * (28 + 45 * L); },
-    flicker: (t, f, L) => { const slot = Math.floor(t / 0.3); return hashUnit(slot) < 0.4 && t - slot * 0.3 < 0.09 ? 35 + 30 * L : 4; },
+    // Pulses here stay about 200 ms or longer, so Bluetooth toys do not miss them.
+    heartbeat: (t, f, L) => { const per = 1 / clampN(f, 0.75, 1.2); const x = (t % per) / per; return (x < 0.24 ? 1 : x >= 0.5 && x < 0.74 ? 0.7 : 0) * (28 + 45 * L); },
+    flicker: (t, f, L) => { const slot = Math.floor(t / 0.7); return hashUnit(slot) < 0.45 && t - slot * 0.7 < 0.25 ? 35 + 30 * L : 4; },
     slowwave: (t, f, L) => 10 + (25 + 30 * L) * sine01(0.3 * t),
     swell: (t, f, L, c) => 15 + (35 + 45 * L) * (1 - c.pos / 100),          // deeper = stronger
     tide: (t, f, L) => 30 + 25 * L + 15 * Math.sin(2 * Math.PI * 0.2 * t),
     strokepulse: (t, f, L, c) => (c.dir < 0 ? 45 + 45 * L : 12 + 10 * L),    // a pulse on every downstroke
     steps: (t, f, L) => 28 + Math.floor(((t * f / 2) % 1) * 4) * (10 + 8 * L),
     throb: (t, f, L) => 35 + (25 + 30 * L) * sine01(f * t),
-    pound: (t, f, L) => (((t * f) % 1) < 0.35 ? 100 : 55 + 20 * L),
+    pound: (t, f, L) => (((t * f) % 1) < Math.max(0.35, 0.2 * f) ? 100 : 55 + 20 * L),
     surge: (t, f) => 60 + 40 * ((t * f) % 1),
     high: (t, f, L) => 84 + 8 * L + 4 * Math.sin(2 * Math.PI * 3 * t),
-    flutter: (t, f, L) => (Math.sin(2 * Math.PI * 8 * t) > 0 ? 85 + 10 * L : 50),
-    buzz: (t) => 88 + 7 * Math.sin(2 * Math.PI * 12 * t),
-    stutter: (t, f, L) => (((t * 6) % 1) < 0.5 ? 80 + 15 * L : 25),
+    flutter: (t, f, L) => (Math.sin(2 * Math.PI * 3 * t) > 0 ? 85 + 10 * L : 55),
+    buzz: (t) => 86 + 8 * Math.sign(Math.sin(2 * Math.PI * 3 * t)),
+    stutter: (t, f, L) => (((t * 2.5) % 1) < 0.5 ? 80 + 15 * L : 25),
     ramp: (t, f, L, c) => 30 + Math.min(60, Math.floor(c.tm / 1.5) * 10) + 8 * L,
     risingwave: (t, f, L, c) => 20 + (35 + 45 * Math.min(1, c.tm / 8)) * sine01(0.6 * t),
   };
@@ -529,6 +530,7 @@
   }
 
   const jit = (r, x, by = 0.1) => x * (1 - by + 2 * by * r());
+  const BLE_PULSE = 250;   // shortest on or off pulse (ms) that reliably reaches a Bluetooth toy
 
   // Stroke patterns: (track, section end, random) fill until the end.
   const MS = {
@@ -572,10 +574,22 @@
       const start = b.t;
       b.until(end, () => { const p = jit(r, period); const hi = hiFrom + (hiTo - hiFrom) * clampN((b.t - start) / Math.max(1, end - start), 0, 1); for (let k = 1; k <= 8; k++) b.to(lo + (hi - lo) * (0.5 - 0.5 * Math.cos(2 * Math.PI * k / 8)), p / 8); });
     },
-    pulses: (lvl, on, off, offFirst = false) => (b, end, r) => { if (offFirst) b.jump(0).hold(off); b.until(end, () => { b.jump(lvl).hold(on).jump(0).hold(jit(r, off, 0.15)); }); },
-    heartbeat: (lvl, bpm, delay = 0) => (b, end) => { if (delay) b.jump(0).hold(delay); b.until(end, () => { b.jump(lvl).hold(110).jump(0).hold(90).jump(lvl * 0.7).hold(100).jump(0).hold(60000 / bpm - 300); }); },
-    buzz: (lvl) => (b, end, r) => b.until(end, () => { b.jump(lvl + 6 * r()).hold(70).jump(lvl - 8).hold(70); }),
-    flicker: (lvl, base) => (b, end, r) => b.until(end, () => { b.jump(base).hold(150 + 450 * r()); b.jump(lvl * (0.7 + 0.3 * r())).hold(60 + 60 * r()); }),
+    // Pulses stay at least BLE_PULSE long, on and off: updates go out about
+    // every 100 ms and Bluetooth adds delay, so shorter taps can be missed.
+    pulses: (lvl, on, off, offFirst = false) => (b, end, r) => { on = Math.max(BLE_PULSE, on); off = Math.max(BLE_PULSE, off); if (offFirst) b.jump(0).hold(off); b.until(end, () => { b.jump(lvl).hold(on).jump(0).hold(Math.max(BLE_PULSE, jit(r, off, 0.15))); }); },
+    heartbeat: (lvl, bpm, delay = 0) => (b, end) => {
+      // Lub-dub when there is time for reliable pulses, else (a racing heart) single beats.
+      const per = 60000 / bpm, on1 = Math.max(220, per * 0.24), gap = Math.max(220, per * 0.2), on2 = Math.max(220, per * 0.22);
+      const dub = per >= on1 + gap + on2 + BLE_PULSE;
+      if (delay) b.jump(0).hold(delay);
+      b.until(end, () => {
+        b.jump(lvl).hold(on1).jump(0);
+        if (dub) b.hold(gap).jump(lvl * 0.7).hold(on2).jump(0).hold(per - on1 - gap - on2);
+        else b.hold(Math.max(BLE_PULSE, per - on1));
+      });
+    },
+    buzz: (lvl) => (b, end, r) => b.until(end, () => { b.jump(Math.min(100, lvl + 6 + 4 * r())).hold(170).jump(lvl - 12).hold(170); }),   // a ~3 Hz texture
+    flicker: (lvl, base) => (b, end, r) => b.until(end, () => { b.jump(base).hold(300 + 500 * r()); b.jump(lvl * (0.7 + 0.3 * r())).hold(BLE_PULSE + 80 * r()); }),
     steps: (levels, each) => (b, end) => b.until(end, () => { for (const x of levels) { if (b.t >= end) break; b.jump(x).hold(Math.min(each, Math.max(1, end - b.t))); } }),
     bursts: (lvl, burst, gap, base = 0) => (b, end, r) => b.until(end, () => { b.to(lvl, 80).hold(jit(r, burst, 0.2)).to(base, 200).hold(jit(r, gap, 0.3)); }),
     swell: (lo, hi, rise, fall, top) => (b, end) => b.until(end, () => { b.to(hi, rise).hold(top).to(lo, fall).hold(300); }),
@@ -586,7 +600,7 @@
     surprise: () => (b, end, r) => b.until(end, () => {
       const k = r();
       if (k < 0.25) b.jump(0).hold(600 + 1200 * r());
-      else if (k < 0.5) for (let i = 0; i < 3; i++) b.jump(90).hold(120).jump(0).hold(120);
+      else if (k < 0.5) for (let i = 0; i < 3; i++) b.jump(90).hold(BLE_PULSE).jump(0).hold(BLE_PULSE);
       else if (k < 0.75) b.to(80, 1200).to(10, 1200);
       else b.jump(30 + 70 * r()).hold(700);
     }),
@@ -716,10 +730,24 @@
     ] },
   };
 
-  // Strength for strokers: depth scales toward the tip (95), so a softer
-  // setting gives shallower strokes at the same timing, which is also slower.
-  const MOOD_TIP = 95;
-  const moodSoften = (pos, k) => MOOD_TIP + (pos - MOOD_TIP) * k;
+  // Strength for strokers: strokes are scaled toward one end, so a softer
+  // setting gives shorter strokes at the same timing (which is also slower).
+  // That end switches between the tip and the base every 10-16 s, easing
+  // across over 1.5 s, so softer still visits both.
+  const MOOD_TIP = 95, MOOD_BASE = 5, MOOD_EASE = 1500;
+  function moodAnchor(ms) {
+    let start = 0, i = 0, prev = MOOD_TIP;
+    for (;;) {
+      const len = 10000 + 6000 * hashUnit(i + 7);
+      const here = i % 2 ? MOOD_BASE : MOOD_TIP;
+      if (ms < start + len) {
+        const k = i === 0 ? 1 : Math.min(1, (ms - start) / MOOD_EASE);
+        return prev + (here - prev) * (0.5 - 0.5 * Math.cos(Math.PI * k));
+      }
+      start += len; prev = here; i++;
+    }
+  }
+  const moodSoften = (pos, k, ms = 0) => { const a = moodAnchor(ms); return a + (pos - a) * k; };
 
   // Build a combo: a stroke track and one or two vibration tracks, aligned at every section.
   function buildMood(sections, r) {
@@ -2806,7 +2834,7 @@
         return [0, 1].map((i) => {
           const p = parseTarget(this._outTargetValue(i));
           this._aiLabel(i, null);
-          if (p && p.motor === 'l') return moodSoften(sampleAt(raw.actions, ms), k);
+          if (p && p.motor === 'l') return moodSoften(sampleAt(raw.actions, ms), k, ms);
           return sampleAt(raw.mood.vibe[i] || raw.mood.vibe[0], ms) * k;
         });
       }
@@ -2840,7 +2868,7 @@
     _goalFrom(i, raw, ms, rate, cache) {
       if (raw.mood) {
         const next = nextAction(raw.actions, ms);
-        return next ? { goal: moodSoften(next.pos, this._moodStrength()), dur: (next.at - ms) / (rate || 1) } : null;
+        return next ? { goal: moodSoften(next.pos, this._moodStrength(), next.at), dur: (next.at - ms) / (rate || 1) } : null;
       }
       const v1 = i && raw.channels && raw.channels.V1 && raw.channels.V1.actions;
       const second = Boolean(v1 && v1.length);
@@ -2997,7 +3025,7 @@
       const rp = this._rp;
       if (!rp.raw) return 0;
       const pos = sampleAt(rp.raw.actions, rp.t);
-      return rp.raw.mood ? moodSoften(pos, this._moodStrength()) : pos;
+      return rp.raw.mood ? moodSoften(pos, this._moodStrength(), rp.t) : pos;
     }
 
     // A stroker's next move from the script: the next action and how long to get there.

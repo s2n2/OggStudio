@@ -7,8 +7,8 @@ global.window = globalThis;
 const src = fs.readFileSync(path.join(__dirname, '../custom_components/oggstudio/frontend/oggstudio-card.js'), 'utf8');
 const grab = (start, end) => src.slice(src.indexOf(start), src.indexOf(end));
 // eslint-disable-next-line no-eval
-const { isStroke, STROKE_SPEEDS, STROKE_LIMITS_RESET, parseTarget, MOODS } = eval(grab('  const b64 =', '  // Run modes:') + grab('  // Run modes:', '  const duration =')
-  + '; globalThis.toIntensity = toIntensity; ({ isStroke, STROKE_SPEEDS, STROKE_LIMITS_RESET, parseTarget, MOODS })');
+const { isStroke, STROKE_SPEEDS, STROKE_LIMITS_RESET, parseTarget, MOODS, VIBE_PATTERNS, moodSoften } = eval(grab('  const b64 =', '  // Run modes:') + grab('  // Run modes:', '  const duration =')
+  + '; globalThis.toIntensity = toIntensity; ({ isStroke, STROKE_SPEEDS, STROKE_LIMITS_RESET, parseTarget, MOODS, VIBE_PATTERNS, moodSoften })');
 
 // Card variants: each tag shows a valid subset of the parts, and every part needs a take box to save into.
 {
@@ -293,6 +293,15 @@ assert.strictEqual(runScript(two, 'speed'), two, 'vibration scripts play unchang
   // Moods hold for a moment and patterns do not flicker.
   for (let i = 1; i < v1.moods.length; i++) assert.ok(v1.moods[i].at - v1.moods[i - 1].at >= 500, 'no mood flicker');
 
+  // AI feel patterns: on/off pulses at least ~200 ms at every tempo.
+  {
+    for (const [name, fn] of Object.entries(VIBE_PATTERNS)) for (const f of [0.5, 1, 2, 4]) {
+      const runs = []; let on = fn(0, f, 0.5, { pos: 50, dir: 1, tm: 0 }) > 5, len = 0;
+      for (let ms = 0; ms <= 10000; ms += 10) { const now = fn(ms / 1000, f, 0.5, { pos: 50, dir: 1, tm: ms / 1000 }) > 5; if (now === on) len += 10; else { runs.push(len); on = now; len = 10; } }
+      const bad = runs.slice(1).filter((x) => x < 190);
+      assert.ok(!bad.length, `AI pattern ${name} at ${f} Hz: pulses of ${bad.slice(0, 5).join(',')} ms`);
+    }
+  }
   // Vibration windows.
   const wave = (fn) => Array.from({ length: 61 }, (_, k) => fn(k * 0.05));
   const vm = (fn) => vibeMood(vibeFeatures(wave(fn)));
@@ -356,11 +365,27 @@ assert.strictEqual(runScript(two, 'speed'), two, 'vibration scripts play unchang
   }
   assert.strictEqual(n, keys.length * 3 * 2);
   // Strength softens strokers: depth toward the tip, so half strength = half the travel (and speed).
-  const { moodSoften } = eval(grab('  const MOOD_TIP =', '  // Build a combo:') + '; ({ moodSoften })');
-  assert.strictEqual(moodSoften(95, 0.5), 95);
-  assert.strictEqual(moodSoften(5, 0.5), 50);
-  assert.strictEqual(moodSoften(5, 1), 5);
-  assert.strictEqual(Math.abs(moodSoften(5, 0.5) - moodSoften(85, 0.5)), 40, '80 units of travel become 40');
+  assert.strictEqual(moodSoften(95, 0.5, 0), 95, 'starts at the tip');
+  assert.strictEqual(moodSoften(5, 0.5, 0), 50);
+  assert.strictEqual(moodSoften(5, 1, 0), 5, 'full strength: unchanged');
+  assert.strictEqual(Math.abs(moodSoften(5, 0.5, 0) - moodSoften(85, 0.5, 0)), 40, '80 units of travel become 40');
+  assert.strictEqual(Math.round(moodSoften(5, 0.5, 17500)), 5, 'later, softer strokes sit at the base');
+  assert.strictEqual(Math.round(moodSoften(95, 0.5, 17500)), 50);
+  // The end switches every 10-16 s and eases across (no jump bigger than a few units per 100 ms).
+  let ends = new Set(), last = moodAnchor(0), maxJump = 0;
+  for (let ms = 0; ms < 120000; ms += 100) { const a = moodAnchor(ms); maxJump = Math.max(maxJump, Math.abs(a - last)); last = a; if (Math.abs(a - 95) < 0.5) ends.add('tip'); if (Math.abs(a - 5) < 0.5) ends.add('base'); }
+  assert.ok(ends.has('tip') && ends.has('base'), 'visits both ends');
+  assert.ok(maxJump < 10, 'eases across: ' + maxJump.toFixed(1));
+  // Bluetooth: no on or off pulse shorter than 200 ms, in any mood combo.
+  const shortRuns = (sample, total, step = 10) => {
+    const runs = []; let on = sample(0) > 5, len = 0;
+    for (let ms = 0; ms <= total; ms += step) { const now = sample(ms) > 5; if (now === on) len += step; else { runs.push(len); on = now; len = step; } }
+    return runs.slice(1).filter((x) => x < 200);   // the first run can be cut short by the start
+  };
+  for (const [key, mood] of Object.entries(MOODS)) for (const [name, sections] of mood.combos) {
+    const b = buildMood(sections, aiRandom(5));
+    for (const tr of b.vibe) { const end = tr[tr.length - 1].at - 400; const bad = shortRuns((ms) => sampleAt(tr, ms), end); assert.ok(!bad.length, `${key}/${name}: pulses of ${bad.join(',')} ms`); }
+  }
   // Alternating moods give the second device its own track.
   assert.strictEqual(buildMood(MOODS.squeeze.combos[1][1], aiRandom(3)).vibe.length, 2);
   assert.strictEqual(buildMood(MOODS.tease.combos[0][1], aiRandom(3)).vibe.length, 1);

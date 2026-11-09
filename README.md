@@ -78,8 +78,10 @@ track for vibrators, built in sections that stay in step; Embrace, Squeeze and H
 give a second vibrator its own alternating track. Tapping a mood plays one of its combos at
 random, with small variations, and a different combo follows when it ends (about 30 s each).
 🎲 Another switches now, tapping the lit mood (or ■ Stop) stops, and **Strength** softens it:
-vibration level, and for a stroker the depth (scaled toward the tip, so strokes get shallower
-and, at the same timing, slower). A mood is its own feel, so it ignores each device's follow type. Strokes stay
+vibration level, and for a stroker the stroke length (scaled toward one end, so strokes get
+shorter and, at the same timing, slower; that end switches between the tip and the base every
+10–16 s). Vibration pulses are kept at least about a quarter of a second, on and off, so a
+Bluetooth toy does not miss them. A mood is its own feel, so it ignores each device's follow type. Strokes stay
 within the device's top speed.
 
 ## Devices
