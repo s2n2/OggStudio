@@ -6,7 +6,7 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.10.0';
+  const VERSION = '0.10.1';
   const DEVICE_KEY = 'oggstudio_device';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
@@ -822,7 +822,7 @@
             <div class="stlive"><span class="gpslot"></span></div>
             <div class="row" id="vrecdone" style="margin-top:6px" hidden><button id="vrecuse">Use as take</button><button id="vrecdl">Download .funscript</button><button id="vrecclear" class="stop">Clear</button></div>
             <div class="vstat" id="vstat"></div>
-            <div class="row" style="margin-top:8px"><button id="vgo" class="go">▶ Go</button><button id="vstop" class="stop" style="flex:0 0 96px">■ Stop</button></div>
+            <div class="row" style="margin-top:8px"><button id="vgo" class="go">▶ Go</button><button id="vcast" type="button" style="flex:0 0 96px" title="Play the video on a Chromecast (Chrome's built-in cast)">📺 Cast</button><button id="vstop" class="stop" style="flex:0 0 96px">■ Stop</button></div>
             <label>Sync offset <span id="voffv"></span></label>
             <input id="voff" type="range" min="-1000" max="1000" step="25" value="150">
             <div class="hint">Positive values send each moment slightly early to make up for Bluetooth delay. Pause, seek and playback speed all stay in sync.</div>
@@ -1603,6 +1603,44 @@
       $('vrecuse').addEventListener('click', () => this._vrecUse());
       $('vrecdl').addEventListener('click', () => this._vrecDownload());
       $('vrecclear').addEventListener('click', () => { if (confirm('Discard this recording?')) this._vrecReset(); });
+      this._bindCast(video);
+    }
+
+    // Cast the video with Chrome's built-in cast (Remote Playback API). The
+    // video element stays in charge: its time and play/pause follow the
+    // Chromecast, so the devices keep syncing as usual. Chrome may refuse a
+    // local file; then the button says so.
+    _bindCast(video) {
+      const $ = this._el;
+      const btn = $('vcast');
+      const remote = video.remote;
+      if (!remote || typeof remote.prompt !== 'function') {
+        btn.disabled = true;
+        btn.title = 'This browser cannot cast videos (use Chrome on Android or a computer)';
+        return;
+      }
+      const show = () => {
+        const st = remote.state;
+        btn.textContent = st === 'connected' ? '📺 Casting' : st === 'connecting' ? '📺 …' : '📺 Cast';
+        btn.classList.toggle('on', st === 'connected');
+        this._videoStatus();
+      };
+      for (const type of ['connecting', 'connect', 'disconnect']) remote.addEventListener(type, show);
+      remote.addEventListener('connect', () => this._toast('Casting: the video plays on the Chromecast; devices stay in sync with it.'));
+      remote.addEventListener('disconnect', () => this._toast('Casting stopped.'));
+      btn.addEventListener('click', async () => {
+        if (!this._vurl) { this._toast('Choose a video first'); return; }
+        try {
+          await remote.prompt();      // Chrome's own device picker (also used to stop casting)
+        } catch (e) {
+          const name = e && e.name;
+          if (name === 'NotAllowedError' || name === 'AbortError') return;   // picker closed
+          if (name === 'NotSupportedError') this._toast(`Chrome cannot cast this video (local files often cannot be cast). Try casting the whole tab from Chrome's ⋮ menu instead.`);
+          else if (name === 'NotFoundError') this._toast('No Chromecast found on this network.');
+          else this._toast('Could not cast: ' + ((e && e.message) || e));
+        }
+      });
+      show();
     }
 
     async _loadVideoScript() {
@@ -1911,6 +1949,7 @@
       if (labEl.textContent !== lab) labEl.textContent = lab;
       if (levels && !this._vrec && !this._hbActive && !this._outsHere && !(this._vsyncTimer && this._vscript)) this._showHBar(0, (levels[0] || 0) * 100);
       const parts = [];
+      if (video.remote && video.remote.state === 'connected') parts.push('📺 casting');
       if (this._vscript) parts.push(`Script ${fmt(duration(this._vscript))}`);
       if (this._vurl && Number.isFinite(video.duration)) parts.push(`video ${fmt(video.duration * 1000)}`);
       if (this._vsyncTimer && levels) parts.push(`now ${levels.map((v) => Math.round(v * 100) + '%').join(' / ')}`);

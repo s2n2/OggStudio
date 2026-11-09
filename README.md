@@ -166,6 +166,14 @@ position about ten times a second and sends the matching level with `ogg.live`. 
 seeking and changing playback speed stay in sync, and pausing stops the toy. **Sync offset**
 (remembered per browser) sends each moment slightly early to make up for Bluetooth delay.
 
+### Casting the video
+
+**📺 Cast** uses Chrome's built-in cast to play the video on a Chromecast (Chrome on Android
+or a computer, on the same network). The video still streams from your phone, nothing goes
+to Home Assistant, and the devices keep following the video's position on the Chromecast.
+Press it again to stop casting. Chrome may refuse to cast some local files; the button says
+so, and casting the whole tab from Chrome's ⋮ menu is the fallback.
+
 ### Making a script for a video
 
 Under the video there is one simple slider and a small **● Rec** button. The slider is the
