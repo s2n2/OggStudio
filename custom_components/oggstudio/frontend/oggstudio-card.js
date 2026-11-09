@@ -6,7 +6,7 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.10.2';
+  const VERSION = '0.12.0';
   const DEVICE_KEY = 'oggstudio_device';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
@@ -197,6 +197,540 @@
     return p > keep ? { lower: keep, upper: p, last: 'upper' } : { lower: p, upper: keep, last: 'lower' };
   }
   const STROKE_LIMITS_RESET = { lower: 0, upper: 100, last: null };
+
+  // ---------------------------------------------------------- AI feel
+  // "How it makes you feel" mapping between stroke and vibration. Instead of
+  // number-for-number, it reads the intent of the last few seconds (a mood)
+  // and answers with a matching feel: stroke moods become vibration patterns,
+  // vibration moods become planned strokes. Moods switch only once they have
+  // lasted a moment, and patterns re-roll every 10-24 s to stay interesting.
+  const FOLLOW_AI = 'ai';
+  const AI_STEP = 50;          // ms between analysed samples
+  const AI_HALF = 30;          // samples either side for scripts (3 s window)
+  const AI_LIVE_MS = 3000;     // live: the last 3 s
+  const clampN = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+  // Small seeded random generator: the same script previews the same way.
+  function aiRandom(seed) {
+    let s = seed >>> 0;
+    return () => {
+      s = (s + 0x6D2B79F5) >>> 0;
+      let t = Math.imul(s ^ (s >>> 15), 1 | s);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const aiSeed = (acts) => (acts.length * 7919 + (acts.length ? acts[acts.length - 1].at : 0) * 31 + (acts.length ? acts[0].pos : 0)) >>> 0;
+  const hashUnit = (n) => { const x = Math.sin(n * 12.9898) * 43758.5453; return x - Math.floor(x); };
+
+  // Stroke window (positions every AI_STEP ms): speed, stroke rate and length,
+  // depth, how much of the time it moves, and whether it is speeding up.
+  function strokeFeatures(p) {
+    const n = p.length;
+    if (n < 3) return { speed: 0, rate: 0, amp: 0, center: n ? p[0] : 50, activity: 0, trend: 1 };
+    let dist = 0, moving = 0, dir = 0, ext = p[0], extI = 0, prevExt = p[0];
+    const halves = [];
+    for (let i = 1; i < n; i++) {
+      const d = p[i] - p[i - 1];
+      dist += Math.abs(d);
+      if (Math.abs(d) > 0.4) moving++;
+      if (dir >= 0) {
+        if (p[i] >= ext) { ext = p[i]; extI = i; } else if (ext - p[i] > 4) { halves.push(Math.abs(ext - prevExt)); prevExt = ext; dir = -1; ext = p[i]; extI = i; }
+      } else if (p[i] <= ext) { ext = p[i]; extI = i; } else if (p[i] - ext > 4) { halves.push(Math.abs(ext - prevExt)); prevExt = ext; dir = 1; ext = p[i]; extI = i; }
+    }
+    const secs = (n - 1) * AI_STEP / 1000;
+    const real = halves.filter((a) => a >= 4);
+    let lo = 100, hi = 0, sum = 0;
+    for (const v of p) { lo = Math.min(lo, v); hi = Math.max(hi, v); sum += v; }
+    const amp = real.length ? real.reduce((a, b) => a + b, 0) / real.length : hi - lo;
+    const third = Math.max(2, Math.floor(n / 3));
+    const travel = (from, to) => { let t = 0; for (let i = from + 1; i < to; i++) t += Math.abs(p[i] - p[i - 1]); return t; };
+    const early = travel(0, third), late = travel(n - third, n);
+    return {
+      speed: dist / secs,
+      rate: real.length / 2 / secs,
+      amp,
+      center: sum / n,
+      activity: moving / (n - 1),
+      trend: early > 5 ? late / early : (late > 20 ? 3 : 1),
+    };
+  }
+
+  // prev: the mood before, or true when it was intense in the last few seconds.
+  function strokeMood(f, prev) {
+    const hot = prev === true || ['intense', 'frantic', 'build', 'edge'].includes(prev);
+    if (f.speed < 12) return hot ? 'edge' : 'rest';
+    if (hot && f.speed < 45 && f.activity < 0.5) return 'edge';     // winding down right after a peak
+    if (f.rate > 2.0 && f.amp < 35) return 'frantic';
+    if (f.speed > 230 && f.amp >= 30) return 'intense';
+    if (f.trend > 1.6 && f.speed > 40) return 'build';
+    if (f.speed >= 110) return 'rhythm';
+    if (f.amp >= 40 && f.activity > 0.6) return 'glide';
+    return 'tease';
+  }
+
+  // Vibration patterns: (seconds into the pattern, stroke tempo Hz, level 0-1, context) -> 0-100.
+  const sine01 = (x) => 0.5 - 0.5 * Math.cos(2 * Math.PI * x);
+  const VIBE_PATTERNS = {
+    breath: (t) => 6 + 6 * Math.sin(2 * Math.PI * 0.15 * t),
+    off: () => 0,
+    heartbeat: (t, f, L) => { const per = 1 / clampN(f, 0.75, 1.3); const x = (t % per) / per; return (x < 0.11 ? 1 : x > 0.2 && x < 0.29 ? 0.7 : 0) * (28 + 45 * L); },
+    flicker: (t, f, L) => { const slot = Math.floor(t / 0.3); return hashUnit(slot) < 0.4 && t - slot * 0.3 < 0.09 ? 35 + 30 * L : 4; },
+    slowwave: (t, f, L) => 10 + (25 + 30 * L) * sine01(0.3 * t),
+    swell: (t, f, L, c) => 15 + (35 + 45 * L) * (1 - c.pos / 100),          // deeper = stronger
+    tide: (t, f, L) => 30 + 25 * L + 15 * Math.sin(2 * Math.PI * 0.2 * t),
+    strokepulse: (t, f, L, c) => (c.dir < 0 ? 45 + 45 * L : 12 + 10 * L),    // a pulse on every downstroke
+    steps: (t, f, L) => 28 + Math.floor(((t * f / 2) % 1) * 4) * (10 + 8 * L),
+    throb: (t, f, L) => 35 + (25 + 30 * L) * sine01(f * t),
+    pound: (t, f, L) => (((t * f) % 1) < 0.35 ? 100 : 55 + 20 * L),
+    surge: (t, f) => 60 + 40 * ((t * f) % 1),
+    high: (t, f, L) => 84 + 8 * L + 4 * Math.sin(2 * Math.PI * 3 * t),
+    flutter: (t, f, L) => (Math.sin(2 * Math.PI * 8 * t) > 0 ? 85 + 10 * L : 50),
+    buzz: (t) => 88 + 7 * Math.sin(2 * Math.PI * 12 * t),
+    stutter: (t, f, L) => (((t * 6) % 1) < 0.5 ? 80 + 15 * L : 25),
+    ramp: (t, f, L, c) => 30 + Math.min(60, Math.floor(c.tm / 1.5) * 10) + 8 * L,
+    risingwave: (t, f, L, c) => 20 + (35 + 45 * Math.min(1, c.tm / 8)) * sine01(0.6 * t),
+  };
+  const STROKE_MOOD_PATTERNS = {
+    rest: ['breath', 'off'], edge: ['heartbeat', 'off', 'heartbeat'], tease: ['heartbeat', 'flicker', 'slowwave'],
+    glide: ['swell', 'tide', 'slowwave'], rhythm: ['strokepulse', 'steps', 'throb'], build: ['ramp', 'risingwave', 'steps'],
+    intense: ['pound', 'surge', 'high'], frantic: ['flutter', 'buzz', 'stutter'],
+  };
+
+  // Shared mood keeper: a new mood must last `hold` s; patterns re-roll every 10-24 s.
+  class MoodKeeper {
+    constructor(seed, table) { this.r = aiRandom(seed); this.table = table; this.mood = null; this.cand = null; this.candAt = 0; this.pat = null; this.patAt = 0; this.patUntil = 0; this.moodAt = 0; }
+    // Switch once a new mood has held most (70%) of the last `hold` seconds,
+    // so one odd reading neither switches nor resets the wait.
+    update(t, mood, hold) {
+      if (this.mood === null) { this.mood = mood; this.moodAt = t; this.hist = [{ t, mood }]; this.pick(t); return; }
+      this.hist.push({ t, mood });
+      while (this.hist.length > 1 && this.hist[0].t < t - hold) this.hist.shift();
+      if (mood !== this.mood && t - this.hist[0].t >= hold * 0.8) {
+        const share = this.hist.filter((h) => h.mood === mood).length / this.hist.length;
+        if (share >= 0.7) { this.mood = mood; this.moodAt = t; this.pick(t); }
+      }
+      if (t >= this.patUntil) this.pick(t);
+    }
+    pick(t) {
+      const list = this.table[this.mood];
+      let p = list[Math.floor(this.r() * list.length)];
+      if (p === this.pat && new Set(list).size > 1) p = list.find((x) => x !== this.pat);
+      this.pat = p; this.patAt = t; this.patUntil = t + 10 + this.r() * 14;
+    }
+    get label() { return `${this.mood} · ${this.pat}`; }
+  }
+
+  class StrokeToVibe {
+    constructor(seed) { this.k = new MoodKeeper(seed, STROKE_MOOD_PATTERNS); }
+    step(t, f, ctx) {
+      if (['intense', 'frantic', 'build'].includes(this.k.mood)) this.hotAt = t;
+      const hot = this.hotAt !== undefined && t - this.hotAt < 4;
+      let mood = strokeMood(f, hot || this.k.mood);
+      if (mood === 'edge' && this.k.mood === 'edge' && t - this.k.moodAt > 6) mood = 'rest';
+      this.k.update(t, mood, mood === 'rest' || mood === 'edge' ? 0.5 : 0.9);
+      const L = this.k.mood === 'edge' ? 0.12 : clampN(0.6 * f.speed / 320 + 0.4 * f.amp / 100, 0, 1);
+      const tempo = clampN(f.rate || 1, 0.3, 4);
+      return clampN(VIBE_PATTERNS[this.k.pat](t - this.k.patAt, tempo, L, { ...ctx, tm: t - this.k.moodAt }), 0, 100);
+    }
+  }
+
+  // Vibration window (levels every AI_STEP ms): level, swing, pulse rate, rise, roughness.
+  function vibeFeatures(v) {
+    const n = v.length;
+    if (n < 3) return { mean: n ? v[0] : 0, std: 0, max: n ? v[0] : 0, pulseRate: 0, trend: 0 };
+    let sum = 0, max = 0;
+    for (const x of v) { sum += x; max = Math.max(max, x); }
+    const mean = sum / n;
+    let sq = 0;
+    for (const x of v) sq += (x - mean) * (x - mean);
+    const std = Math.sqrt(sq / n);
+    const hyst = Math.max(6, std * 0.5);
+    let side = 0, cross = 0;
+    for (const x of v) {
+      if (x > mean + hyst / 2 && side <= 0) { if (side < 0) cross++; side = 1; } else if (x < mean - hyst / 2 && side >= 0) { if (side > 0) cross++; side = -1; }
+    }
+    const secs = (n - 1) * AI_STEP / 1000;
+    const third = Math.max(1, Math.floor(n / 3));
+    const avg = (from, to) => { let s = 0; for (let i = from; i < to; i++) s += v[i]; return s / (to - from); };
+    const a = avg(0, third), b = avg(third, n - third), c = avg(n - third, n);
+    let lo = 0, hi = 0;
+    for (let i = 1; i < n; i++) { if (v[i] < v[lo]) lo = i; if (v[i] >= v[hi]) hi = i; }
+    // A real build: steadily up, lowest at the start and highest at the end.
+    const rising = b > a + 4 && c > b + 4 && lo <= n * 0.2 && hi >= n * 0.8;
+    return { mean, std, max, pulseRate: cross / 2 / secs, trend: c - a, rising };
+  }
+
+  function vibeMood(f) {
+    if (f.mean < 4 && f.max < 10) return 'rest';
+    if (f.pulseRate > 3.5 && f.mean > 35) return 'buzz';
+    if (f.trend > 15 && f.rising) return 'build';     // a sustained rise, not one side of a wave
+    if (f.mean > 68 && f.std < 15) return 'strong';
+    if (f.mean < 25) return 'tease';            // anything faint is teasing, whatever its shape
+    if (f.std >= 14 && f.pulseRate >= 0.4) return f.mean < 35 ? 'tease' : 'pulse';
+    if (f.std >= 10) return 'wave';
+    if (f.mean < 30) return 'tease';
+    return 'steady';
+  }
+
+  // Stroke styles: (features, half-stroke number, seconds in mood, time) -> the
+  // next stroke's centre and length (0-100), full cycle time (s), and pauses.
+  const STROKE_STYLES = {
+    park: () => ({ center: 85, amp: 0, period: 2 }),
+    tiptease: (f) => ({ center: 82, amp: 14 + 12 * f.mean / 100, period: 2.2 - 0.8 * f.mean / 100, pauseEvery: 4, pauseLen: 0.8 }),
+    slowfull: (f) => ({ center: 50, amp: 70, period: 3.2 - 1.2 * f.mean / 100 }),
+    stopstart: () => ({ center: 70, amp: 30, period: 1.6, pauseEvery: 2, pauseLen: 1.2 }),
+    swell: (f) => ({ center: 55, amp: 30 + 55 * f.mean / 100, period: 2.4 - 1.2 * f.mean / 100 }),
+    tidal: (f) => ({ center: 60 - 20 * f.mean / 100, amp: 40 + 30 * f.mean / 100, period: 2.0 }),
+    beat: (f) => ({ center: 55, amp: 35 + 45 * f.max / 100, period: clampN(1 / Math.max(f.pulseRate, 0.1), 0.45, 3) }),
+    doublebeat: (f) => ({ center: 60, amp: 25 + 35 * f.max / 100, period: clampN(0.5 / Math.max(f.pulseRate, 0.1), 0.4, 2) }),
+    metronome: (f) => ({ center: 55, amp: 45, period: 1.5 - 0.7 * f.mean / 100 }),
+    longshort: (f, k) => ({ center: 50, amp: k % 4 < 2 ? 70 : 30, period: 1.2 - 0.5 * f.mean / 100 }),
+    drift: (f, k, tm, t) => ({ center: 50 + 25 * Math.sin(0.15 * 2 * Math.PI * t), amp: 40, period: 1.3 - 0.5 * f.mean / 100 }),
+    pound: (f) => ({ center: 40, amp: 80, period: 0.75 - 0.25 * f.mean / 100 }),
+    fullfast: () => ({ center: 50, amp: 92, period: 0.6 }),
+    mixed: (f, k) => (k % 6 < 2 ? { center: 45, amp: 85, period: 1.0 } : { center: 60, amp: 30, period: 0.36 }),
+    vibrato: () => ({ center: 40, amp: 18, period: 0.3 }),
+    shudder: (f, k) => (k % 10 < 2 ? { center: 50, amp: 70, period: 0.7 } : { center: 30, amp: 12, period: 0.26 }),
+    climb: (f, k, tm) => ({ center: 55 - 10 * Math.min(1, tm / 10), amp: 30 + 60 * Math.min(1, tm / 10), period: 1.6 - 1.0 * Math.min(1, tm / 10) }),
+  };
+  const VIBE_MOOD_STYLES = {
+    rest: ['park'], tease: ['tiptease', 'slowfull', 'stopstart'], wave: ['swell', 'tidal', 'slowfull'],
+    pulse: ['beat', 'doublebeat', 'beat'], steady: ['metronome', 'longshort', 'drift'],
+    strong: ['pound', 'fullfast', 'mixed'], buzz: ['vibrato', 'shudder'], build: ['climb', 'climb', 'swell'],
+  };
+
+  // Plans strokes from the vibration's mood: one half-stroke at a time, never
+  // faster than the device's top speed.
+  class VibeToStroke {
+    constructor(seed) { this.k = new MoodKeeper(seed, VIBE_MOOD_STYLES); this.half = 0; this.pos = 85; this.dir = 1; this.nextAt = 0; this.paused = false; }
+    // Next move {goal, dur ms} if one is due at t (s), else null (moving or pausing).
+    plan(t, f) {
+      this.k.update(t, vibeMood(f), 1.0);
+      if (t < this.nextAt) return null;
+      const P = STROKE_STYLES[this.k.pat](f, this.half, t - this.k.moodAt, t);
+      if (P.amp < 2) {
+        const goal = clampN(P.center, 0, 100);
+        const dur = Math.max(800, Math.abs(goal - this.pos) / (STROKE_TOP / 1000));
+        this.pos = goal; this.nextAt = t + dur / 1000;
+        return { goal, dur };
+      }
+      if (P.pauseEvery && this.half > 0 && this.half % (P.pauseEvery * 2) === 0 && !this.paused) { this.paused = true; this.nextAt = t + P.pauseLen; return null; }
+      this.paused = false;
+      this.dir = -this.dir;
+      const goal = clampN(P.center + this.dir * P.amp / 2, 0, 100);
+      const dur = Math.max(P.period * 500, Math.abs(goal - this.pos) / (STROKE_TOP / 1000));
+      this.half += 1; this.pos = goal; this.nextAt = t + dur / 1000;
+      return { goal, dur };
+    }
+  }
+
+  const resample = (actions, from, to) => { const out = []; for (let ms = from; ms <= to; ms += AI_STEP) out.push(sampleAt(actions, ms)); return out; };
+
+  // Scripts: stroke actions -> vibration actions (with the moods it found).
+  function aiStrokeToVibe(actions) {
+    const a = cleanActions(actions);
+    if (a.length < 2) return { actions: a.map((x) => ({ at: x.at, pos: 0 })), moods: [] };
+    const end = a[a.length - 1].at;
+    const pos = resample(a, 0, end);
+    const eng = new StrokeToVibe(aiSeed(a));
+    const out = [], moods = [];
+    let last = null;
+    for (let k = 0; k < pos.length; k++) {
+      const f = strokeFeatures(pos.slice(Math.max(0, k - AI_HALF), k + AI_HALF + 1));
+      const dir = k + 1 < pos.length ? Math.sign(pos[k + 1] - pos[k]) : 0;
+      const v = Math.round(eng.step(k * AI_STEP / 1000, f, { pos: pos[k], dir }));
+      if (!moods.length || moods[moods.length - 1].label !== eng.k.label) moods.push({ at: k * AI_STEP, label: eng.k.label });
+      if (v !== last) {
+        if (last !== null && out.length && out[out.length - 1].at < k * AI_STEP - AI_STEP) out.push({ at: k * AI_STEP - AI_STEP, pos: last });
+        out.push({ at: k * AI_STEP, pos: v });
+        last = v;
+      }
+    }
+    out.push({ at: end, pos: last ?? 0 }, { at: end + 1, pos: 0 });
+    return { actions: out, moods };
+  }
+
+  // Scripts: vibration actions -> stroke actions (planned strokes).
+  function aiVibeToStroke(actions) {
+    const a = cleanActions(actions);
+    if (!a.length) return { actions: [], moods: [] };
+    const end = a[a.length - 1].at;
+    const lv = resample(a, 0, end);
+    const eng = new VibeToStroke(aiSeed(a));
+    const out = [{ at: 0, pos: eng.pos }], moods = [];
+    // Every 50 ms: the mood is read; a stroke is planned whenever the last one ends.
+    for (let k = 0; k < lv.length; k++) {
+      const t = k * AI_STEP / 1000;
+      const f = vibeFeatures(lv.slice(Math.max(0, k - AI_HALF), k + AI_HALF + 1));
+      const due = t >= eng.nextAt;
+      const before = eng.pos;
+      const move = eng.plan(t, f);
+      if (!moods.length || moods[moods.length - 1].label !== eng.k.label) moods.push({ at: Math.round(t * 1000), label: eng.k.label });
+      if (move) out.push({ at: Math.round(t * 1000 + move.dur), pos: Math.round(move.goal) });
+      else if (due) out.push({ at: Math.round(eng.nextAt * 1000), pos: Math.round(before) });   // a pause: hold
+    }
+    const clean = [];
+    for (const x of out) { const l = clean[clean.length - 1]; if (l && x.at <= l.at) l.pos = x.pos; else clean.push(x); }
+    return { actions: clean, moods };
+  }
+
+  const moodAt = (moods, ms) => { let m = null; for (const x of moods) { if (x.at > ms) break; m = x.label; } return m; };
+
+  // Live: the last 3 s of input, analysed every update.
+  class AiLive {
+    constructor(kind) { this.kind = kind; this.buf = []; this.eng = kind === 'stroke' ? new StrokeToVibe((Math.random() * 2 ** 32) >>> 0) : new VibeToStroke((Math.random() * 2 ** 32) >>> 0); this.last = null; }
+    window(now) {
+      const from = now - AI_LIVE_MS;
+      while (this.buf.length > 2 && this.buf[1].at < from) this.buf.shift();
+      const out = [];
+      for (let ms = Math.max(from, this.buf[0].at); ms <= now; ms += AI_STEP) out.push(sampleAt(this.buf, ms));
+      return out;
+    }
+    // Stroke in (position) -> vibration level.
+    level(now, pos, dir) {
+      this.buf.push({ at: now, pos });
+      return this.eng.step(now / 1000, strokeFeatures(this.window(now)), { pos, dir });
+    }
+    // Vibration in (level) -> next stroke move (or the last one while it runs).
+    move(now, level) {
+      this.buf.push({ at: now, pos: level });
+      const m = this.eng.plan(now / 1000, vibeFeatures(this.window(now)));
+      if (m) this.last = m;
+      return this.last || { goal: this.eng.pos, dur: 300 };
+    }
+    get label() { return this.eng.k.label; }
+  }
+
+  // ---------------------------------------------------------- moods
+  // Mood buttons: three hand-made combos per mood. A combo is a list of
+  // aligned sections, each filling the same time with a stroke pattern (for
+  // strokers) and one or two vibration patterns (for vibrators; a second
+  // track goes to the second device, for alternating moods). Small random
+  // variations each time; when a combo ends, a different one follows.
+  function moodTrack(start, stroke) {
+    const a = [{ at: 0, pos: start }];
+    let t = 0, v = start;
+    const b = {
+      get t() { return t; },
+      get v() { return v; },
+      to(p, ms) {
+        p = clampN(Math.round(p), 0, 100);
+        if (stroke) ms = Math.max(ms, Math.abs(p - v) / (STROKE_TOP / 1000));   // within the device's top speed
+        t += Math.max(1, Math.round(ms)); v = p; a.push({ at: t, pos: p });
+        return b;
+      },
+      hold(ms) { t += Math.max(1, Math.round(ms)); a.push({ at: t, pos: v }); return b; },
+      jump(p) { return b.to(p, 1); },
+      until(end, fn) { let g = 0; while (t < end && g++ < 4000) fn(); return b; },
+      done() { return a; },
+    };
+    return b;
+  }
+
+  const jit = (r, x, by = 0.1) => x * (1 - by + 2 * by * r());
+
+  // Stroke patterns: (track, section end, random) fill until the end.
+  const MS = {
+    strokes: (lo, hi, half) => (b, end, r) => b.until(end, () => { const h = jit(r, half); b.to(hi, h).to(lo, h); }),
+    breathe: (lo, hi, half) => (b, end, r) => b.until(end, () => { const h = jit(r, half); b.to(hi, h).hold(350).to(lo, h).hold(550); }),
+    park: (pos) => (b, end) => { b.to(pos, 700); if (b.t < end) b.hold(end - b.t); },
+    ramp: (from, to) => (b, end, r) => {
+      const start = b.t;
+      b.until(end, () => {
+        const k = clampN((b.t - start) / Math.max(1, end - start), 0, 1);
+        const L = (i) => from[i] + (to[i] - from[i]) * k;
+        b.to(L(1), jit(r, L(2), 0.05)).to(L(0), jit(r, L(2), 0.05));
+      });
+    },
+    stopstart: (lo, hi, half, n, pause) => (b, end, r) => b.until(end, () => { for (let i = 0; i < n; i++) b.to(hi, half).to(lo, half); b.hold(jit(r, pause, 0.3)); }),
+    flick: (base, amp, half, n, pause) => (b, end, r) => b.until(end, () => { b.to(base, 300); for (let i = 0; i < n; i++) b.to(base - jit(r, amp, 0.2), half).to(base, half); b.hold(jit(r, pause, 0.3)); }),
+    gasp: () => (b, end, r) => b.until(end, () => { b.to(92, 900).hold(jit(r, 1100, 0.3)).to(8, 250).hold(700).to(60, 1500).hold(500); }),
+    clutch: (lo, hi) => (b, end, r) => b.until(end, () => { b.to(lo + (hi - lo) * r(), 200).hold(500 + 900 * r()); }),
+    reach: (top, bottom, up, down) => (b, end, r) => b.until(end, () => { b.to(top, jit(r, up)).hold(jit(r, 800, 0.3)).to(bottom, jit(r, down)).hold(300); }),
+    steps: (ranges, each, half) => (b, end) => b.until(end, () => { for (const [lo, hi] of ranges) { if (b.t >= end) break; const stop = Math.min(end, b.t + each); while (b.t < stop) b.to(hi, half).to(lo, half); } }),
+    edge: () => (b, end, r) => b.until(end, () => { for (let i = 0; i < 8; i++) { const h = 450 - i * 25; b.to(95, h).to(15, h); } b.to(90, 300).hold(1500 + 1500 * r()); }),
+    mix: () => (b, end, r) => b.until(end, () => { const big = r() < 0.35; const amp = big ? 85 : 25 + 20 * r(); const h = big ? 500 : 180 + 120 * r(); b.to(55 + amp / 2, h).to(55 - amp / 2, h); }),
+    surprise: () => (b, end, r) => b.until(end, () => {
+      const k = r();
+      if (k < 0.25) b.hold(600 + 1200 * r());
+      else if (k < 0.5) for (let i = 0; i < 3; i++) b.to(70, 150).to(45, 150);
+      else if (k < 0.75) b.to(98, 1200).to(3, 1200);
+      else b.to(100 * r(), 200).hold(700);
+    }),
+  };
+
+  // Vibration patterns.
+  const MV = {
+    level: (x) => (b, end) => { b.to(x, 300); if (b.t < end) b.hold(end - b.t); },
+    ramp: (lo, hi) => (b, end) => { b.to(lo, 200); b.to(hi, Math.max(200, end - b.t)); },
+    wave: (lo, hi, period, phase = 0) => (b, end, r) => {
+      if (phase) b.to(lo + (hi - lo) * (0.5 - 0.5 * Math.cos(2 * Math.PI * phase)), 300);
+      b.until(end, () => { const p = jit(r, period); for (let k = 1; k <= 8; k++) b.to(lo + (hi - lo) * (0.5 - 0.5 * Math.cos(2 * Math.PI * (k / 8 + phase))), p / 8); });
+    },
+    waveUp: (lo, hiFrom, hiTo, period) => (b, end, r) => {
+      const start = b.t;
+      b.until(end, () => { const p = jit(r, period); const hi = hiFrom + (hiTo - hiFrom) * clampN((b.t - start) / Math.max(1, end - start), 0, 1); for (let k = 1; k <= 8; k++) b.to(lo + (hi - lo) * (0.5 - 0.5 * Math.cos(2 * Math.PI * k / 8)), p / 8); });
+    },
+    pulses: (lvl, on, off, offFirst = false) => (b, end, r) => { if (offFirst) b.jump(0).hold(off); b.until(end, () => { b.jump(lvl).hold(on).jump(0).hold(jit(r, off, 0.15)); }); },
+    heartbeat: (lvl, bpm, delay = 0) => (b, end) => { if (delay) b.jump(0).hold(delay); b.until(end, () => { b.jump(lvl).hold(110).jump(0).hold(90).jump(lvl * 0.7).hold(100).jump(0).hold(60000 / bpm - 300); }); },
+    buzz: (lvl) => (b, end, r) => b.until(end, () => { b.jump(lvl + 6 * r()).hold(70).jump(lvl - 8).hold(70); }),
+    flicker: (lvl, base) => (b, end, r) => b.until(end, () => { b.jump(base).hold(150 + 450 * r()); b.jump(lvl * (0.7 + 0.3 * r())).hold(60 + 60 * r()); }),
+    steps: (levels, each) => (b, end) => b.until(end, () => { for (const x of levels) { if (b.t >= end) break; b.jump(x).hold(Math.min(each, Math.max(1, end - b.t))); } }),
+    bursts: (lvl, burst, gap, base = 0) => (b, end, r) => b.until(end, () => { b.to(lvl, 80).hold(jit(r, burst, 0.2)).to(base, 200).hold(jit(r, gap, 0.3)); }),
+    swell: (lo, hi, rise, fall, top) => (b, end) => b.until(end, () => { b.to(hi, rise).hold(top).to(lo, fall).hold(300); }),
+    gasp: () => (b, end, r) => b.until(end, () => { b.to(25, 900).hold(jit(r, 1100, 0.3)).jump(95).hold(250).to(10, 700).hold(700).to(40, 1500).hold(500); }),
+    clutch: (lo, hi) => (b, end, r) => b.until(end, () => { b.jump(lo + (hi - lo) * r()).hold(500 + 900 * r()); }),
+    random: (lo, hi) => (b, end, r) => b.until(end, () => { b.to(lo + (hi - lo) * r(), 150 + 500 * r()).hold(200 + 800 * r()); }),
+    edge: () => (b, end, r) => b.until(end, () => { b.to(70 + 20 * r(), 3600).jump(0).hold(1500 + 1500 * r()); }),
+    surprise: () => (b, end, r) => b.until(end, () => {
+      const k = r();
+      if (k < 0.25) b.jump(0).hold(600 + 1200 * r());
+      else if (k < 0.5) for (let i = 0; i < 3; i++) b.jump(90).hold(120).jump(0).hold(120);
+      else if (k < 0.75) b.to(80, 1200).to(10, 1200);
+      else b.jump(30 + 70 * r()).hold(700);
+    }),
+  };
+
+  // [name, sections]; a section is [ms, stroke, vibe, second vibe?].
+  const MOODS = {
+    rest: { icon: '🌙', label: 'Rest', combos: [
+      ['Still breath', [[30000, MS.park(85), MV.wave(0, 12, 6000)]]],
+      ['Slow drift', [[30000, MS.breathe(70, 90, 2500), MV.wave(4, 15, 8000)]]],
+      ['Quiet', [[20000, MS.park(90), MV.level(0)], [10000, MS.breathe(75, 90, 3000), MV.heartbeat(10, 50)]]],
+    ] },
+    soft: { icon: '☁️', label: 'Soft', combos: [
+      ['Feather', [[30000, MS.strokes(60, 90, 1300), MV.wave(8, 30, 5000)]]],
+      ['Cloud', [[30000, MS.breathe(40, 80, 1800), MV.swell(10, 35, 2500, 2500, 800)]]],
+      ['Gentle steps', [[30000, MS.strokes(55, 85, 1000), MV.steps([10, 18, 26, 18], 1500)]]],
+    ] },
+    tease: { icon: '😏', label: 'Tease', combos: [
+      ['Heartbeat tease', [[12000, MS.flick(88, 12, 250, 4, 1500), MV.heartbeat(35, 62)], [6000, MS.strokes(20, 90, 1500), MV.wave(10, 40, 4000)], [12000, MS.flick(85, 15, 220, 3, 2000), MV.heartbeat(40, 70)]]],
+      ['Stop-start', [[30000, MS.stopstart(30, 85, 500, 4, 2200), MV.bursts(55, 2000, 2200)]]],
+      ['Almost', [[9000, MS.ramp([65, 85, 700], [35, 95, 350]), MV.ramp(10, 70)], [3000, MS.park(90), MV.level(0)], [9000, MS.ramp([60, 85, 700], [30, 95, 320]), MV.ramp(15, 75)], [3000, MS.park(92), MV.level(0)]]],
+    ] },
+    wave: { icon: '🌊', label: 'Wave', combos: [
+      ['Ocean', [[30000, MS.strokes(10, 90, 1500), MV.wave(15, 75, 6000)]]],
+      ['Rolling', [[30000, MS.breathe(20, 85, 1100), MV.swell(20, 70, 2200, 2200, 400)]]],
+      ['Tide', [[15000, MS.strokes(40, 80, 1200), MV.wave(20, 55, 5000)], [15000, MS.strokes(10, 95, 1400), MV.wave(30, 85, 5000)]]],
+    ] },
+    gasp: { icon: '😮', label: 'Gasp', combos: [
+      ['Catch breath', [[30000, MS.gasp(), MV.gasp()]]],
+      ['Sudden', [[8000, MS.strokes(60, 85, 600), MV.level(20)], [1500, MS.strokes(5, 95, 250), MV.level(95)], [4000, MS.park(90), MV.level(5)], [8000, MS.strokes(55, 85, 650), MV.level(25)], [1500, MS.strokes(5, 95, 250), MV.level(100)], [4000, MS.park(90), MV.level(5)]]],
+      ['Hold it', [[5000, MS.strokes(70, 95, 300), MV.wave(30, 60, 1500)], [2500, MS.park(95), MV.level(0)], [1200, MS.strokes(5, 95, 280), MV.level(100)], [3000, MS.park(60), MV.level(15)], [5000, MS.strokes(70, 95, 300), MV.wave(30, 60, 1500)], [2500, MS.park(95), MV.level(0)], [1200, MS.strokes(5, 95, 280), MV.level(100)], [3000, MS.park(60), MV.level(15)]]],
+    ] },
+    build: { icon: '📈', label: 'Build', combos: [
+      ['Climb', [[30000, MS.ramp([65, 85, 900], [5, 95, 280]), MV.ramp(10, 95)]]],
+      ['Stairs', [[30000, MS.ramp([60, 85, 800], [10, 95, 320]), MV.steps([15, 30, 45, 60, 75, 90], 5000)]]],
+      ['Wave up', [[30000, MS.ramp([50, 80, 1200], [5, 95, 350]), MV.waveUp(10, 40, 100, 2500)]]],
+    ] },
+    buzz: { icon: '🐝', label: 'Buzz', combos: [
+      ['Hum', [[30000, MS.strokes(40, 60, 150), MV.buzz(75)]]],
+      ['Hive', [[30000, MS.strokes(30, 50, 130), MV.flicker(95, 60)]]],
+      ['Static', [[30000, MS.strokes(35, 55, 120), MV.random(55, 95)]]],
+    ] },
+    edge: { icon: '🎯', label: 'Edge', combos: [
+      ['Brink', [[30000, MS.edge(), MV.edge()]]],
+      ['Hold back', [[30000, MS.stopstart(10, 95, 280, 6, 3500), MV.bursts(90, 2400, 3500)]]],
+      ['Slow burn', [[22000, MS.ramp([50, 85, 900], [10, 95, 300]), MV.ramp(20, 90)], [6000, MS.park(92), MV.heartbeat(15, 50)]]],
+    ] },
+    frantic: { icon: '⚡', label: 'Frantic', combos: [
+      ['Rush', [[30000, MS.strokes(25, 75, 110), MV.buzz(90)]]],
+      ['Scramble', [[30000, MS.mix(), MV.random(60, 100)]]],
+      ['Flurry', [[30000, MS.stopstart(30, 70, 100, 10, 400), MV.pulses(100, 900, 250)]]],
+    ] },
+    steady: { icon: '🎵', label: 'Steady', combos: [
+      ['Metronome', [[30000, MS.strokes(20, 80, 600), MV.level(55)]]],
+      ['Groove', [[30000, MS.strokes(25, 85, 500), MV.pulses(65, 500, 500)]]],
+      ['Cruise', [[30000, MS.strokes(15, 85, 700), MV.wave(45, 65, 3000)]]],
+    ] },
+    step: { icon: '🪜', label: 'Step', combos: [
+      ['Staircase', [[30000, MS.steps([[70, 90], [55, 90], [40, 90], [25, 90], [10, 90]], 6000, 600), MV.steps([20, 35, 50, 65, 80], 6000)]]],
+      ['Up and down', [[30000, MS.steps([[70, 90], [50, 90], [30, 90], [10, 90], [30, 90], [50, 90]], 2500, 450), MV.steps([20, 40, 60, 80, 60, 40], 2500)]]],
+      ['Terraces', [[30000, MS.steps([[60, 90], [60, 90], [30, 90], [30, 90], [5, 95], [5, 95], [80, 92]], 2000, 500), MV.steps([30, 30, 60, 60, 90, 90, 0], 2000)]]],
+    ] },
+    bold: { icon: '🔥', label: 'Bold', combos: [
+      ['Pound', [[30000, MS.strokes(5, 70, 300), MV.bursts(100, 250, 250, 60)]]],
+      ['Full force', [[30000, MS.strokes(5, 95, 330), MV.level(95)]]],
+      ['Thunder', [[30000, MS.breathe(5, 95, 350), MV.swell(70, 100, 400, 400, 300)]]],
+    ] },
+    embrace: { icon: '🤗', label: 'Embrace', combos: [
+      ['Hug', [[30000, MS.breathe(10, 60, 1600), MV.wave(35, 70, 5000), MV.wave(35, 70, 5000, 0.5)]]],
+      ['Hold close', [[30000, MS.breathe(5, 30, 1200), MV.level(60), MV.swell(30, 75, 2000, 2000, 1000)]]],
+      ['Wrap', [[30000, MS.strokes(5, 55, 1400), MV.swell(40, 80, 1800, 1800, 1500), MV.wave(40, 80, 5400, 0.5)]]],
+    ] },
+    tip: { icon: '👆', label: 'Tip', combos: [
+      ['Flicks', [[30000, MS.flick(92, 12, 160, 6, 900), MV.flicker(70, 10)]]],
+      ['Circling', [[30000, MS.strokes(78, 98, 400), MV.wave(20, 55, 2000)]]],
+      ['Taps', [[30000, MS.flick(95, 20, 200, 2, 1100), MV.pulses(60, 200, 1100)]]],
+    ] },
+    long: { icon: '↕️', label: 'Long', combos: [
+      ['Full length', [[30000, MS.strokes(2, 98, 1300), MV.wave(25, 75, 2600)]]],
+      ['Slow and deep', [[30000, MS.breathe(2, 98, 1800), MV.swell(20, 80, 1800, 1800, 600)]]],
+      ['Long pulls', [[30000, MS.strokes(5, 95, 900), MV.pulses(70, 900, 900)]]],
+    ] },
+    surprise: { icon: '🎲', label: 'Surprise', combos: [
+      ['Wildcard', [[30000, MS.surprise(), MV.surprise()]]],
+      ['Jumble', [[8000, MS.mix(), MV.random(30, 100)], [4000, MS.park(90), MV.level(0)], [8000, MS.strokes(5, 95, 300), MV.pulses(100, 300, 200)], [6000, MS.flick(88, 15, 200, 3, 900), MV.heartbeat(40, 70)]]],
+      ['Plot twist', [[10000, MS.strokes(60, 90, 1200), MV.wave(10, 30, 4000)], [2500, MS.strokes(5, 95, 250), MV.level(100)], [8000, MS.breathe(40, 80, 1500), MV.heartbeat(30, 60)], [2500, MS.strokes(20, 80, 110), MV.buzz(90)]]],
+    ] },
+    grasp: { icon: '✊', label: 'Grasp', combos: [
+      ['Clutch', [[30000, MS.clutch(10, 90), MV.clutch(30, 95)]]],
+      ['Grip and release', [[30000, MS.stopstart(5, 40, 400, 3, 1500), MV.bursts(85, 1500, 1500, 10)]]],
+      ['Reach', [[30000, MS.reach(95, 10, 600, 1400), MV.swell(20, 90, 600, 1400, 900)]]],
+    ] },
+    squeeze: { icon: '🫳', label: 'Squeeze', combos: [
+      ['Tight', [[30000, MS.strokes(2, 25, 500), MV.bursts(85, 800, 400, 50)]]],
+      ['Pulse squeeze', [[30000, MS.strokes(5, 30, 300), MV.pulses(80, 300, 300), MV.pulses(80, 300, 300, true)]]],
+      ['Hold squeeze', [[30000, MS.breathe(2, 30, 700), MV.swell(40, 90, 700, 700, 900)]]],
+    ] },
+    heartbeat: { icon: '💓', label: 'Heartbeat', combos: [
+      ['Calm heart', [[30000, MS.breathe(60, 80, 500), MV.heartbeat(45, 60)]]],
+      ['Racing heart', [[30000, MS.strokes(40, 70, 250), MV.heartbeat(70, 110)]]],
+      ['Heart to heart', [[30000, MS.strokes(30, 80, 500), MV.heartbeat(55, 75), MV.heartbeat(55, 75, 400)]]],
+    ] },
+    ripple: { icon: '〰️', label: 'Ripple', combos: [
+      ['Ripples', [[30000, MS.strokes(50, 80, 250), MV.wave(30, 60, 800)]]],
+      ['Shimmer', [[30000, MS.strokes(40, 70, 180), MV.buzz(50)]]],
+      ['Rings', [[30000, MS.breathe(30, 80, 600), MV.swell(10, 60, 300, 900, 200)]]],
+    ] },
+    deep: { icon: '⬇️', label: 'Deep', combos: [
+      ['Depths', [[30000, MS.strokes(2, 45, 900), MV.level(65)]]],
+      ['Grind', [[30000, MS.strokes(2, 20, 600), MV.wave(55, 85, 2400)]]],
+      ['Plunge', [[30000, MS.reach(80, 2, 900, 400), MV.bursts(90, 800, 900, 30)]]],
+    ] },
+    peak: { icon: '🌋', label: 'Peak', combos: [
+      ['Summit', [[20000, MS.ramp([40, 85, 600], [2, 98, 260]), MV.ramp(40, 100)], [10000, MS.strokes(2, 98, 260), MV.level(100)]]],
+      ['Crescendo', [[30000, MS.ramp([30, 80, 500], [2, 98, 250]), MV.steps([50, 60, 70, 80, 90, 100], 5000)]]],
+      ['Release', [[18000, MS.strokes(5, 95, 280), MV.bursts(100, 700, 150, 80)], [8000, MS.breathe(50, 90, 1500), MV.wave(10, 40, 4000)], [4000, MS.park(85), MV.heartbeat(20, 55)]]],
+    ] },
+    afterglow: { icon: '🌅', label: 'Afterglow', combos: [
+      ['Glow', [[30000, MS.breathe(60, 90, 2500), MV.wave(5, 25, 7000)]]],
+      ['Linger', [[30000, MS.strokes(50, 85, 2000), MV.heartbeat(18, 50)]]],
+      ['Warm', [[30000, MS.park(80), MV.swell(5, 20, 3000, 4000, 2000)]]],
+    ] },
+    playful: { icon: '🎈', label: 'Playful', combos: [
+      ['Tickle', [[30000, MS.flick(85, 20, 150, 3, 600), MV.flicker(70, 0)]]],
+      ['Bounce', [[30000, MS.mix(), MV.pulses(60, 200, 300)]]],
+      ['Peekaboo', [[30000, MS.stopstart(40, 90, 300, 2, 900), MV.bursts(70, 600, 900)]]],
+    ] },
+  };
+
+  // Build a combo: a stroke track and one or two vibration tracks, aligned at every section.
+  function buildMood(sections, r) {
+    const s = moodTrack(85, true), v1 = moodTrack(0, false), v2 = moodTrack(0, false);
+    let end = 0, two = false;
+    for (const [ms, sf, vf, vf2] of sections) {
+      end += Math.round(jit(r, ms));
+      sf(s, end, r); vf(v1, end, r);
+      if (vf2) { two = true; vf2(v2, end, r); }
+      const m = Math.max(s.t, v1.t, v2.t, end);
+      for (const b of [s, v1, v2]) if (b.t < m) b.hold(m - b.t);
+      end = m;
+    }
+    v1.to(0, 300); v2.to(0, 300); s.hold(300);
+    return { stroke: s.done(), vibe: two ? [v1.done(), v2.done()] : [v1.done()] };
+  }
 
   // Outputs: up to two devices (or motors) follow a recorder live. A target
   // is "deviceId|motor": motor 0 or 1, b = both motors, l = linear (stroker).
@@ -701,7 +1235,15 @@
           .stsl input{flex:1;min-width:0;height:24px;margin:0}
           .stsl b{flex:0 0 42px;text-align:right;font-size:12.5px;color:#bef2ff;font-variant-numeric:tabular-nums}
           .st{position:relative}
-          .ctltabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+          .ctltabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px}
+          .moodgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px}
+          .moodgrid button.moodbtn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:60px;padding:4px;font-size:12px;background:#18233d}
+          .moodgrid button.moodbtn span{font-size:20px;line-height:1}
+          .moodgrid button.moodbtn.on{background:linear-gradient(110deg,#ff5c7a,#ff8aa0);color:#2a0710;border-color:transparent}
+          .moodrow{display:flex;align-items:center;gap:8px;margin-top:6px}
+          .moodrow label{margin:0;flex:0 0 auto}
+          .moodrow input{flex:1}
+          .moodrow b{flex:0 0 44px;text-align:right;font-size:12.5px;color:#bef2ff}
           .ctltabs button{min-height:44px;font-size:14.5px;background:#24395a;color:#bef2ff}
           .ctltabs button.on{background:linear-gradient(110deg,#2fbfa9,#67e0c8);color:#062a24;border-color:transparent}
           .rpbox{position:relative}
@@ -722,6 +1264,7 @@
           .outrow.solo{grid-template-columns:1fr}
           .outrow.solo.take{grid-template-columns:1fr auto}
           .outrow button.outtake{min-height:38px;background:rgba(255,207,138,.12);border-color:rgba(255,207,138,.45);color:#ffcf8a}
+          .outai{grid-column:1/-1;font-size:11.5px;color:#ffcf8a;font-weight:700;margin:-2px 2px 0}
           .outnote{font-size:11px;color:var(--muted);margin-top:4px}
           .stside button.stlatch{min-height:40px;padding:0 6px;font-size:11.5px;border-radius:9px;background:#141d33;color:var(--muted)}
           .stside button.stlatch.on{background:linear-gradient(110deg,#ff5c7a,#ff8aa0);color:#2a0710;border-color:transparent}
@@ -780,7 +1323,14 @@
           </section>
           <section data-part="outputs" id="outhome" class="off">
             <div id="ctlbox">
-              <div class="ctltabs" role="tablist"><button type="button" data-ctl="record">● Record</button><button type="button" data-ctl="replay">▶ Replay</button></div>
+              <div class="ctltabs" role="tablist"><button type="button" data-ctl="record">● Record</button><button type="button" data-ctl="replay">▶ Replay</button><button type="button" data-ctl="mood">◎ Mood</button></div>
+              <div id="moodbox" hidden>
+                <div class="moodgrid">${Object.entries(MOODS).map(([k, m]) => `<button type="button" class="moodbtn" data-mood="${k}"><span>${m.icon}</span>${m.label}</button>`).join('')}</div>
+                <div class="rpbar" id="moodbar"><i id="moodfill"></i></div>
+                <div class="rpinfo" id="moodinfo"></div>
+                <div class="moodrow"><label>Strength</label><input id="moodstr" type="range" min="20" max="100" step="5" value="100"><b id="moodstrv">100%</b></div>
+                <div class="row" style="margin-top:6px"><button id="moodnext" type="button">🎲 Another</button><button id="moodstop" type="button" class="stop">■ Stop</button></div>
+              </div>
               <div class="rpbox" id="rpbox" hidden>
                 <button id="rppick" type="button" class="rppick">📂 <span id="rpname">Choose a script…</span></button>
                 <div class="rppop" id="rppop" hidden><div id="rplist"></div><label class="rpfile">From a file on this device: <input id="rpfile" type="file" accept=".funscript,.json,application/json" multiple></label></div>
@@ -791,8 +1341,8 @@
             </div>
             <div class="outbox" id="outbox">
               <label>Devices, and how each follows (used for recording, replay, library and video)</label>
-              <div class="outrow" data-row="0"><select class="outt" aria-label="First device"></select><select class="outm" aria-label="How the first device follows"></select><button class="outtake" type="button" hidden>Take control</button></div>
-              <div class="outrow" data-row="1"><select class="outt" aria-label="Second device"></select><select class="outm" aria-label="How the second device follows"></select><button class="outtake" type="button" hidden>Take control</button></div>
+              <div class="outrow" data-row="0"><select class="outt" aria-label="First device"></select><select class="outm" aria-label="How the first device follows"></select><div class="outai" hidden></div><button class="outtake" type="button" hidden>Take control</button></div>
+              <div class="outrow" data-row="1"><select class="outt" aria-label="Second device"></select><select class="outm" aria-label="How the second device follows"></select><div class="outai" hidden></div><button class="outtake" type="button" hidden>Take control</button></div>
               <div class="outnote" id="outnote"></div>
             </div>
           </section>
@@ -1046,9 +1596,15 @@
       const values = this._outs.map((o, i) => {
         const p = parseTarget(this._outTargetValue(i));
         if (!p || (!full && p.motor !== 'l')) return null;
+        if (fromScript && this._rp.raw.mood && p.motor !== 'l') return this._mapScript(this._rp.raw, this._rp.t, {})[i];
+        if (o.m === FOLLOW_AI && p.motor !== 'l') {
+          // A vibrator follows the stroke by feel: from the script, or live.
+          if (fromScript) return this._mapScript(this._rp.raw, this._rp.t, this._rp.convs || (this._rp.convs = {}))[i];
+          return this._aiStroke(i, st.pos, st.vel);
+        }
         if (p.motor === 'l' || o.m === FOLLOW_STROKER) {
           if (p.motor !== 'l') return Math.round(st.pos);   // stroker mode on a vibrator: position
-          if (fromScript) return this._rpGoal() || { goal: st.pos, dur: 120 };
+          if (fromScript) return this._goalFrom(i, this._rp.raw, this._rp.t, this._rpSpeed(), this._rp.convs || (this._rp.convs = {})) || { goal: st.pos, dur: 120 };
           if (speed === null) return { goal: st.pos, dur: 120 };
           const goal = st.dir > 0 ? st.upper : st.lower;
           return { goal, dur: Math.abs(goal - st.pos) / strokeVel(this._stPcts[speed]) };
@@ -1377,7 +1933,9 @@
     _gpRec() {
       const $ = this._el;
       const target = this._gpTarget();
-      if ((target === 'stroke' || target === 'record') && this._ctl === 'replay') {
+      if ((target === 'stroke' || target === 'record') && this._ctl === 'mood') {
+        if (this._rp.playing) this._rpStop(); else if (this._mood) this._moodNext(true);
+      } else if ((target === 'stroke' || target === 'record') && this._ctl === 'replay') {
         this._rpToggle();
       } else if (target === 'stroke') {
         if (this._stRecording) this._stStop(); else this._stStart();
@@ -1708,10 +2266,11 @@
         const values = this._outs.map((o, i) => {
           const p = parseTarget(this._outTargetValue(i));
           if (!p) return null;
+          const cache = this._vconvs || (this._vconvs = {});
           if (p.motor === 'l') {
-            const next = script && nextAction(this._vraw.actions, ms);
-            return next ? { goal: next.pos, dur: (next.at - ms) / (video.playbackRate || 1) } : { goal: value, dur: 120 };
+            return (script && this._goalFrom(i, this._vraw, ms, video.playbackRate, cache)) || { goal: value, dur: 120 };
           }
+          if (o.m === FOLLOW_AI) return script ? this._mapScript(this._vraw, ms, cache)[i] : this._aiStroke(i, value, this._vVel);
           if (o.m === FOLLOW_STROKER) return value;
           return Math.min(100, Math.max(0, liveIntensity(o.m, value, this._vVel)));
         });
@@ -1734,8 +2293,7 @@
           if (i && !this._twoPads) return null;
           const p = parseTarget(this._outTargetValue(i));
           if (p && p.motor === 'l') {
-            const next = this._vraw && nextAction(this._vraw.actions, ms);
-            return next ? { goal: next.pos, dur: (next.at - ms) / (video.playbackRate || 1) } : { goal: this._vals[i], dur: 150 };
+            return (this._vraw && this._goalFrom(i, this._vraw, ms, video.playbackRate, this._vconvs || (this._vconvs = {}))) || { goal: this._vals[i], dur: 150 };
           }
           return this._vals[i];
         });
@@ -2128,13 +2686,23 @@
       this._rp = { raw: null, conv: null, name: '', lib: null, playing: false, t: 0, len: 0, last: 0, outAt: 0 };
       let ctl = null;
       try { ctl = localStorage.getItem(`oggstudio_ctl:${this.localName}`); } catch (_) { /* private mode */ }
-      this._ctl = ctl === 'replay' ? 'replay' : 'record';
+      this._ctl = ['replay', 'mood'].includes(ctl) ? ctl : 'record';
       for (const b of this.shadowRoot.querySelectorAll('.ctltabs button')) b.addEventListener('click', () => this._setCtl(b.dataset.ctl));
       $('rpspeed').replaceChildren(...SPEEDS.map((x) => new Option(x, x)));
       $('rpspeed').value = '1x';
       $('rppick').addEventListener('click', () => this._rpPicker(!$('rppop').hidden ? false : true));
       $('rpfile').addEventListener('change', () => this._rpFromFiles());
       $('rpplay').addEventListener('click', () => this._rpToggle());
+      for (const b of this.shadowRoot.querySelectorAll('.moodbtn')) b.addEventListener('click', () => this._moodPlay(b.dataset.mood));
+      $('moodnext').addEventListener('click', () => { if (this._mood) this._moodNext(!this._rp.playing); });
+      $('moodstop').addEventListener('click', () => this._rpStop());
+      let strength = 100;
+      try { strength = Number(localStorage.getItem('oggstudio_mood_strength')) || 100; } catch (_) { /* private mode */ }
+      $('moodstr').value = String(strength);
+      const showStrength = () => { $('moodstrv').textContent = `${$('moodstr').value}%`; };
+      showStrength();
+      $('moodstr').addEventListener('input', showStrength);
+      $('moodstr').addEventListener('change', () => { try { localStorage.setItem('oggstudio_mood_strength', $('moodstr').value); } catch (_) { /* private mode */ } });
       const bar = $('rpbar');
       const seek = (e) => { const r = bar.getBoundingClientRect(); this._rp.t = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * this._rp.len; this._rpShow(); if (this._rp.playing) this._rpTick(); };
       bar.addEventListener('pointerdown', (e) => { if (!this._rp.raw) return; e.preventDefault(); capture(bar, e); seek(e); bar.dataset.drag = '1'; });
@@ -2159,6 +2727,7 @@
       } else {
         this._rpStop();
       }
+      if (mode !== 'mood') this._mood = null;
       this._ctl = mode;
       try { localStorage.setItem(`oggstudio_ctl:${this.localName}`, mode); } catch (_) { /* private mode */ }
       this._ctlShow();
@@ -2169,8 +2738,9 @@
       const replay = this._ctl === 'replay';
       for (const b of this.shadowRoot.querySelectorAll('.ctltabs button')) b.classList.toggle('on', b.dataset.ctl === this._ctl);
       $('rpbox').hidden = !replay;
+      $('moodbox').hidden = this._ctl !== 'mood';
       this._outRender();
-      for (const id of ['rec', 'timer', 'strec', 'liverow', 'stliverow']) $(id).hidden = replay;
+      for (const id of ['rec', 'timer', 'strec', 'liverow', 'stliverow']) $(id).hidden = this._ctl !== 'record';
       this._rpShow();
     }
 
@@ -2225,12 +2795,32 @@
     // takes a second track if there is one) mapped by that output's way of
     // following. Position (and a stroker) passes it straight through.
     _mapScript(raw, ms, cache) {
+      if (raw.mood) {
+        // A mood: vibrators get its vibration tracks (scaled by Strength), strokers its strokes.
+        const k = Number(this._el('moodstr').value || 100) / 100;
+        return [0, 1].map((i) => {
+          const p = parseTarget(this._outTargetValue(i));
+          this._aiLabel(i, null);
+          if (p && p.motor === 'l') return sampleAt(raw.actions, ms);
+          return sampleAt(raw.mood.vibe[i] || raw.mood.vibe[0], ms) * k;
+        });
+      }
       return [0, 1].map((i) => {
         const v1 = i && raw.channels && raw.channels.V1 && raw.channels.V1.actions;
         const second = Boolean(v1 && v1.length);
         const track = second ? v1 : raw.actions;
         const p = parseTarget(this._outTargetValue(i));
         const m = this._outs[i].m;
+        if (m === FOLLOW_AI) {
+          // Stroke into a vibrator, or vibration into a stroker: by feel. Same kind: as it is.
+          const linear = Boolean(p && p.motor === 'l');
+          if (linear === isStroke(raw)) { this._aiLabel(i, null); return sampleAt(track, ms); }
+          const key = `ai:${second ? 1 : 0}:${linear ? 's' : 'v'}`;
+          if (!cache[key]) cache[key] = linear ? aiVibeToStroke(track) : aiStrokeToVibe(track);
+          this._aiLabel(i, moodAt(cache[key].moods, ms));
+          return sampleAt(cache[key].actions, ms);
+        }
+        this._aiLabel(i, null);
         if (m === FOLLOW_STROKER || m === 'position' || (p && p.motor === 'l')) return sampleAt(track, ms);
         const key = `${second ? 1 : 0}:${m}`;
         if (!cache[key]) cache[key] = toIntensity(track, m);
@@ -2238,10 +2828,63 @@
       });
     }
 
+    // A stroker's next move from a script at ms: its next action (or, with AI
+    // feel on a vibration script, the next planned stroke) and how long to take.
+    _goalFrom(i, raw, ms, rate, cache) {
+      const v1 = i && raw.channels && raw.channels.V1 && raw.channels.V1.actions;
+      const second = Boolean(v1 && v1.length);
+      let src = second ? v1 : raw.actions;
+      if (this._outs[i].m === FOLLOW_AI && !isStroke(raw)) {
+        const key = `ai:${second ? 1 : 0}:s`;
+        if (!cache[key]) cache[key] = aiVibeToStroke(src);
+        src = cache[key].actions;
+        this._aiLabel(i, moodAt(cache[key].moods, ms));
+      }
+      const next = nextAction(src, ms);
+      return next ? { goal: next.pos, dur: (next.at - ms) / (rate || 1) } : null;
+    }
+
+    // Live AI feel per output (one engine each, restarted when stopped).
+    _aiLiveFor(i, kind) {
+      this._aiLive = this._aiLive || [null, null];
+      if (!this._aiLive[i] || this._aiLive[i].kind !== kind) this._aiLive[i] = new AiLive(kind);
+      return this._aiLive[i];
+    }
+
+    // Stroke in -> vibration level by feel (stroke recorder, stroke video slider).
+    _aiStroke(i, pos, vel) {
+      const eng = this._aiLiveFor(i, 'stroke');
+      const v = eng.level(performance.now(), pos, Math.sign(vel));
+      this._aiLabel(i, eng.label);
+      return v;
+    }
+
+    // What each output's AI feel is doing now, shown under it.
+    _aiLabel(i, label) {
+      this._aiLabels = this._aiLabels || [null, null];
+      this._aiLabels[i] = label;
+      const now = performance.now();
+      if (now - (this._aiShownAt || 0) < 250 || !this._el) return;
+      this._aiShownAt = now;
+      [...this.shadowRoot.querySelectorAll('.outai')].forEach((el, j) => {
+        const l = this._outs[j].m === FOLLOW_AI ? this._aiLabels[j] : null;
+        el.hidden = !l;
+        if (l && el.textContent !== `✨ ${l}`) el.textContent = `✨ ${l}`;
+      });
+    }
+
     // A live value (pad, slider) mapped by an output's way of following.
     _mapLive(i, value, vel) {
       const p = parseTarget(this._outTargetValue(i));
       const m = this._outs[i].m;
+      if (p && p.motor === 'l' && m === FOLLOW_AI) {
+        // Vibration in, stroker out: strokes planned from the vibration's mood.
+        const eng = this._aiLiveFor(i, 'vibe');
+        const move = eng.move(performance.now(), value);
+        this._aiLabel(i, eng.label);
+        return move;
+      }
+      if (m === FOLLOW_AI) { this._aiLabel(i, null); return value; }   // vibration to a vibrator: as it is
       if (p && p.motor === 'l') return { goal: value, dur: 150 };
       if (m === FOLLOW_STROKER || m === 'position') return value;
       return Math.min(100, Math.max(0, liveIntensity(m, value, vel)));
@@ -2280,6 +2923,31 @@
     }
 
     _rpToggle() { if (this._rp.playing) this._rpStop(); else this._rpPlay(); }
+
+    // A mood: one of its three combos at random (a different one each time).
+    _moodPlay(key) {
+      if (this._mood && this._mood.key === key && this._rp.playing) { this._rpStop(); return; }   // tap again: stop
+      this._setCtl('mood');
+      this._mood = { key, combo: -1 };
+      this._moodNext(true);
+    }
+
+    _moodNext(start) {
+      const mood = MOODS[this._mood.key];
+      let i;
+      do { i = Math.floor(Math.random() * mood.combos.length); } while (mood.combos.length > 1 && i === this._mood.combo);
+      this._mood.combo = i;
+      const [name, sections] = mood.combos[i];
+      const built = buildMood(sections, aiRandom((Math.random() * 2 ** 32) >>> 0));
+      const title = `${mood.label}: ${name}`;
+      const script = { version: '1.0', inverted: false, range: 100, actions: built.stroke,
+        metadata: { creator: 'OggStudio', type: 'stroke', title }, mood: { vibe: built.vibe } };
+      const rp = this._rp;
+      if (!start && rp.playing) { rp.raw = script; rp.name = title; rp.len = duration(script); rp.t = 0; rp.convs = {}; this._rpShow(); return; }
+      this._rpLoad(script, title, null);
+      this._el('rpspeed').value = '1x';
+      this._rpPlay();
+    }
 
     _rpPlay() {
       const rp = this._rp;
@@ -2329,6 +2997,7 @@
       const now = performance.now();
       rp.t += Math.min(250, now - rp.last) * this._rpSpeed();
       rp.last = now;
+      if (rp.t >= rp.len && rp.raw.mood && this._mood) { this._moodNext(false); return; }   // next combo of the mood
       if (rp.t >= rp.len) {
         if (this._el('rploop').checked && rp.len > 0) rp.t = 0;
         else { rp.t = rp.len; this._rpStop(); this._toast(`Replay of "${rp.name}" finished.`); return; }
@@ -2345,7 +3014,7 @@
           if (now - rp.outAt >= 100) rp.outAt = now;
           const out = [0, 1].map((i) => {
             if (i && !this._twoPads) return null;
-            if (targets[i] && targets[i].motor === 'l') return (this._padActive && this._padActive[i]) ? { goal: this._vals[i], dur: 150 } : (this._rpGoal() || { goal: this._vals[i], dur: 150 });
+            if (targets[i] && targets[i].motor === 'l') return (this._padActive && this._padActive[i]) ? { goal: this._vals[i], dur: 150 } : (this._goalFrom(i, rp.raw, rp.t, this._rpSpeed(), rp.convs) || { goal: this._vals[i], dur: 150 });
             return this._vals[i];
           });
           this._outApply(out, 0.6);
@@ -2366,6 +3035,12 @@
       if (rp.playing) parts.push(this._strokeKind ? 'touch the bar or a speed to take over' : 'touch a pad to take over');
       $('rpinfo').textContent = parts.join(' · ');
       $('rpplay').textContent = rp.playing ? '■ Stop' : '▶ Replay';
+      const mood = this._mood && MOODS[this._mood.key];
+      for (const b of this.shadowRoot.querySelectorAll('.moodbtn')) b.classList.toggle('on', Boolean(mood && rp.playing && b.dataset.mood === this._mood.key));
+      $('moodfill').style.width = mood && rp.len ? `${Math.min(100, rp.t / rp.len * 100)}%` : '0';
+      $('moodinfo').textContent = mood
+        ? `${mood.icon} ${rp.name} (${this._mood.combo + 1} of ${mood.combos.length}) · ${fmt(rp.t)} / ${fmt(rp.len)}${rp.playing ? '' : ' · stopped'}`
+        : 'Pick how you want it to feel. Each mood has three combos, picked at random; a new one follows when it ends.';
       $('rpplay').classList.toggle('stop', rp.playing);
     }
 
@@ -2502,6 +3177,7 @@
       this._claimAt = {};
       this._outLast = {};
       this._linLast = {};
+      this._aiLive = [null, null];
     }
 
     _outRender() {
@@ -2533,11 +3209,12 @@
         labels.push(dev ? (p.motor === 'b' ? dev.name : p.motor === 'l' ? `${dev.name} (stroker)` : `${dev.name} m${Number(p.motor) + 1}`) : `Pad ${i + 1}`);
         // How it follows (stroke recorder): a stroker by position, a vibrator by a run mode.
         const msel = row.querySelector('.outm');
-        const modes = p && p.motor === 'l' ? [[FOLLOW_STROKER, 'Stroker: follows the position']]
-          : [...Object.entries(RUN_MODES).map(([v, t]) => [v, t.replace(/ \(vibration scripts\)/, '')]), [FOLLOW_STROKER, 'Stroker: level = position']];
+        const modes = p && p.motor === 'l'
+          ? [[FOLLOW_STROKER, 'Stroker: follows the position'], [FOLLOW_AI, "✨ AI feel: strokes from a vibration's mood"]]
+          : [[FOLLOW_AI, "✨ AI feel: patterns from the stroke's mood"], ...Object.entries(RUN_MODES).map(([v, t]) => [v, t.replace(/ \(vibration scripts\)/, '')]), [FOLLOW_STROKER, 'Stroker: level = position']];
         const mkey = JSON.stringify(modes);
         if (msel.dataset.key !== mkey) { msel.replaceChildren(...modes.map(([v, t]) => new Option(t, v))); msel.dataset.key = mkey; }
-        if (!modes.some(([v]) => v === this._outs[i].m)) this._outs[i].m = modes[0][0];
+        if (!modes.some(([v]) => v === this._outs[i].m)) this._outs[i].m = p && p.motor !== 'l' && this._outs[i].m !== FOLLOW_AI ? 'position' : modes[0][0];
         msel.value = this._outs[i].m;
         const owner = dev && this._claimedBy(dev);
         const take = row.querySelector('.outtake');

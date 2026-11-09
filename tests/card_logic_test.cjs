@@ -7,8 +7,8 @@ global.window = globalThis;
 const src = fs.readFileSync(path.join(__dirname, '../custom_components/oggstudio/frontend/oggstudio-card.js'), 'utf8');
 const grab = (start, end) => src.slice(src.indexOf(start), src.indexOf(end));
 // eslint-disable-next-line no-eval
-const { isStroke, STROKE_SPEEDS, STROKE_LIMITS_RESET, parseTarget } = eval(grab('  const b64 =', '  // Run modes:') + grab('  // Run modes:', '  const duration =')
-  + '; globalThis.toIntensity = toIntensity; ({ isStroke, STROKE_SPEEDS, STROKE_LIMITS_RESET, parseTarget })');
+const { isStroke, STROKE_SPEEDS, STROKE_LIMITS_RESET, parseTarget, MOODS } = eval(grab('  const b64 =', '  // Run modes:') + grab('  // Run modes:', '  const duration =')
+  + '; globalThis.toIntensity = toIntensity; ({ isStroke, STROKE_SPEEDS, STROKE_LIMITS_RESET, parseTarget, MOODS })');
 
 // Card variants: each tag shows a valid subset of the parts, and every part needs a take box to save into.
 {
@@ -260,6 +260,104 @@ assert.strictEqual(runScript(two, 'speed'), two, 'vibration scripts play unchang
   let p2 = 0, t = 0, caught = false;
   while (!caught && t < 5000) { const q = approachStep(p2, 100, V(30), 20); p2 = q.pos; caught = q.caught; t += 20; }
   assert.ok(t >= 820 && t <= 860, 'a full-range jump at 30% takes about 0.83 s, not an instant');
+}
+
+// AI feel: moods read from the intent of the last few seconds.
+{
+  // Stroke windows: triangle strokes of a given length and half-stroke time, sampled every 50 ms.
+  const strokes = (amp, halfMs, secs = 3, center = 50) => Array.from({ length: secs * 20 + 1 }, (_, k) => {
+    const ph = (k * 50 / halfMs) % 2; return center - amp / 2 + amp * (ph < 1 ? ph : 2 - ph);
+  });
+  const mood = (w, prev) => strokeMood(strokeFeatures(w), prev);
+  assert.strictEqual(mood(Array(61).fill(40)), 'rest', 'still');
+  assert.strictEqual(mood(Array(61).fill(40), 'intense'), 'edge', 'stopping right after intense');
+  assert.strictEqual(mood(strokes(20, 600)), 'tease', 'slow short strokes');
+  assert.strictEqual(mood(strokes(80, 1200)), 'glide', 'slow long strokes');
+  assert.strictEqual(mood(strokes(60, 400)), 'rhythm', 'steady medium strokes');
+  assert.strictEqual(mood(strokes(80, 250)), 'intense', 'fast long strokes');
+  assert.strictEqual(mood(strokes(20, 100)), 'frantic', 'very fast short strokes');
+  const speeding = [...strokes(30, 800, 1.5), ...strokes(70, 250, 1.5).map((x) => x)];
+  assert.strictEqual(mood(speeding), 'build', 'speeding up');
+
+  // A script that teases, settles into rhythm, goes intense, then stops.
+  const seg = (amp, halfMs, ms, t0) => { const out = []; for (let t = 0; t < ms; t += halfMs) out.push({ at: t0 + t, pos: (out.length % 2 ? 50 + amp / 2 : 50 - amp / 2) }); return out; };
+  const script = [...seg(20, 600, 8000, 0), ...seg(60, 400, 8000, 8000), ...seg(85, 250, 8000, 16000), { at: 24000, pos: 50 }, { at: 30000, pos: 50 }];
+  const v1 = aiStrokeToVibe(script), v2 = aiStrokeToVibe(script);
+  assert.deepStrictEqual(v1, v2, 'a script always maps the same way (seeded)');
+  assert.ok(v1.actions.every((x) => x.pos >= 0 && x.pos <= 100), 'levels within 0-100');
+  const order = [...new Set(v1.moods.map((m) => m.label.split(' · ')[0]))];
+  for (const [a, b] of [['tease', 'rhythm'], ['rhythm', 'intense']]) assert.ok(order.indexOf(a) >= 0 && order.indexOf(a) < order.indexOf(b), `${a} before ${b}: ${order}`);
+  assert.ok(['edge', 'rest'].includes(order[order.length - 1]), 'ends calm: ' + order);
+  const avg = (from, to) => { const xs = []; for (let t = from; t < to; t += 50) xs.push(sampleAt(v1.actions, t)); return xs.reduce((a, b) => a + b, 0) / xs.length; };
+  assert.ok(avg(17000, 23500) > avg(1500, 7500) + 25, 'intense feels much stronger than tease');
+  // Moods hold for a moment and patterns do not flicker.
+  for (let i = 1; i < v1.moods.length; i++) assert.ok(v1.moods[i].at - v1.moods[i - 1].at >= 500, 'no mood flicker');
+
+  // Vibration windows.
+  const wave = (fn) => Array.from({ length: 61 }, (_, k) => fn(k * 0.05));
+  const vm = (fn) => vibeMood(vibeFeatures(wave(fn)));
+  assert.strictEqual(vm(() => 0), 'rest');
+  assert.strictEqual(vm(() => 85), 'strong', 'steady high');
+  assert.strictEqual(vm(() => 50), 'steady');
+  assert.strictEqual(vm((t) => ((t % 1) < 0.12 || ((t % 1) > 0.2 && (t % 1) < 0.3) ? 40 : 0)), 'tease', 'heartbeat');
+  assert.strictEqual(vm((t) => 50 + 30 * Math.sin(2 * Math.PI * 0.3 * t)), 'wave', 'smooth swells');
+  assert.strictEqual(vm((t) => ((t * 1.5) % 1 < 0.5 ? 80 : 0)), 'pulse', 'on/off pulses');
+  assert.strictEqual(vm((t) => 78 + 17 * Math.sign(Math.sin(2 * Math.PI * 8 * t))), 'buzz', 'fast high buzz');
+  assert.strictEqual(vm((t) => 10 + 20 * t), 'build', 'rising');
+
+  // Vibration script -> planned strokes: in range, never faster than the device's top speed.
+  const vib = [];
+  for (let t = 0; t <= 10000; t += 100) vib.push({ at: t, pos: (t % 1000) < 120 || ((t % 1000) > 200 && (t % 1000) < 300) ? 35 : 0 });   // heartbeat tease
+  for (let t = 10100; t <= 20000; t += 100) vib.push({ at: t, pos: 88 });                                                          // strong
+  const s1 = aiVibeToStroke(vib), s2 = aiVibeToStroke(vib);
+  assert.deepStrictEqual(s1, s2, 'seeded');
+  assert.ok(s1.actions.every((x) => x.pos >= 0 && x.pos <= 100));
+  for (let i = 1; i < s1.actions.length; i++) {
+    const a0 = s1.actions[i - 1], a1 = s1.actions[i];
+    assert.ok(Math.abs(a1.pos - a0.pos) / Math.max(1, a1.at - a0.at) <= 0.4 + 0.02, `stroke ${i} within top speed`);
+  }
+  const stats = (from, to) => {
+    const xs = s1.actions.filter((x) => x.at >= from && x.at < to);
+    const lens = xs.slice(1).map((x, i) => Math.abs(x.pos - xs[i].pos)).filter((d) => d > 2);
+    return { len: lens.reduce((a, b) => a + b, 0) / (lens.length || 1), n: lens.length };
+  };
+  const tease = stats(2000, 9500), strong = stats(12500, 19500);
+  assert.ok(strong.len > tease.len + 20, `strong strokes are longer (${tease.len.toFixed(0)} vs ${strong.len.toFixed(0)})`);
+  assert.ok(strong.n > tease.n, 'and more of them');
+  const moods = [...new Set(s1.moods.map((m) => m.label.split(' · ')[0]))];
+  assert.ok(moods.includes('tease') && moods.includes('strong'), 'moods: ' + moods);
+}
+
+// Moods: every mood has three combos; tracks stay in range, aligned, within the stroker's top speed.
+{
+  const keys = Object.keys(MOODS);
+  for (const k of ['rest', 'soft', 'tease', 'wave', 'gasp', 'build', 'buzz', 'edge', 'frantic', 'steady', 'step', 'bold', 'embrace', 'tip', 'long', 'surprise', 'grasp', 'squeeze']) assert.ok(keys.includes(k), 'mood ' + k);
+  assert.ok(keys.length >= 24);
+  let n = 0;
+  for (const [key, mood] of Object.entries(MOODS)) {
+    assert.strictEqual(mood.combos.length, 3, key + ' has three combos');
+    for (const [name, sections] of mood.combos) {
+      for (const seed of [1, 99]) {
+        const b = buildMood(sections, aiRandom(seed));
+        const end = b.stroke[b.stroke.length - 1].at;
+        assert.ok(end >= 20000 && end <= 45000, `${key}/${name}: ${end} ms long`);
+        for (const tr of b.vibe) {
+          assert.ok(tr.every((x) => x.pos >= 0 && x.pos <= 100), `${key}/${name} vibe in range`);
+          assert.ok(Math.abs(tr[tr.length - 1].at - end) <= 300, `${key}/${name} tracks aligned`);
+          assert.strictEqual(tr[tr.length - 1].pos, 0, 'ends quiet');
+        }
+        for (let i = 1; i < b.stroke.length; i++) {
+          const a0 = b.stroke[i - 1], a1 = b.stroke[i];
+          assert.ok(a1.at >= a0.at && Math.abs(a1.pos - a0.pos) / Math.max(1, a1.at - a0.at) <= 0.4 + 1e-9, `${key}/${name} stroke within top speed`);
+        }
+        n++;
+      }
+    }
+  }
+  assert.strictEqual(n, keys.length * 3 * 2);
+  // Alternating moods give the second device its own track.
+  assert.strictEqual(buildMood(MOODS.squeeze.combos[1][1], aiRandom(3)).vibe.length, 2);
+  assert.strictEqual(buildMood(MOODS.tease.combos[0][1], aiRandom(3)).vibe.length, 1);
 }
 
 // Outputs: two outputs become one command per device.

@@ -67,6 +67,20 @@ starts). The take's **▶ Play now** and the Library's **▶ Play** use Replay t
 library's speed and Loop. Automations can still play inside Ogg's own frame loop with the
 `oggstudio.play` service.
 
+## Moods
+
+The **◎ Mood** tab (beside Record and Replay) has a button for how you want it to feel: Rest,
+Soft, Tease, Wave, Gasp, Build, Buzz, Edge, Frantic, Steady, Step, Bold, Embrace, Tip, Long,
+Surprise, Grasp, Squeeze, Heartbeat, Ripple, Deep, Peak, Afterglow and Playful.
+
+Each mood has three hand-made combos. Each combo has strokes for a stroker and a vibration
+track for vibrators, built in sections that stay in step; Embrace, Squeeze and Heartbeat
+give a second vibrator its own alternating track. Tapping a mood plays one of its combos at
+random, with small variations, and a different combo follows when it ends (about 30 s each).
+🎲 Another switches now, tapping the lit mood (or ■ Stop) stops, and **Strength** scales the
+vibration. A mood is its own feel, so it ignores each device's follow type. Strokes stay
+within the device's top speed.
+
 ## Devices
 
 At the top of every card, the **Devices** box lists up to two outputs and how each one follows.
@@ -77,6 +91,20 @@ two toys, or a stroker and a vibrator. Pick **No device (record only)** to recor
 
 * **Vibrate recorder:** choosing a second output adds a second pad, and the take gets two tracks
   (the second is played on motor 2).
+* **✨ AI feel** maps by mood instead of by numbers, so a stroker and a vibrator can follow each
+  other across toy types, live or from scripts:
+  * *Stroke into a vibrator.* It reads stroke speed, rate, length, depth, pauses and whether
+    it is speeding up. From that it picks a mood: rest, edge (stopping just after a peak),
+    tease, glide, rhythm, build, intense or frantic. Each mood plays a matching pattern, such
+    as a heartbeat or flicker for tease, a swell deeper in for glide, a pulse on every
+    downstroke for rhythm, pounding or surges for intense, and flutter or buzz for frantic.
+  * *Vibration into a stroker.* It reads level, swing, pulse rate and rise. From that it
+    picks rest, tease, wave, pulse, steady, strong, buzz or build, and plans matching strokes
+    within the device's top speed. Examples: short tip strokes with pauses for tease, one
+    stroke per pulse, length following a swell, deep and fast for strong.
+  * A new mood has to last about a second before it switches, and patterns re-roll every
+    10–24 s. Scripts use a fixed seed, so they preview the same way each time. The current
+    mood shows under the device (for example "✨ tease · heartbeat").
 * **How each follows** applies to everything: a vibrator by one of the [Run modes](#run-modes)
   (Position passes levels straight through, as before), a stroker by position (**Stroker**).
   In the Vibrate recorder the pads show what you draw and each device gets it mapped its own
