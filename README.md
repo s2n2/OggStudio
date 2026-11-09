@@ -80,15 +80,16 @@ toggle at the top of the Record section switches between the pads and this strok
 (remembered per card type):
 
 * **Hold Slow, Medium or Fast** to stroke between the lower and upper limit. Let go and it
-  stops where it is. Each speed is a % of the device's top speed. Tap the % under it for a
-  slider (defaults 30%, 55% and 100%). 100% is a full 0 to 100 stroke in a quarter second,
+  stops where it is. Each speed is a % of the device's top speed, set with the slider above
+  its button (defaults 30%, 55% and 100%). 100% is a full 0 to 100 stroke in a quarter second,
   about 384 mm/s on a Handy's 96 mm of usable travel, close to its roughly 400 mm/s top
   speed.
   The device moves at that speed whatever the range, so a short range just makes quicker
   strokes. The choices are remembered per browser.
-* **⟳ Latch** keeps a speed running without holding the button. Latching another speed
-  switches to it, and pressing the latch again stops. Pressing any speed button takes over
-  from a latch: it runs while held and stops when you let go.
+* **⟳ Latch** keeps a speed running without holding the button. While latched, holding a
+  different speed overrides it until you let go, then the latched speed carries on. Holding
+  the latched speed's own button unlatches it: it runs while held and stops when you let go.
+  Latching another speed switches to it, and pressing the lit latch again stops.
 * **Range bar** (left): drag the top or bottom edge to move that limit, or drag the middle
   to move the whole range without changing its width.
 * **Position bar** (right): touch to move the stroker there by hand. Until it reaches your

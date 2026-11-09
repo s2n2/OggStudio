@@ -6,7 +6,7 @@
 (() => {
   const TAG = 'oggstudio-card';
   if (customElements.get(TAG)) return;
-  const VERSION = '0.7.0';
+  const VERSION = '0.7.1';
   const DEVICE_KEY = 'oggstudio_device';
   const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
   const SAMPLE_MS = 100;
@@ -643,7 +643,7 @@
           .gplearn{flex-basis:100%;font-size:13px;color:#ffcf8a;font-weight:700}
           .gpraw{flex-basis:100%;font-size:10.5px;color:var(--muted);font-family:monospace;word-break:break-all}
           .st{display:grid;grid-template-columns:minmax(150px,52%) 1fr;gap:10px;margin:4px 0 10px}
-          .sttrack{display:grid;grid-template-columns:44% 1fr;gap:6px;height:300px}
+          .sttrack{display:grid;grid-template-columns:44% 1fr;gap:6px;height:256px}
           .strail,.stlane{position:relative;border-radius:16px;border:1px solid #33415f;background:#141d33;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:ns-resize;outline:none}
           .strail.active,.stlane.active{border-color:#67e0c8}
           .strail:focus-visible,.stlane:focus-visible{box-shadow:0 0 0 3px rgba(103,224,200,.45)}
@@ -658,16 +658,14 @@
           .stlim{position:absolute;left:0;right:0;text-align:center;font-size:11px;font-weight:800;color:#bff5ea;font-variant-numeric:tabular-nums;pointer-events:none}
           .stlane .pct{position:absolute;top:8px;left:0;right:0;text-align:center;font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.55);pointer-events:none}
           .stside{display:flex;flex-direction:column;gap:8px}
-          .stspd{flex:1;display:flex;flex-direction:column;gap:4px;padding:5px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.025)}
-          .stside button.sthold{flex:1;min-height:46px;font-size:15px;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+          .stspd{flex:1;display:flex;flex-direction:column;justify-content:center;gap:4px;padding:4px 6px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.025)}
+          .stside button.sthold{min-height:40px;font-size:14px;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
           .stside button.sthold.on{background:linear-gradient(110deg,#2fbfa9,#67e0c8);color:#062a24;border-color:transparent}
           .stctl{display:grid;grid-template-columns:1fr 1fr;gap:4px}
-          .stside button.stpctbtn{min-height:32px;padding:0 6px;font-size:12.5px;border-radius:9px;background:#18233d;font-variant-numeric:tabular-nums}
+          .stsl{display:flex;align-items:center;gap:6px}
+          .stsl input{flex:1;min-width:0;height:24px;margin:0}
+          .stsl b{flex:0 0 42px;text-align:right;font-size:12.5px;color:#bef2ff;font-variant-numeric:tabular-nums}
           .st{position:relative}
-          .stpop{position:absolute;z-index:5;left:0;right:0;padding:12px;border-radius:14px;border:1px solid #67e0c8;background:#101a30;box-shadow:0 10px 30px rgba(0,0,0,.6)}
-          .stpop .row{align-items:center}
-          .stpop b{font-size:22px;font-variant-numeric:tabular-nums;flex:0 0 auto;min-width:64px;text-align:right}
-          .stpop .hint{margin-top:2px}
           .outbox{margin-top:10px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.025)}
           .outbox > label{margin-top:0}
           .outrow{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;align-items:center}
@@ -675,7 +673,7 @@
           .outrow.solo.take{grid-template-columns:1fr auto}
           .outrow button.outtake{min-height:38px;background:rgba(255,207,138,.12);border-color:rgba(255,207,138,.45);color:#ffcf8a}
           .outnote{font-size:11px;color:var(--muted);margin-top:4px}
-          .stside button.stlatch{min-height:32px;padding:0 6px;font-size:11.5px;border-radius:9px;background:#141d33;color:var(--muted)}
+          .stside button.stlatch{min-height:40px;padding:0 6px;font-size:11.5px;border-radius:9px;background:#141d33;color:var(--muted)}
           .stside button.stlatch.on{background:linear-gradient(110deg,#ff5c7a,#ff8aa0);color:#2a0710;border-color:transparent}
           .stside .row button{min-height:46px}
           .stinfo{font-size:12px;color:#cdd6f6;font-variant-numeric:tabular-nums;margin-top:6px;text-align:center}
@@ -705,21 +703,16 @@
                 <div class="stlane" id="stlane" role="slider" tabindex="0" aria-label="Stroke position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><div class="ticks"></div><div class="stshade" id="stshade"></div><div class="stpos" id="stpos"></div><span class="pct" id="stpct">50</span></div>
               </div></div>
               <div class="stside">
-                <div class="stspd"><button class="sthold" type="button" data-speed="2">Fast</button><div class="stctl"><button class="stpctbtn" type="button" data-speed="2" aria-label="Fast speed, tap to change"></button><button class="stlatch" type="button" data-speed="2" aria-pressed="false" title="Keep running at this speed">⟳ Latch</button></div></div>
-                <div class="stspd"><button class="sthold" type="button" data-speed="1">Medium</button><div class="stctl"><button class="stpctbtn" type="button" data-speed="1" aria-label="Medium speed, tap to change"></button><button class="stlatch" type="button" data-speed="1" aria-pressed="false" title="Keep running at this speed">⟳ Latch</button></div></div>
-                <div class="stspd"><button class="sthold" type="button" data-speed="0">Slow</button><div class="stctl"><button class="stpctbtn" type="button" data-speed="0" aria-label="Slow speed, tap to change"></button><button class="stlatch" type="button" data-speed="0" aria-pressed="false" title="Keep running at this speed">⟳ Latch</button></div></div>
+                <div class="stspd"><div class="stsl"><input class="stpctr" type="range" min="${STROKE_PCT_MIN}" max="100" step="1" data-speed="2" aria-label="Fast speed"><b class="stpv" data-speed="2"></b></div><div class="stctl"><button class="sthold" type="button" data-speed="2">Fast</button><button class="stlatch" type="button" data-speed="2" aria-pressed="false" title="Keep running at this speed">⟳ Latch</button></div></div>
+                <div class="stspd"><div class="stsl"><input class="stpctr" type="range" min="${STROKE_PCT_MIN}" max="100" step="1" data-speed="1" aria-label="Medium speed"><b class="stpv" data-speed="1"></b></div><div class="stctl"><button class="sthold" type="button" data-speed="1">Medium</button><button class="stlatch" type="button" data-speed="1" aria-pressed="false" title="Keep running at this speed">⟳ Latch</button></div></div>
+                <div class="stspd"><div class="stsl"><input class="stpctr" type="range" min="${STROKE_PCT_MIN}" max="100" step="1" data-speed="0" aria-label="Slow speed"><b class="stpv" data-speed="0"></b></div><div class="stctl"><button class="sthold" type="button" data-speed="0">Slow</button><button class="stlatch" type="button" data-speed="0" aria-pressed="false" title="Keep running at this speed">⟳ Latch</button></div></div>
                 <div class="row"><button id="stlimit" type="button">Set limit</button><button id="streset" type="button">Reset limits</button></div>
-              </div>
-              <div class="stpop" id="stpop" hidden>
-                <div class="row"><label id="stpoplab" style="margin:0">Speed</label><b id="stpopval"></b></div>
-                <input id="stpoprange" type="range" min="${STROKE_PCT_MIN}" max="100" step="1">
-                <div class="row"><span class="hint" id="stpophint"></span><button id="stpopdone" type="button" style="flex:0 0 auto">Done</button></div>
               </div>
             </div>
             <button id="strec" class="rec" type="button">● Record</button><div class="stinfo" id="stinfo"></div>
             <div class="outslot"></div>
             <label class="check" style="margin-top:6px"><input id="stlive" type="checkbox"> Devices follow without recording</label>
-            <div class="hint">Hold Slow, Medium or Fast to stroke between the limits at that speed (% of the device's top speed); let go to stop where you are. ⟳ Latch keeps a speed running without holding; pressing any speed button, or latching another, takes over. Touching the position bar overrides a latch only while your finger is down. Drag the range on the left: a limit to move it, the middle to move the whole range. Touch the position bar to move there: it travels at the last speed you used until it reaches your finger, then follows it. Or stop at a spot and press Set limit: above the other limit it becomes the upper one, below it the lower one. Reset limits goes back to the full range. Each device below follows in its own way: a vibrator by speed, position or both, a stroker by position.</div>
+            <div class="hint">Hold Slow, Medium or Fast to stroke between the limits at that speed (% of the device's top speed); let go to stop where you are. Drag a speed's slider to change it. ⟳ Latch keeps a speed running without holding. While latched, holding another speed overrides it until you let go; holding the latched speed's own button unlatches it; latching another speed switches. Touching the position bar overrides a latch only while your finger is down. Drag the range on the left: a limit to move it, the middle to move the whole range. Touch the position bar to move there: it travels at the last speed you used until it reaches your finger, then follows it. Or stop at a spot and press Set limit: above the other limit it becomes the upper one, below it the lower one. Reset limits goes back to the full range. Each device below follows in its own way: a vibrator by speed, position or both, a stroker by position.</div>
           </section>
           <section data-part="record">
             <div class="rechead"><h3>Record</h3><div class="kind" role="group" aria-label="Recording type"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div></div>
@@ -835,39 +828,14 @@
       $('streset').addEventListener('click', () => this._stReset());
       const pcts = load(STROKE_SPEED_KEY, null);
       this._stPcts = STROKE_SPEEDS.map((sp, i) => (Array.isArray(pcts) && okPct(pcts[i]) ? pcts[i] : sp.pct));
-      // Speed: tap the % to open a slider (changes apply straight away).
-      const pop = $('stpop');
-      let popFor = null;
-      const closePop = () => { if (popFor === null) return; popFor = null; pop.hidden = true; this._gpSave(STROKE_SPEED_KEY, this._stPcts); };
-      const showVal = () => {
-        const v = this._stPcts[popFor];
-        $('stpopval').textContent = `${v}%`;
-        $('stpophint').textContent = `≈ ${Math.round(v / 100 * 384)} mm/s on a Handy · full stroke ${(100 / (v / 100 * STROKE_TOP)).toFixed(2)} s`;
-      };
-      for (const btn of this.shadowRoot.querySelectorAll('.stpctbtn')) {
-        const i = Number(btn.dataset.speed);
-        btn.addEventListener('click', () => {
-          if (popFor === i) { closePop(); return; }
-          popFor = i;
-          $('stpoplab').textContent = `${STROKE_SPEEDS[i].name} speed`;
-          $('stpoprange').value = String(this._stPcts[i]);
-          const block = btn.closest('.stspd');
-          pop.style.top = `${block.offsetTop + block.offsetHeight + 4}px`;
-          pop.hidden = false;
-          showVal();
-        });
+      // Speed sliders: changes apply straight away, saved when let go.
+      for (const r of this.shadowRoot.querySelectorAll('.stpctr')) {
+        const i = Number(r.dataset.speed);
+        r.value = String(this._stPcts[i]);
+        r.title = '';
+        r.addEventListener('input', () => { this._stPcts[i] = Number(r.value); this._stShow(); this._gpStatus(); });
+        r.addEventListener('change', () => this._gpSave(STROKE_SPEED_KEY, this._stPcts));
       }
-      $('stpoprange').addEventListener('input', () => {
-        if (popFor === null) return;
-        this._stPcts[popFor] = Number($('stpoprange').value);
-        showVal(); this._stShow(); this._gpStatus();
-      });
-      $('stpopdone').addEventListener('click', closePop);
-      this.shadowRoot.addEventListener('pointerdown', (e) => {
-        if (popFor === null) return;
-        const path = e.composedPath();
-        if (!path.includes(pop) && !path.some((n) => n.classList && n.classList.contains('stpctbtn'))) closePop();
-      });
       for (const btn of this.shadowRoot.querySelectorAll('.stlatch')) {
         const i = Number(btn.dataset.speed);
         btn.addEventListener('click', () => { this._st.latch = this._st.latch === i ? null : i; this._stRun(); });
@@ -876,10 +844,13 @@
         const speed = Number(btn.dataset.speed);
         const release = () => { if (this._st.touch === speed) { this._st.touch = null; this._stRun(); } };
         // Pressing a speed takes over from a latched one: it runs while held and stops on release.
-        btn.addEventListener('pointerdown', (e) => { e.preventDefault(); capture(btn, e); this._st.latch = null; this._st.touch = speed; this._stRun(); });
+        // Holding the latched speed's own button unlatches it (runs while held,
+        // stops on release); holding another speed overrides the latch until let go.
+        const press = () => { if (this._st.latch === speed) this._st.latch = null; this._st.touch = speed; this._stRun(); };
+        btn.addEventListener('pointerdown', (e) => { e.preventDefault(); capture(btn, e); press(); });
         for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) btn.addEventListener(type, release);
         btn.addEventListener('contextmenu', (e) => e.preventDefault());
-        btn.addEventListener('keydown', (e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); this._st.latch = null; this._st.touch = speed; this._stRun(); } });
+        btn.addEventListener('keydown', (e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); press(); } });
         btn.addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') release(); });
       }
       const level = (el, e) => { const r = el.getBoundingClientRect(); return Math.min(100, Math.max(0, (1 - (e.clientY - r.top) / r.height) * 100)); };
@@ -1091,7 +1062,7 @@
       $('strail').setAttribute('aria-valuetext', `range ${st.lower} to ${st.upper}`);
       const speed = this._stSpeed();
       for (const b of this.shadowRoot.querySelectorAll('.sthold')) b.classList.toggle('on', Number(b.dataset.speed) === speed);
-      for (const b of this.shadowRoot.querySelectorAll('.stpctbtn')) { const t = `${this._stPcts[Number(b.dataset.speed)]}%`; if (b.textContent !== t) b.textContent = t; }
+      for (const b of this.shadowRoot.querySelectorAll('.stpv')) { const t = `${this._stPcts[Number(b.dataset.speed)]}%`; if (b.textContent !== t) b.textContent = t; }
       for (const b of this.shadowRoot.querySelectorAll('.stlatch')) {
         const on = Number(b.dataset.speed) === st.latch;
         if (b.classList.contains('on') !== on) { b.classList.toggle('on', on); b.textContent = on ? '■ Latched' : '⟳ Latch'; b.setAttribute('aria-pressed', String(on)); }
@@ -1278,7 +1249,7 @@
         if (pressed('limit')) this._stSetLimit();
         if (pressed('reset')) this._stReset();
         const held = s.fast > 0.5 ? 2 : s.med > 0.5 ? 1 : s.slow > 0.5 ? 0 : null;
-        if (held !== this._st.pad) { if (held !== null) this._st.latch = null; this._st.pad = held; this._stRun(); }
+        if (held !== this._st.pad) { if (held !== null && held === this._st.latch) this._st.latch = null; this._st.pad = held; this._stRun(); }
         this._gpPrev = s;
         this._gpStatus();
         return;
