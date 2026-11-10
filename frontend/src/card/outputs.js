@@ -2,6 +2,7 @@
 import { FOLLOW_AI } from '../lib/ai.js';
 import { RUN_MODES, RUN_MODE_DEFAULT, fileKind, fileTitle, isStroke, normalise } from '../lib/convert.js';
 import { SAMPLE_MS, SPEEDS, TAKE_SRC, decodeText, duration, encodeCode, fmt } from '../lib/core.js';
+import { limitLevels, limitMove } from '../lib/limits.js';
 import { FOLLOW_STROKER, OUT_KEY, outLevels, parseTarget } from '../lib/outputs.js';
 
 // Methods mixed into OggStudioCard.
@@ -96,12 +97,13 @@ export class OutputsPart {
   _outApply(values, seconds) {
     if (!this._hass || !this._outs) return;
     const now = performance.now();
+    if (now < (this._holdUntil || 0)) return;       // Stop all was just pressed
     const targets = this._outs.map((o, i) => this._outTargetValue(i));
     let blocked = false;
     for (const e of outLevels(targets, values, this._devices)) {
       if (!this._outClaim(e.dev)) { blocked = true; continue; }
       if (e.vibe) {
-        const lv = e.levels.map((x) => Math.round(Math.min(100, Math.max(0, x))) / 100);
+        const lv = limitLevels(this._limits(e.dev), e.levels).map((x) => Math.round(x) / 100);
         const last = this._outLast[e.dev.id];
         if (!last || lv.some((x, j) => Math.abs(x - last.lv[j]) >= 0.01) || now - last.at > 500) {
           this._outLast[e.dev.id] = { lv, at: now };
@@ -116,9 +118,10 @@ export class OutputsPart {
   // Strokers take "go to this position over this long" moves. Ogg's
   // ogg.linear does that live; without it, Ogg's Position control is used
   // (coarse: it moves over a fixed second).
-  _outLinear(dev, move, now) {
-    const goal = Math.round(Math.min(100, Math.max(0, move.goal)));
+  _outLinear(dev, asked, now) {
     const last = this._linLast[dev.id];
+    const move = limitMove(this._limits(dev), asked, last ? last.goal : null);
+    const goal = Math.round(Math.min(100, Math.max(0, move.goal)));
     if (last && last.goal === goal && now - last.at < 1000) return;
     const live = Boolean(this._hass.services && this._hass.services.ogg && this._hass.services.ogg.linear);
     if (last && now - last.at < (live ? 80 : 400)) return;
@@ -246,6 +249,7 @@ export class OutputsPart {
 
   _playScript(script, name, lib) {
     if (!script) return;
+    this._plOff();
     this._setCtl('replay');
     this._rpLoad(script, name, lib);
     if (SPEEDS.includes(this._el('speed').value)) this._el('rpspeed').value = this._el('speed').value;
@@ -396,6 +400,11 @@ export class OutputsPart {
     if (this._vsyncTimer) this._videoHalt();
     if (this._cast) this._castEnd(true);       // the video streams from here: stop the TV too
     if (this._vurl) { URL.revokeObjectURL(this._vurl); this._vurl = null; }
+    if (this._rp && this._rp.playing) { this._plOff(); this._rpStop(); }
+    this._auStop();
+    this._tgEnd();
+    clearInterval(this._lockTimer); this._lockTimer = null;
     this._outStop();
+    this._sessionClose();
   }
 }

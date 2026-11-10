@@ -172,6 +172,7 @@ export class GamepadPart {
     if (!this._gpUsable() || !this._gpIsOwner()) return;
     const s = gpRead(this._gpMap, pad, this._gpKeys);
     const pressed = (a) => s[a] > 0.5 && !(this._gpPrev[a] > 0.5);
+    if (pressed('panic')) { this._gpPrev = s; this._panic(); return; }
     if (this._gpProfName === 'stroke') {
       if (pressed('rec')) this._gpRec();
       if (pressed('limit')) this._stSetLimit();

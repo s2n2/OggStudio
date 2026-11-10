@@ -17,7 +17,7 @@ export class ReplayPart {
     this._rp = { raw: null, conv: null, name: '', lib: null, playing: false, t: 0, len: 0, last: 0, outAt: 0 };
     let ctl = null;
     try { ctl = localStorage.getItem(`oggstudio_ctl:${this.localName}`); } catch (_) { /* private mode */ }
-    this._ctl = ['replay', 'mood'].includes(ctl) ? ctl : 'record';
+    this._ctl = ['replay', 'mood', 'audio', 'together'].includes(ctl) ? ctl : 'record';
     for (const b of this.shadowRoot.querySelectorAll('.ctltabs button')) b.addEventListener('click', () => this._setCtl(b.dataset.ctl));
     $('rpspeed').replaceChildren(...SPEEDS.map((x) => new Option(x, x)));
     $('rpspeed').value = '1x';
@@ -26,7 +26,7 @@ export class ReplayPart {
     $('rpplay').addEventListener('click', () => this._rpToggle());
     for (const b of this.shadowRoot.querySelectorAll('.moodbtn')) b.addEventListener('click', () => this._moodPlay(b.dataset.mood));
     $('moodnext').addEventListener('click', () => { if (this._mood) this._moodNext(!this._rp.playing); });
-    $('moodstop').addEventListener('click', () => this._rpStop());
+    $('moodstop').addEventListener('click', () => { this._plOff(); this._rpStop(); });
     let strength = 100;
     try { strength = Number(localStorage.getItem('oggstudio_mood_strength')) || 100; } catch (_) { /* private mode */ }
     $('moodstr').value = String(strength);
@@ -56,7 +56,9 @@ export class ReplayPart {
       if (this._live) { this._el('live').checked = false; this._setLive(false); }
       if (this._el('stlive').checked) { this._el('stlive').checked = false; this._stRun(); }
     } else {
+      this._plOff();
       this._rpStop();
+      this._auStop();
     }
     if (mode !== 'mood') this._mood = null;
     this._ctl = mode;
@@ -70,6 +72,8 @@ export class ReplayPart {
     for (const b of this.shadowRoot.querySelectorAll('.ctltabs button')) b.classList.toggle('on', b.dataset.ctl === this._ctl);
     $('rpbox').hidden = !replay;
     $('moodbox').hidden = this._ctl !== 'mood';
+    $('aubox').hidden = this._ctl !== 'audio';
+    $('tgbox').hidden = this._ctl !== 'together';
     this._outRender();
     for (const id of ['rec', 'timer', 'strec', 'liverow', 'stliverow']) $(id).hidden = this._ctl !== 'record';
     this._rpShow();
@@ -80,18 +84,19 @@ export class ReplayPart {
     if (!open) { $('rppop').hidden = true; return; }
     const saved = this._studio && this._hass && this._hass.states[this._studio.saved];
     const names = ((saved && saved.attributes.options) || []).filter((n) => n && !/^\(.*\)$/.test(n));
-    const item = (label, tag, fn) => { const b = document.createElement('button'); b.type = 'button'; b.innerHTML = `<span>${esc(label)}</span><small>${esc(tag)}</small>`; b.addEventListener('click', fn); return b; };
+    const item = (label, tag, fn, heat) => { const b = document.createElement('button'); b.type = 'button'; b.dataset.heat = heat; b.innerHTML = `<span>${esc(label)}</span><small>${esc(tag)}</small>`; b.addEventListener('click', () => { this._plOff(); fn(); }); return b; };
     const items = [];
-    if (this._take) items.push(item('Current take', `${isStroke(this._take) ? 'stroke' : 'vibration'} · ${fmt(duration(this._take))}`, () => this._rpLoad(this._take, 'Current take', null)));
+    if (this._take) items.push(item('Current take', `${isStroke(this._take) ? 'stroke' : 'vibration'} · ${fmt(duration(this._take))}`, () => this._rpLoad(this._take, 'Current take', null), '\u0000take'));
     for (const n of names) {
       const info = this._scriptInfo(n);
       items.push(item(n, info ? `${info.kind === 'stroke' ? 'stroke' : 'vibration'} · ${fmt(info.duration_ms || 0)}` : '', async () => {
         try { this._rpLoad(await this._getSaved(n), n, n); } catch (e) { this._toast('Could not load the script: ' + (e.message || e)); }
-      }));
+      }, n));
     }
     if (!items.length) { const d = document.createElement('div'); d.className = 'hint'; d.textContent = 'No saved scripts yet: record one, or load a file below.'; items.push(d); }
     $('rplist').replaceChildren(...items);
     $('rppop').hidden = false;
+    this._pickHeats();
   }
 
   async _rpFromFiles() {
@@ -101,6 +106,7 @@ export class ReplayPart {
       const parsed = await Promise.all(files.slice(0, 2).map(async (f) => decodeText(await f.text())));
       const first = parsed[0];
       if (parsed[1]) first.channels = { V1: { actions: parsed[1].actions || [] } };
+      this._plOff();
       this._rpLoad(normalise(first, fileKind(files[0].name, 'auto'), Boolean(first.inverted)), fileTitle(files[0].name), null);
     } catch (e) { this._toast('Could not read the file: ' + (e.message || e)); }
     this._el('rpfile').value = '';
@@ -259,7 +265,7 @@ export class ReplayPart {
     return rp.convs[mode];
   }
 
-  _rpToggle() { if (this._rp.playing) this._rpStop(); else this._rpPlay(); }
+  _rpToggle() { if (this._rp.playing) { this._plOff(); this._rpStop(); } else this._rpPlay(); }
 
   // A mood: one of its three combos at random (a different one each time).
   _moodPlay(key) {
@@ -339,6 +345,7 @@ export class ReplayPart {
     const now = performance.now();
     rp.t += Math.min(250, now - rp.last) * this._rpSpeed();
     rp.last = now;
+    if (rp.t >= rp.len && this._pl && this._pl.on) { rp.t = rp.len; this._plNext(); return; }   // next in the queue
     if (rp.t >= rp.len && rp.raw.mood && this._mood) { this._moodNext(false); return; }   // next combo of the mood
     if (rp.t >= rp.len) {
       if (this._el('rploop').checked && rp.len > 0) rp.t = 0;
@@ -370,6 +377,7 @@ export class ReplayPart {
     const $ = this._el;
     const rp = this._rp;
     $('rpname').textContent = rp.raw ? rp.name : 'Choose a script…';
+    this._heatShow();
     $('rpfill').style.width = rp.len ? `${Math.min(100, rp.t / rp.len * 100)}%` : '0';
     const kind = rp.raw ? (isStroke(rp.raw) ? 'stroke script' : 'vibration script') : '';
     const parts = rp.raw ? [`${fmt(rp.t)} / ${fmt(rp.len)}`, kind] : ['Pick a saved script, the current take or a file'];

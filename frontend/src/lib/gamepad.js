@@ -7,8 +7,8 @@
 // a key {k} for controllers in keyboard mode.
 export const GP_SPEEDS = [15, 30, 60, 100, 180, 300];   // % per second while held
 export const GP_SPEED_DEFAULT = 3;
-export const GP_ACTIONS = ['up', 'down', 'left', 'right', 'rec', 'zero', 'motor'];
-export const GP_LABELS = { up: 'Up (level up)', down: 'Down (level down)', left: 'Left (slower)', right: 'Right (faster)', rec: 'Record start/stop', zero: 'Level to 0', motor: 'Switch motor' };
+export const GP_ACTIONS = ['up', 'down', 'left', 'right', 'rec', 'zero', 'motor', 'panic'];
+export const GP_LABELS = { up: 'Up (level up)', down: 'Down (level down)', left: 'Left (slower)', right: 'Right (faster)', rec: 'Record start/stop', zero: 'Level to 0', motor: 'Switch motor', panic: 'Stop everything' };
 export const GP_DEFAULT_MAP = {
   up: [{ b: 12 }, { a: 1, d: -1 }, { k: 'ArrowUp' }],
   down: [{ b: 13 }, { a: 1, d: 1 }, { k: 'ArrowDown' }],
@@ -17,6 +17,7 @@ export const GP_DEFAULT_MAP = {
   rec: [{ b: 0 }, { k: 'Enter' }, { k: 'MediaPlayPause' }],
   zero: [{ b: 1 }, { k: 'Escape' }, { k: 'Backspace' }],
   motor: [{ b: 3 }],
+  panic: [{ b: 8 }],
 };
 export const GP_MAP_KEY = 'oggstudio_pad_map';
 export const GP_SPEED_KEY = 'oggstudio_pad_speed';
@@ -25,7 +26,7 @@ export const GP_DEAD = 0.25;
 export const GP_POLL_MS = 20;
 export const GP_HAT_TOL = 0.12;        // hat switch: one axis, one value per direction
 export const GP_REST_SAMPLES = 40;     // ~0.8 s of hands-off readings when learning
-export const GP_HOLD_ACTIONS = ['up', 'down', 'left', 'right', 'zero', 'motor'];
+export const GP_HOLD_ACTIONS = ['up', 'down', 'left', 'right', 'zero', 'motor', 'panic'];
 
 // How hard one action is pressed, 0..1.
 export function gpStrength(binds, pad, keys) {
@@ -156,8 +157,8 @@ export function gpTargetFor(parts, hasVideo) {
 }
 
 // Stroke recorder controls: hold a speed to stroke, set or reset limits.
-export const ST_ACTIONS = ['rec', 'slow', 'med', 'fast', 'limit', 'reset'];
-export const ST_LABELS = { rec: 'Record start/stop', slow: 'Slow stroke (hold)', med: 'Medium stroke (hold)', fast: 'Fast stroke (hold)', limit: 'Set range limit', reset: 'Reset range limits' };
+export const ST_ACTIONS = ['rec', 'slow', 'med', 'fast', 'limit', 'reset', 'panic'];
+export const ST_LABELS = { rec: 'Record start/stop', slow: 'Slow stroke (hold)', med: 'Medium stroke (hold)', fast: 'Fast stroke (hold)', limit: 'Set range limit', reset: 'Reset range limits', panic: 'Stop everything' };
 export const ST_DEFAULT_MAP = {
   rec: [{ b: 0 }, { k: 'Enter' }, { k: 'MediaPlayPause' }],
   slow: [{ b: 14 }, { k: 'ArrowLeft' }],
@@ -165,10 +166,11 @@ export const ST_DEFAULT_MAP = {
   fast: [{ b: 15 }, { k: 'ArrowRight' }],
   limit: [{ b: 12 }, { b: 2 }, { k: 'ArrowUp' }, { k: 'Space' }],
   reset: [{ b: 1 }, { k: 'Escape' }, { k: 'Backspace' }],
+  panic: [{ b: 8 }],
 };
 // Which actions a controller profile has, and where its learned map lives.
 export const GP_PROFILES = {
   level: { actions: GP_ACTIONS, labels: GP_LABELS, defaults: GP_DEFAULT_MAP, hold: GP_HOLD_ACTIONS, mapKey: GP_MAP_KEY },
-  stroke: { actions: ST_ACTIONS, labels: ST_LABELS, defaults: ST_DEFAULT_MAP, hold: ['slow', 'med', 'fast', 'limit', 'reset'], mapKey: 'oggstudio_pad_map_stroke' },
+  stroke: { actions: ST_ACTIONS, labels: ST_LABELS, defaults: ST_DEFAULT_MAP, hold: ['slow', 'med', 'fast', 'limit', 'reset', 'panic'], mapKey: 'oggstudio_pad_map_stroke' },
 };
 export const gpState = { owner: null };   // with several OggStudio cards on screen, only one listens

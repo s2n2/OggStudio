@@ -162,7 +162,15 @@ export class OggStudioCard extends HTMLElement {
 ${STYLES}
       </style>
       <ha-card>
-        <h2>${esc(this._config.title || this._variant.name)}</h2><div class="sub">${esc(this._variant.sub)} · v${VERSION}</div>
+        <div class="cover" id="cover" hidden>
+          <h2 id="covername">Studio</h2>
+          <div id="coverpin"><label>PIN</label><div class="row"><input id="pin" type="password" inputmode="numeric" autocomplete="off" aria-label="PIN"><button id="pingo" type="button" style="flex:0 0 auto">Open</button></div></div>
+          <button id="coveropen" type="button" class="go">Open</button>
+          <div class="hint" id="covermsg"></div>
+          <button id="coverstop" type="button" class="stop">■ Stop all</button>
+        </div>
+        <div class="head"><h2 id="title">${esc(this._config.title || this._variant.name)}</h2><button id="lockbtn" type="button" title="Lock this card" aria-label="Lock this card" hidden>🔒</button><button id="stopall" type="button" class="stop" title="Stop every device now">■ Stop all</button></div>
+        <div class="sub" id="sub">${esc(this._variant.sub)} · v${VERSION}</div>
         <div id="devbox"><label>Playback device</label><select id="device"></select></div>
         <div class="gp" id="gp">
           <label class="check"><input id="gpon" type="checkbox"> 🎮 Controller</label>
@@ -207,7 +215,7 @@ ${STYLES}
         </section>
         <section data-part="outputs" id="outhome" class="off">
           <div id="ctlbox">
-            <div class="ctltabs" role="tablist"><button type="button" data-ctl="record">● Record</button><button type="button" data-ctl="replay">▶ Replay</button><button type="button" data-ctl="mood">◎ Mood</button></div>
+            <div class="ctltabs" role="tablist"><button type="button" data-ctl="record">● Record</button><button type="button" data-ctl="replay">▶ Replay</button><button type="button" data-ctl="mood">◎ Mood</button><button type="button" data-ctl="audio">♪ Audio</button><button type="button" data-ctl="together">🤝 Together</button></div>
             <div id="moodbox" hidden>
               <div class="moodgrid">${Object.entries(MOODS).map(([k, m]) => `<button type="button" class="moodbtn" data-mood="${k}"><span>${m.icon}</span>${m.label}</button>`).join('')}</div>
               <div class="rpbar" id="moodbar"><i id="moodfill"></i></div>
@@ -218,9 +226,48 @@ ${STYLES}
             <div class="rpbox" id="rpbox" hidden>
               <button id="rppick" type="button" class="rppick">📂 <span id="rpname">Choose a script…</span></button>
               <div class="rppop" id="rppop" hidden><div id="rplist"></div><label class="rpfile">From a file on this device: <input id="rpfile" type="file" accept=".funscript,.json,application/json" multiple></label></div>
-              <div class="rpbar" id="rpbar" title="Tap to jump"><i id="rpfill"></i></div>
+              <div class="rpbar" id="rpbar" title="Tap to jump. Colour shows how intense each part is"><canvas id="rpheat" width="240" height="1"></canvas><i id="rpfill"></i></div>
               <div class="rpinfo" id="rpinfo"></div>
               <div class="rprow"><button id="rpplay" type="button" class="go">▶ Replay</button><select id="rpspeed" aria-label="Replay speed"></select><label class="check"><input id="rploop" type="checkbox"> Loop</label></div>
+              <div class="row" style="margin-top:8px"><button id="tlbtn" type="button">✂ Tools</button><button id="plbtn" type="button">☰ Queue</button></div>
+              <div class="subbox" id="tlbox" hidden>
+                <div class="row"><button id="tlstart" type="button">Cut before here</button><button id="tlend" type="button">Cut after here</button></div>
+                <div class="row"><select id="tln" aria-label="How many times"></select><button id="tlloop" type="button">Repeat</button></div>
+                <div class="row"><select id="tlother" aria-label="Script to add"></select><button id="tlstitch" type="button">Add after</button></div>
+                <div class="hint">Drag the bar to a spot, then cut. Each change becomes the current take; the saved script is not touched.</div>
+              </div>
+              <div class="subbox" id="plbox" hidden>
+                <div id="pllist"></div>
+                <div class="row"><select id="pladd" aria-label="Add to the queue"></select><button id="pladdbtn" type="button" style="flex:0 0 auto">Add</button></div>
+                <div class="row"><button id="plplay" type="button">▶ Play queue</button><label class="check"><input id="plloop" type="checkbox"> Repeat queue</label></div>
+                <div class="row"><select id="plsaved" aria-label="Saved queues"></select><button id="pldel" type="button" style="flex:0 0 auto">Delete</button></div>
+                <div class="row"><input id="plname" type="text" placeholder="Queue name"><button id="plsave" type="button" style="flex:0 0 auto">Save queue</button></div>
+              </div>
+            </div>
+            <div id="aubox" hidden>
+              <label>Sound from</label><select id="ausrc"><option value="mic">Microphone</option><option value="file">A music file on this device</option><option value="video">The video in Video sync</option><option value="tab">Another tab (share its audio)</option></select>
+              <div id="aufilebox" hidden><input id="aufile" type="file" accept="audio/*,video/*" style="margin-top:6px"><audio id="auel" controls preload="metadata"></audio></div>
+              <label>Feel</label><select id="aumode"></select>
+              <div class="moodrow"><label title="How easily it reacts">Sensitivity</label><input id="ausens" type="range" min="0" max="100" step="5" value="50"><b id="ausensv">50%</b></div>
+              <div class="meter"><i id="aum1"></i></div><div class="meter m2"><i id="aum2"></i></div>
+              <div class="rpinfo" id="auinfo"></div>
+              <button id="augo" type="button" class="go" style="margin-top:6px">♪ Start</button>
+            </div>
+            <div id="tgbox" hidden>
+              <div id="tgidle">
+                <div class="hint" style="margin-top:0">Play together from two places. Each of you gets a slider that drives the other's devices, by feel, inside the limits each has set. Either of you can stop both sides at any time.</div>
+                <button id="tgstart" type="button" class="go" style="margin-top:8px">🤝 Start a session</button>
+                <label>Or join one: paste the link you were sent</label>
+                <div class="row"><input id="tglink" type="text" placeholder="https://…/api/oggstudio/together/…" autocomplete="off"><button id="tgjoin" type="button" style="flex:0 0 auto">Join</button></div>
+              </div>
+              <div id="tglive" hidden>
+                <div id="tgsharebox"><label>Send this link to your partner</label><div class="row"><input id="tgshare" type="text" readonly><button id="tgcopy" type="button" style="flex:0 0 auto">Copy</button></div></div>
+                <div class="rpinfo" id="tgstat"></div>
+                <label class="check"><input id="tgaccept" type="checkbox"> Let my partner control my devices</label>
+                <label>From my partner</label><div class="meter"><i id="tgin"></i></div>
+                <label>To my partner <b id="tgsendv">0%</b></label><input id="tgsend" type="range" min="0" max="100" step="1" value="0">
+                <div class="row" style="margin-top:8px"><button id="tgstop" type="button" class="stop">■ Stop both</button><button id="tgend" type="button">End session</button></div>
+              </div>
             </div>
           </div>
           <div class="outbox" id="outbox">
@@ -228,6 +275,8 @@ ${STYLES}
             <div class="outrow" data-row="0"><select class="outt" aria-label="First device"></select><select class="outm" aria-label="How the first device follows"></select><div class="outai" hidden></div><button class="outtake" type="button" hidden>Take control</button></div>
             <div class="outrow" data-row="1"><select class="outt" aria-label="Second device"></select><select class="outm" aria-label="How the second device follows"></select><div class="outai" hidden></div><button class="outtake" type="button" hidden>Take control</button></div>
             <div class="outnote" id="outnote"></div>
+            <button id="limbtn" type="button" class="limbtn">⚙ Limits</button>
+            <div class="subbox" id="limbox" hidden><div id="limlist"></div><div class="hint">Nothing goes past these, whatever is driving: pads, scripts, moods, audio or a partner. They are kept in Home Assistant for every card.</div></div>
           </div>
         </section>
         <section id="takebox" data-part="take" hidden>
@@ -304,6 +353,10 @@ ${STYLES}
     this._bindStroke();
     this._bindOutputs();
     this._bindReplay();
+    this._bindTools();
+    this._bindAudio();
+    this._bindTogether();
+    this._bindSafety();
     this._bindVideo();
     this._bindGamepad();
     this._update();

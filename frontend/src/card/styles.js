@@ -8,7 +8,7 @@ h2{margin:0 0 2px;font-size:20px;letter-spacing:-.02em} .sub{color:var(--muted);
 section{border:1px solid var(--line);border-radius:16px;padding:12px;margin-top:10px;background:rgba(255,255,255,.035)}
 h3{margin:0 0 8px;font-size:13px;color:#cdd6f6;letter-spacing:.01em}
 label{display:block;font-size:11px;color:var(--muted);margin:6px 0 3px}
-select,input[type=text],textarea{width:100%;box-sizing:border-box;background:#18233d;color:var(--ink);border:1px solid #33415f;border-radius:10px;padding:8px;font:inherit;font-size:13px}
+select,input[type=text],input[type=password],textarea{width:100%;box-sizing:border-box;background:#18233d;color:var(--ink);border:1px solid #33415f;border-radius:10px;padding:8px;font:inherit;font-size:13px}
 textarea{min-height:60px;resize:vertical;font-family:monospace;font-size:11px}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap} .row > *{flex:1}
 button{border:1px solid rgba(118,200,239,.35);background:#24395a;color:#bef2ff;border-radius:12px;min-height:44px;padding:0 12px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
@@ -87,7 +87,36 @@ button.vrec.on{background:linear-gradient(110deg,#ff5c7a,#ff8aa0);color:#2a0710}
 .stsl input{flex:1;min-width:0;height:24px;margin:0}
 .stsl b{flex:0 0 42px;text-align:right;font-size:12.5px;color:#bef2ff;font-variant-numeric:tabular-nums}
 .st{position:relative}
-.ctltabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px}
+.ctltabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.ctltabs button{flex:1 1 auto;padding:0 12px;white-space:nowrap}
+.ctltabs button.live:not(.on){box-shadow:inset 0 0 0 2px #67e0c8}
+.head{display:flex;align-items:center;gap:8px;margin-bottom:2px}
+.head h2{flex:1;margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.head button{flex:0 0 auto;min-height:36px;padding:0 12px;font-size:13px}
+ha-card.locked > :not(#cover){display:none!important}
+.cover{display:flex;flex-direction:column;gap:10px;padding:8px 0}
+.cover[hidden]{display:none}
+.cover .stop{align-self:flex-start;min-height:36px;padding:0 12px;font-size:13px}
+.subbox{margin-top:8px;padding:10px;border-radius:14px;border:1px solid #293552;background:#0e1730}
+.subbox .row{margin-top:6px}
+.subbox .row:first-child{margin-top:0}
+.limbtn{margin-top:8px;min-height:36px;font-size:13px;width:100%}
+.limdev h4{margin:8px 0 0;font-size:13px;color:#bef2ff}
+.limdev:first-child h4{margin-top:0}
+.limdev label b{color:#bef2ff}
+.limdev input{width:100%}
+.rpbar canvas{position:absolute;left:0;top:0;width:100%;height:100%;display:none;image-rendering:pixelated}
+.rpbar.heat canvas{display:block}
+.rpbar.heat i{background:rgba(255,255,255,.3);border-right:2px solid #fff}
+.rppop button{flex-wrap:wrap}
+.pkheat{flex:0 0 100%;width:100%;height:5px;border-radius:3px;margin:2px 0 4px;image-rendering:pixelated}
+.plitem{display:flex;gap:6px;margin-bottom:6px}
+.plitem button{flex:0 0 40px;min-height:40px;padding:0}
+.plitem .plname{flex:1;text-align:left;padding:0 10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:#18233d}
+.plitem.on .plname{box-shadow:inset 0 0 0 2px #67e0c8}
+#plbtn.on{box-shadow:inset 0 0 0 2px #67e0c8}
+#auel{width:100%;margin-top:6px}
+#tgsend,#tgshare,#tglink{width:100%}
 .moodgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px}
 .moodgrid button.moodbtn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:60px;padding:4px;font-size:12px;background:#18233d}
 .moodgrid button.moodbtn span{font-size:20px;line-height:1}

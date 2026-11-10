@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.13.1";
+  var VERSION = "0.14.0";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -158,8 +158,8 @@
   // frontend/src/lib/gamepad.js
   var GP_SPEEDS = [15, 30, 60, 100, 180, 300];
   var GP_SPEED_DEFAULT = 3;
-  var GP_ACTIONS = ["up", "down", "left", "right", "rec", "zero", "motor"];
-  var GP_LABELS = { up: "Up (level up)", down: "Down (level down)", left: "Left (slower)", right: "Right (faster)", rec: "Record start/stop", zero: "Level to 0", motor: "Switch motor" };
+  var GP_ACTIONS = ["up", "down", "left", "right", "rec", "zero", "motor", "panic"];
+  var GP_LABELS = { up: "Up (level up)", down: "Down (level down)", left: "Left (slower)", right: "Right (faster)", rec: "Record start/stop", zero: "Level to 0", motor: "Switch motor", panic: "Stop everything" };
   var GP_DEFAULT_MAP = {
     up: [{ b: 12 }, { a: 1, d: -1 }, { k: "ArrowUp" }],
     down: [{ b: 13 }, { a: 1, d: 1 }, { k: "ArrowDown" }],
@@ -167,7 +167,8 @@
     right: [{ b: 15 }, { a: 0, d: 1 }, { k: "ArrowRight" }],
     rec: [{ b: 0 }, { k: "Enter" }, { k: "MediaPlayPause" }],
     zero: [{ b: 1 }, { k: "Escape" }, { k: "Backspace" }],
-    motor: [{ b: 3 }]
+    motor: [{ b: 3 }],
+    panic: [{ b: 8 }]
   };
   var GP_MAP_KEY = "oggstudio_pad_map";
   var GP_SPEED_KEY = "oggstudio_pad_speed";
@@ -176,7 +177,7 @@
   var GP_POLL_MS = 20;
   var GP_HAT_TOL = 0.12;
   var GP_REST_SAMPLES = 40;
-  var GP_HOLD_ACTIONS = ["up", "down", "left", "right", "zero", "motor"];
+  var GP_HOLD_ACTIONS = ["up", "down", "left", "right", "zero", "motor", "panic"];
   function gpStrength(binds, pad, keys) {
     let best = 0;
     for (const bind of binds || []) {
@@ -270,19 +271,20 @@
     if (parts.includes("record")) return "record";
     return null;
   }
-  var ST_ACTIONS = ["rec", "slow", "med", "fast", "limit", "reset"];
-  var ST_LABELS = { rec: "Record start/stop", slow: "Slow stroke (hold)", med: "Medium stroke (hold)", fast: "Fast stroke (hold)", limit: "Set range limit", reset: "Reset range limits" };
+  var ST_ACTIONS = ["rec", "slow", "med", "fast", "limit", "reset", "panic"];
+  var ST_LABELS = { rec: "Record start/stop", slow: "Slow stroke (hold)", med: "Medium stroke (hold)", fast: "Fast stroke (hold)", limit: "Set range limit", reset: "Reset range limits", panic: "Stop everything" };
   var ST_DEFAULT_MAP = {
     rec: [{ b: 0 }, { k: "Enter" }, { k: "MediaPlayPause" }],
     slow: [{ b: 14 }, { k: "ArrowLeft" }],
     med: [{ b: 13 }, { k: "ArrowDown" }],
     fast: [{ b: 15 }, { k: "ArrowRight" }],
     limit: [{ b: 12 }, { b: 2 }, { k: "ArrowUp" }, { k: "Space" }],
-    reset: [{ b: 1 }, { k: "Escape" }, { k: "Backspace" }]
+    reset: [{ b: 1 }, { k: "Escape" }, { k: "Backspace" }],
+    panic: [{ b: 8 }]
   };
   var GP_PROFILES = {
     level: { actions: GP_ACTIONS, labels: GP_LABELS, defaults: GP_DEFAULT_MAP, hold: GP_HOLD_ACTIONS, mapKey: GP_MAP_KEY },
-    stroke: { actions: ST_ACTIONS, labels: ST_LABELS, defaults: ST_DEFAULT_MAP, hold: ["slow", "med", "fast", "limit", "reset"], mapKey: "oggstudio_pad_map_stroke" }
+    stroke: { actions: ST_ACTIONS, labels: ST_LABELS, defaults: ST_DEFAULT_MAP, hold: ["slow", "med", "fast", "limit", "reset", "panic"], mapKey: "oggstudio_pad_map_stroke" }
   };
   var gpState = { owner: null };
 
@@ -1167,7 +1169,7 @@ h2{margin:0 0 2px;font-size:20px;letter-spacing:-.02em} .sub{color:var(--muted);
 section{border:1px solid var(--line);border-radius:16px;padding:12px;margin-top:10px;background:rgba(255,255,255,.035)}
 h3{margin:0 0 8px;font-size:13px;color:#cdd6f6;letter-spacing:.01em}
 label{display:block;font-size:11px;color:var(--muted);margin:6px 0 3px}
-select,input[type=text],textarea{width:100%;box-sizing:border-box;background:#18233d;color:var(--ink);border:1px solid #33415f;border-radius:10px;padding:8px;font:inherit;font-size:13px}
+select,input[type=text],input[type=password],textarea{width:100%;box-sizing:border-box;background:#18233d;color:var(--ink);border:1px solid #33415f;border-radius:10px;padding:8px;font:inherit;font-size:13px}
 textarea{min-height:60px;resize:vertical;font-family:monospace;font-size:11px}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap} .row > *{flex:1}
 button{border:1px solid rgba(118,200,239,.35);background:#24395a;color:#bef2ff;border-radius:12px;min-height:44px;padding:0 12px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
@@ -1246,7 +1248,36 @@ button.vrec.on{background:linear-gradient(110deg,#ff5c7a,#ff8aa0);color:#2a0710}
 .stsl input{flex:1;min-width:0;height:24px;margin:0}
 .stsl b{flex:0 0 42px;text-align:right;font-size:12.5px;color:#bef2ff;font-variant-numeric:tabular-nums}
 .st{position:relative}
-.ctltabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px}
+.ctltabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.ctltabs button{flex:1 1 auto;padding:0 12px;white-space:nowrap}
+.ctltabs button.live:not(.on){box-shadow:inset 0 0 0 2px #67e0c8}
+.head{display:flex;align-items:center;gap:8px;margin-bottom:2px}
+.head h2{flex:1;margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.head button{flex:0 0 auto;min-height:36px;padding:0 12px;font-size:13px}
+ha-card.locked > :not(#cover){display:none!important}
+.cover{display:flex;flex-direction:column;gap:10px;padding:8px 0}
+.cover[hidden]{display:none}
+.cover .stop{align-self:flex-start;min-height:36px;padding:0 12px;font-size:13px}
+.subbox{margin-top:8px;padding:10px;border-radius:14px;border:1px solid #293552;background:#0e1730}
+.subbox .row{margin-top:6px}
+.subbox .row:first-child{margin-top:0}
+.limbtn{margin-top:8px;min-height:36px;font-size:13px;width:100%}
+.limdev h4{margin:8px 0 0;font-size:13px;color:#bef2ff}
+.limdev:first-child h4{margin-top:0}
+.limdev label b{color:#bef2ff}
+.limdev input{width:100%}
+.rpbar canvas{position:absolute;left:0;top:0;width:100%;height:100%;display:none;image-rendering:pixelated}
+.rpbar.heat canvas{display:block}
+.rpbar.heat i{background:rgba(255,255,255,.3);border-right:2px solid #fff}
+.rppop button{flex-wrap:wrap}
+.pkheat{flex:0 0 100%;width:100%;height:5px;border-radius:3px;margin:2px 0 4px;image-rendering:pixelated}
+.plitem{display:flex;gap:6px;margin-bottom:6px}
+.plitem button{flex:0 0 40px;min-height:40px;padding:0}
+.plitem .plname{flex:1;text-align:left;padding:0 10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:#18233d}
+.plitem.on .plname{box-shadow:inset 0 0 0 2px #67e0c8}
+#plbtn.on{box-shadow:inset 0 0 0 2px #67e0c8}
+#auel{width:100%;margin-top:6px}
+#tgsend,#tgshare,#tglink{width:100%}
 .moodgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px}
 .moodgrid button.moodbtn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:60px;padding:4px;font-size:12px;background:#18233d}
 .moodgrid button.moodbtn span{font-size:20px;line-height:1}
@@ -1470,7 +1501,15 @@ button.rppick{width:100%;text-align:left;background:#18233d;overflow:hidden;text
 ${STYLES}
       </style>
       <ha-card>
-        <h2>${esc(this._config.title || this._variant.name)}</h2><div class="sub">${esc(this._variant.sub)} · v${VERSION}</div>
+        <div class="cover" id="cover" hidden>
+          <h2 id="covername">Studio</h2>
+          <div id="coverpin"><label>PIN</label><div class="row"><input id="pin" type="password" inputmode="numeric" autocomplete="off" aria-label="PIN"><button id="pingo" type="button" style="flex:0 0 auto">Open</button></div></div>
+          <button id="coveropen" type="button" class="go">Open</button>
+          <div class="hint" id="covermsg"></div>
+          <button id="coverstop" type="button" class="stop">■ Stop all</button>
+        </div>
+        <div class="head"><h2 id="title">${esc(this._config.title || this._variant.name)}</h2><button id="lockbtn" type="button" title="Lock this card" aria-label="Lock this card" hidden>🔒</button><button id="stopall" type="button" class="stop" title="Stop every device now">■ Stop all</button></div>
+        <div class="sub" id="sub">${esc(this._variant.sub)} · v${VERSION}</div>
         <div id="devbox"><label>Playback device</label><select id="device"></select></div>
         <div class="gp" id="gp">
           <label class="check"><input id="gpon" type="checkbox"> 🎮 Controller</label>
@@ -1515,7 +1554,7 @@ ${STYLES}
         </section>
         <section data-part="outputs" id="outhome" class="off">
           <div id="ctlbox">
-            <div class="ctltabs" role="tablist"><button type="button" data-ctl="record">● Record</button><button type="button" data-ctl="replay">▶ Replay</button><button type="button" data-ctl="mood">◎ Mood</button></div>
+            <div class="ctltabs" role="tablist"><button type="button" data-ctl="record">● Record</button><button type="button" data-ctl="replay">▶ Replay</button><button type="button" data-ctl="mood">◎ Mood</button><button type="button" data-ctl="audio">♪ Audio</button><button type="button" data-ctl="together">🤝 Together</button></div>
             <div id="moodbox" hidden>
               <div class="moodgrid">${Object.entries(MOODS).map(([k, m]) => `<button type="button" class="moodbtn" data-mood="${k}"><span>${m.icon}</span>${m.label}</button>`).join("")}</div>
               <div class="rpbar" id="moodbar"><i id="moodfill"></i></div>
@@ -1526,9 +1565,48 @@ ${STYLES}
             <div class="rpbox" id="rpbox" hidden>
               <button id="rppick" type="button" class="rppick">📂 <span id="rpname">Choose a script…</span></button>
               <div class="rppop" id="rppop" hidden><div id="rplist"></div><label class="rpfile">From a file on this device: <input id="rpfile" type="file" accept=".funscript,.json,application/json" multiple></label></div>
-              <div class="rpbar" id="rpbar" title="Tap to jump"><i id="rpfill"></i></div>
+              <div class="rpbar" id="rpbar" title="Tap to jump. Colour shows how intense each part is"><canvas id="rpheat" width="240" height="1"></canvas><i id="rpfill"></i></div>
               <div class="rpinfo" id="rpinfo"></div>
               <div class="rprow"><button id="rpplay" type="button" class="go">▶ Replay</button><select id="rpspeed" aria-label="Replay speed"></select><label class="check"><input id="rploop" type="checkbox"> Loop</label></div>
+              <div class="row" style="margin-top:8px"><button id="tlbtn" type="button">✂ Tools</button><button id="plbtn" type="button">☰ Queue</button></div>
+              <div class="subbox" id="tlbox" hidden>
+                <div class="row"><button id="tlstart" type="button">Cut before here</button><button id="tlend" type="button">Cut after here</button></div>
+                <div class="row"><select id="tln" aria-label="How many times"></select><button id="tlloop" type="button">Repeat</button></div>
+                <div class="row"><select id="tlother" aria-label="Script to add"></select><button id="tlstitch" type="button">Add after</button></div>
+                <div class="hint">Drag the bar to a spot, then cut. Each change becomes the current take; the saved script is not touched.</div>
+              </div>
+              <div class="subbox" id="plbox" hidden>
+                <div id="pllist"></div>
+                <div class="row"><select id="pladd" aria-label="Add to the queue"></select><button id="pladdbtn" type="button" style="flex:0 0 auto">Add</button></div>
+                <div class="row"><button id="plplay" type="button">▶ Play queue</button><label class="check"><input id="plloop" type="checkbox"> Repeat queue</label></div>
+                <div class="row"><select id="plsaved" aria-label="Saved queues"></select><button id="pldel" type="button" style="flex:0 0 auto">Delete</button></div>
+                <div class="row"><input id="plname" type="text" placeholder="Queue name"><button id="plsave" type="button" style="flex:0 0 auto">Save queue</button></div>
+              </div>
+            </div>
+            <div id="aubox" hidden>
+              <label>Sound from</label><select id="ausrc"><option value="mic">Microphone</option><option value="file">A music file on this device</option><option value="video">The video in Video sync</option><option value="tab">Another tab (share its audio)</option></select>
+              <div id="aufilebox" hidden><input id="aufile" type="file" accept="audio/*,video/*" style="margin-top:6px"><audio id="auel" controls preload="metadata"></audio></div>
+              <label>Feel</label><select id="aumode"></select>
+              <div class="moodrow"><label title="How easily it reacts">Sensitivity</label><input id="ausens" type="range" min="0" max="100" step="5" value="50"><b id="ausensv">50%</b></div>
+              <div class="meter"><i id="aum1"></i></div><div class="meter m2"><i id="aum2"></i></div>
+              <div class="rpinfo" id="auinfo"></div>
+              <button id="augo" type="button" class="go" style="margin-top:6px">♪ Start</button>
+            </div>
+            <div id="tgbox" hidden>
+              <div id="tgidle">
+                <div class="hint" style="margin-top:0">Play together from two places. Each of you gets a slider that drives the other's devices, by feel, inside the limits each has set. Either of you can stop both sides at any time.</div>
+                <button id="tgstart" type="button" class="go" style="margin-top:8px">🤝 Start a session</button>
+                <label>Or join one: paste the link you were sent</label>
+                <div class="row"><input id="tglink" type="text" placeholder="https://…/api/oggstudio/together/…" autocomplete="off"><button id="tgjoin" type="button" style="flex:0 0 auto">Join</button></div>
+              </div>
+              <div id="tglive" hidden>
+                <div id="tgsharebox"><label>Send this link to your partner</label><div class="row"><input id="tgshare" type="text" readonly><button id="tgcopy" type="button" style="flex:0 0 auto">Copy</button></div></div>
+                <div class="rpinfo" id="tgstat"></div>
+                <label class="check"><input id="tgaccept" type="checkbox"> Let my partner control my devices</label>
+                <label>From my partner</label><div class="meter"><i id="tgin"></i></div>
+                <label>To my partner <b id="tgsendv">0%</b></label><input id="tgsend" type="range" min="0" max="100" step="1" value="0">
+                <div class="row" style="margin-top:8px"><button id="tgstop" type="button" class="stop">■ Stop both</button><button id="tgend" type="button">End session</button></div>
+              </div>
             </div>
           </div>
           <div class="outbox" id="outbox">
@@ -1536,6 +1614,8 @@ ${STYLES}
             <div class="outrow" data-row="0"><select class="outt" aria-label="First device"></select><select class="outm" aria-label="How the first device follows"></select><div class="outai" hidden></div><button class="outtake" type="button" hidden>Take control</button></div>
             <div class="outrow" data-row="1"><select class="outt" aria-label="Second device"></select><select class="outm" aria-label="How the second device follows"></select><div class="outai" hidden></div><button class="outtake" type="button" hidden>Take control</button></div>
             <div class="outnote" id="outnote"></div>
+            <button id="limbtn" type="button" class="limbtn">⚙ Limits</button>
+            <div class="subbox" id="limbox" hidden><div id="limlist"></div><div class="hint">Nothing goes past these, whatever is driving: pads, scripts, moods, audio or a partner. They are kept in Home Assistant for every card.</div></div>
           </div>
         </section>
         <section id="takebox" data-part="take" hidden>
@@ -1615,6 +1695,10 @@ ${STYLES}
       this._bindStroke();
       this._bindOutputs();
       this._bindReplay();
+      this._bindTools();
+      this._bindAudio();
+      this._bindTogether();
+      this._bindSafety();
       this._bindVideo();
       this._bindGamepad();
       this._update();
@@ -2190,6 +2274,11 @@ ${STYLES}
       if (!this._gpUsable() || !this._gpIsOwner()) return;
       const s = gpRead(this._gpMap, pad, this._gpKeys);
       const pressed = (a) => s[a] > 0.5 && !(this._gpPrev[a] > 0.5);
+      if (pressed("panic")) {
+        this._gpPrev = s;
+        this._panic();
+        return;
+      }
       if (this._gpProfName === "stroke") {
         if (pressed("rec")) this._gpRec();
         if (pressed("limit")) this._stSetLimit();
@@ -2627,6 +2716,7 @@ ${STYLES}
     }
     // Drive the follow-along devices from the video (outputs on this card).
     _videoOut() {
+      if (this._au) return;
       const now = performance.now();
       const value = this._videoValue();
       const dt = now - (this._vOutAt || now);
@@ -2978,6 +3068,8 @@ ${STYLES}
     _update() {
       if (!this._el || !this._hass) return;
       const $ = this._el;
+      this._safetyUpdate();
+      this._toolsUpdate();
       this._fillVideoScripts();
       const sel = $("device");
       const key = JSON.stringify([this._rememberedLoaded, ...this._devices.map((d) => [d.id, d.name, this._online(d)])]);
@@ -3410,7 +3502,7 @@ ${STYLES}
         ctl = localStorage.getItem(`oggstudio_ctl:${this.localName}`);
       } catch (_) {
       }
-      this._ctl = ["replay", "mood"].includes(ctl) ? ctl : "record";
+      this._ctl = ["replay", "mood", "audio", "together"].includes(ctl) ? ctl : "record";
       for (const b of this.shadowRoot.querySelectorAll(".ctltabs button")) b.addEventListener("click", () => this._setCtl(b.dataset.ctl));
       $("rpspeed").replaceChildren(...SPEEDS.map((x) => new Option(x, x)));
       $("rpspeed").value = "1x";
@@ -3421,7 +3513,10 @@ ${STYLES}
       $("moodnext").addEventListener("click", () => {
         if (this._mood) this._moodNext(!this._rp.playing);
       });
-      $("moodstop").addEventListener("click", () => this._rpStop());
+      $("moodstop").addEventListener("click", () => {
+        this._plOff();
+        this._rpStop();
+      });
       let strength = 100;
       try {
         strength = Number(localStorage.getItem("oggstudio_mood_strength")) || 100;
@@ -3481,7 +3576,9 @@ ${STYLES}
           this._stRun();
         }
       } else {
+        this._plOff();
         this._rpStop();
+        this._auStop();
       }
       if (mode !== "mood") this._mood = null;
       this._ctl = mode;
@@ -3497,6 +3594,8 @@ ${STYLES}
       for (const b of this.shadowRoot.querySelectorAll(".ctltabs button")) b.classList.toggle("on", b.dataset.ctl === this._ctl);
       $("rpbox").hidden = !replay;
       $("moodbox").hidden = this._ctl !== "mood";
+      $("aubox").hidden = this._ctl !== "audio";
+      $("tgbox").hidden = this._ctl !== "together";
       this._outRender();
       for (const id of ["rec", "timer", "strec", "liverow", "stliverow"]) $(id).hidden = this._ctl !== "record";
       this._rpShow();
@@ -3509,15 +3608,19 @@ ${STYLES}
       }
       const saved = this._studio && this._hass && this._hass.states[this._studio.saved];
       const names = (saved && saved.attributes.options || []).filter((n) => n && !/^\(.*\)$/.test(n));
-      const item = (label, tag, fn) => {
+      const item = (label, tag, fn, heat) => {
         const b = document.createElement("button");
         b.type = "button";
+        b.dataset.heat = heat;
         b.innerHTML = `<span>${esc(label)}</span><small>${esc(tag)}</small>`;
-        b.addEventListener("click", fn);
+        b.addEventListener("click", () => {
+          this._plOff();
+          fn();
+        });
         return b;
       };
       const items = [];
-      if (this._take) items.push(item("Current take", `${isStroke(this._take) ? "stroke" : "vibration"} · ${fmt(duration(this._take))}`, () => this._rpLoad(this._take, "Current take", null)));
+      if (this._take) items.push(item("Current take", `${isStroke(this._take) ? "stroke" : "vibration"} · ${fmt(duration(this._take))}`, () => this._rpLoad(this._take, "Current take", null), "\0take"));
       for (const n of names) {
         const info = this._scriptInfo(n);
         items.push(item(n, info ? `${info.kind === "stroke" ? "stroke" : "vibration"} · ${fmt(info.duration_ms || 0)}` : "", async () => {
@@ -3526,7 +3629,7 @@ ${STYLES}
           } catch (e) {
             this._toast("Could not load the script: " + (e.message || e));
           }
-        }));
+        }, n));
       }
       if (!items.length) {
         const d = document.createElement("div");
@@ -3536,6 +3639,7 @@ ${STYLES}
       }
       $("rplist").replaceChildren(...items);
       $("rppop").hidden = false;
+      this._pickHeats();
     }
     async _rpFromFiles() {
       const files = [...this._el("rpfile").files];
@@ -3544,6 +3648,7 @@ ${STYLES}
         const parsed = await Promise.all(files.slice(0, 2).map(async (f) => decodeText(await f.text())));
         const first = parsed[0];
         if (parsed[1]) first.channels = { V1: { actions: parsed[1].actions || [] } };
+        this._plOff();
         this._rpLoad(normalise(first, fileKind(files[0].name, "auto"), Boolean(first.inverted)), fileTitle(files[0].name), null);
       } catch (e) {
         this._toast("Could not read the file: " + (e.message || e));
@@ -3705,8 +3810,10 @@ ${STYLES}
       return rp.convs[mode];
     }
     _rpToggle() {
-      if (this._rp.playing) this._rpStop();
-      else this._rpPlay();
+      if (this._rp.playing) {
+        this._plOff();
+        this._rpStop();
+      } else this._rpPlay();
     }
     // A mood: one of its three combos at random (a different one each time).
     _moodPlay(key) {
@@ -3803,6 +3910,11 @@ ${STYLES}
       const now = performance.now();
       rp.t += Math.min(250, now - rp.last) * this._rpSpeed();
       rp.last = now;
+      if (rp.t >= rp.len && this._pl && this._pl.on) {
+        rp.t = rp.len;
+        this._plNext();
+        return;
+      }
       if (rp.t >= rp.len && rp.raw.mood && this._mood) {
         this._moodNext(false);
         return;
@@ -3842,6 +3954,7 @@ ${STYLES}
       const $ = this._el;
       const rp = this._rp;
       $("rpname").textContent = rp.raw ? rp.name : "Choose a script…";
+      this._heatShow();
       $("rpfill").style.width = rp.len ? `${Math.min(100, rp.t / rp.len * 100)}%` : "0";
       const kind = rp.raw ? isStroke(rp.raw) ? "stroke script" : "vibration script" : "";
       const parts = rp.raw ? [`${fmt(rp.t)} / ${fmt(rp.len)}`, kind] : ["Pick a saved script, the current take or a file"];
@@ -3856,6 +3969,30 @@ ${STYLES}
       $("rpplay").classList.toggle("stop", rp.playing);
     }
   };
+
+  // frontend/src/lib/limits.js
+  var NO_LIMITS = { max: 100, lo: 0, hi: 100, speed: 100 };
+  var LIMIT_FULL_SPEED = 400;
+  var limitsFor = (all, stop) => ({ ...NO_LIMITS, ...all && all[stop] || {} });
+  var isLimited = (lim) => lim.max < 100 || lim.lo > 0 || lim.hi < 100 || lim.speed < 100;
+  var limitLevels = (lim, levels) => levels.map((v) => Math.min(100, Math.max(0, v)) * lim.max / 100);
+  function limitMove(lim, move, from) {
+    const span = lim.hi - lim.lo;
+    const goal = lim.lo + Math.min(100, Math.max(0, move.goal)) * span / 100;
+    let dur = move.dur;
+    if (lim.speed < 100) {
+      const start = from === null || from === void 0 ? goal - lim.lo > span / 2 ? lim.lo : lim.hi : from;
+      dur = Math.max(dur, Math.abs(goal - start) / (LIMIT_FULL_SPEED * lim.speed / 100) * 1e3);
+    }
+    return { goal, dur };
+  }
+  function limitsText(lim) {
+    const bits = [];
+    if (lim.max < 100) bits.push(`top ${lim.max}%`);
+    if (lim.lo > 0 || lim.hi < 100) bits.push(`range ${lim.lo}-${lim.hi}%`);
+    if (lim.speed < 100) bits.push(`speed ${lim.speed}%`);
+    return bits.join(" · ");
+  }
 
   // frontend/src/card/outputs.js
   var OutputsPart = class {
@@ -3953,6 +4090,7 @@ ${STYLES}
     _outApply(values, seconds) {
       if (!this._hass || !this._outs) return;
       const now = performance.now();
+      if (now < (this._holdUntil || 0)) return;
       const targets = this._outs.map((o, i) => this._outTargetValue(i));
       let blocked = false;
       for (const e of outLevels(targets, values, this._devices)) {
@@ -3961,7 +4099,7 @@ ${STYLES}
           continue;
         }
         if (e.vibe) {
-          const lv = e.levels.map((x) => Math.round(Math.min(100, Math.max(0, x))) / 100);
+          const lv = limitLevels(this._limits(e.dev), e.levels).map((x) => Math.round(x) / 100);
           const last = this._outLast[e.dev.id];
           if (!last || lv.some((x, j) => Math.abs(x - last.lv[j]) >= 0.01) || now - last.at > 500) {
             this._outLast[e.dev.id] = { lv, at: now };
@@ -3978,9 +4116,10 @@ ${STYLES}
     // Strokers take "go to this position over this long" moves. Ogg's
     // ogg.linear does that live; without it, Ogg's Position control is used
     // (coarse: it moves over a fixed second).
-    _outLinear(dev, move, now) {
-      const goal = Math.round(Math.min(100, Math.max(0, move.goal)));
+    _outLinear(dev, asked, now) {
       const last = this._linLast[dev.id];
+      const move = limitMove(this._limits(dev), asked, last ? last.goal : null);
+      const goal = Math.round(Math.min(100, Math.max(0, move.goal)));
       if (last && last.goal === goal && now - last.at < 1e3) return;
       const live = Boolean(this._hass.services && this._hass.services.ogg && this._hass.services.ogg.linear);
       if (last && now - last.at < (live ? 80 : 400)) return;
@@ -4119,6 +4258,7 @@ ${STYLES}
     }
     _playScript(script, name, lib) {
       if (!script) return;
+      this._plOff();
       this._setCtl("replay");
       this._rpLoad(script, name, lib);
       if (SPEEDS.includes(this._el("speed").value)) this._el("rpspeed").value = this._el("speed").value;
@@ -4292,12 +4432,1156 @@ ${STYLES}
         URL.revokeObjectURL(this._vurl);
         this._vurl = null;
       }
+      if (this._rp && this._rp.playing) {
+        this._plOff();
+        this._rpStop();
+      }
+      this._auStop();
+      this._tgEnd();
+      clearInterval(this._lockTimer);
+      this._lockTimer = null;
       this._outStop();
+      this._sessionClose();
+    }
+  };
+
+  // frontend/src/card/safety.js
+  var PRIVACY_KEY = "oggstudio_privacy";
+  var UNLOCK_KEY = "oggstudio_unlocked";
+  var PANIC_HOLD_MS = 3e3;
+  var SafetyPart = class {
+    // ---------------------------------------------------------- safety
+    // Stop all: stops every Ogg device (not only this card's), halts whatever
+    // this card was doing and keeps it quiet for a few seconds. Home Assistant
+    // tells every other open card to do the same.
+    _bindSafety() {
+      const $ = this._el;
+      $("stopall").addEventListener("click", () => this._panic());
+      $("coverstop").addEventListener("click", () => this._panic());
+      $("limbtn").addEventListener("click", () => {
+        $("limbox").hidden = !$("limbox").hidden;
+        this._limRender(true);
+      });
+      $("lockbtn").addEventListener("click", () => this._lock());
+      $("coveropen").addEventListener("click", () => this._unlocked());
+      $("pingo").addEventListener("click", () => this._pinTry());
+      $("pin").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") this._pinTry();
+      });
+      this.shadowRoot.addEventListener("pointerdown", () => this._touched(), true);
+      if (!this._pageHide) {
+        this._pageHide = () => {
+          if (this._claimed.size) this._outStop();
+        };
+        window.addEventListener("pagehide", this._pageHide);
+      }
+      try {
+        this._privacy = JSON.parse(localStorage.getItem(PRIVACY_KEY) || "null") || {};
+      } catch (_) {
+        this._privacy = {};
+      }
+      this._privacyShow();
+    }
+    _panic() {
+      this._haltAll();
+      this._toast("Everything stopped.");
+      if (this._hass) this._hass.callService("oggstudio", "panic", {}, void 0, false).catch((e) => this._toast("Stop all did not reach Home Assistant: " + (e.message || e)));
+    }
+    // Halt whatever this card is doing and hold its output for a moment.
+    _haltAll() {
+      if (!this._el) return;
+      const $ = this._el;
+      this._holdUntil = performance.now() + PANIC_HOLD_MS;
+      if (this._recording) this._stopRecording();
+      if (this._stRecording) this._stStop();
+      if (this._live) {
+        $("live").checked = false;
+        this._setLive(false);
+      }
+      $("stlive").checked = false;
+      if (this._st) {
+        this._st.touch = null;
+        this._st.pad = null;
+        this._st.drag = null;
+        this._st.latch = null;
+      }
+      this._stHalt();
+      if (this._pl) this._pl.on = false;
+      this._rpStop();
+      const video = $("video");
+      if (video && !video.paused) video.pause();
+      this._auStop();
+      this._tgStopLocal(true);
+      this._outStop();
+      this._plShow();
+    }
+    // The session tells Home Assistant this card is alive: when the browser
+    // goes away (closed, crashed, off the network) it stops this card's devices.
+    _sessionOpen() {
+      if (this._sessionUnsub || this._sessionOpening || !this.isConnected) return;
+      const conn = this._hass && this._hass.connection;
+      if (!conn || !conn.subscribeMessage || !this._studio || !this._studio.saved) return;
+      this._sessionOpening = true;
+      conn.subscribeMessage(() => {
+      }, { type: "oggstudio/session", owner: this._owner }).then((unsub) => {
+        this._sessionUnsub = unsub;
+        if (!this.isConnected) this._sessionClose();
+      }).catch(() => {
+        this._sessionFailed = true;
+      }).finally(() => {
+        this._sessionOpening = false;
+      });
+    }
+    _sessionClose() {
+      const unsub = this._sessionUnsub;
+      this._sessionUnsub = null;
+      if (unsub) {
+        try {
+          Promise.resolve(unsub()).catch(() => {
+          });
+        } catch (_) {
+        }
+      }
+    }
+    // Called from _update on every state change.
+    _safetyUpdate() {
+      const saved = this._studio && this._hass.states[this._studio.saved];
+      const attrs = saved && saved.attributes || {};
+      if (!this._sessionFailed) this._sessionOpen();
+      if (saved) {
+        const panic = attrs.panic || 0;
+        if (this._panicSeen !== void 0 && panic !== this._panicSeen) {
+          this._haltAll();
+          this._toast("Everything was stopped.");
+        }
+        this._panicSeen = panic;
+      }
+      this._limitsAll = attrs.limits || {};
+      if (saved && attrs.settings) {
+        const s = attrs.settings;
+        const next = { pin: Boolean(s.pin), discreet: Boolean(s.discreet), name: s.name || "Studio", users: s.users || [], auto_lock: Number(s.auto_lock) || 0 };
+        if (JSON.stringify(next) !== JSON.stringify(this._privacy)) {
+          this._privacy = next;
+          try {
+            localStorage.setItem(PRIVACY_KEY, JSON.stringify(next));
+          } catch (_) {
+          }
+        }
+      }
+      const discreet = Boolean(this._privacy.discreet);
+      [...this._devices].sort((a, b) => (a.real || a.name).localeCompare(b.real || b.name)).forEach((d, i) => {
+        if (!d.real) d.real = d.name;
+        d.name = discreet ? `Device ${String.fromCharCode(65 + i % 26)}` : d.real;
+      });
+      this._privacyShow();
+      this._limRender(false);
+    }
+    // ---------------------------------------------------------- limits
+    _limits(dev) {
+      return limitsFor(this._limitsAll, dev.stop);
+    }
+    _limRender(force) {
+      const $ = this._el;
+      const lims = this._devices.map((d) => [d, this._limits(d)]);
+      const any = lims.filter(([, l]) => isLimited(l));
+      const label = any.length ? `⚙ Limits (${any.length} set)` : "⚙ Limits";
+      if ($("limbtn").textContent !== label) $("limbtn").textContent = label;
+      if ($("limbox").hidden) return;
+      const key = JSON.stringify(lims.map(([d, l]) => [d.id, d.name, l]));
+      if (!force && (key === $("limbox").dataset.key || $("limbox").contains(this.shadowRoot.activeElement))) return;
+      $("limbox").dataset.key = key;
+      const slider = (dev, field, text, min, value) => `<label>${text} <b data-v="${field}">${value}%</b></label><input type="range" min="${min}" max="100" step="1" value="${value}" data-dev="${esc(dev.stop)}" data-field="${field}">`;
+      const rows = lims.map(([d, l]) => {
+        const vibe = d.vibe || !d.linear;
+        return `<div class="limdev"><h4>${esc(d.name)}</h4>` + (vibe ? slider(d, "max", "Top intensity", 0, l.max) : "") + (d.linear ? slider(d, "lo", "Stroke range from", 0, l.lo) + slider(d, "hi", "Stroke range to", 0, l.hi) + slider(d, "speed", "Top stroke speed", 5, l.speed) : "") + "</div>";
+      });
+      $("limlist").innerHTML = rows.join("") || '<div class="hint">No devices yet.</div>';
+      for (const input of $("limlist").querySelectorAll("input")) {
+        input.addEventListener("input", () => {
+          input.previousElementSibling.querySelector("b").textContent = `${input.value}%`;
+        });
+        input.addEventListener("change", () => this._limSet(input));
+      }
+    }
+    _limSet(input) {
+      const stop = input.dataset.dev;
+      const dev = this._devices.find((d) => d.stop === stop);
+      if (!dev) return;
+      const lim = { ...this._limits(dev), [input.dataset.field]: Number(input.value) };
+      if (lim.hi - lim.lo < 5) {
+        if (input.dataset.field === "lo") lim.hi = Math.min(100, lim.lo + 5);
+        else lim.lo = Math.max(0, lim.hi - 5);
+      }
+      if (lim.hi - lim.lo < 5) {
+        lim.lo = 0;
+        lim.hi = 100;
+      }
+      this._limitsAll = { ...this._limitsAll, [stop]: lim };
+      this._hass.callService("oggstudio", "set_limits", { entity_id: stop, ...lim }).then(() => this._toast(`Limits for ${dev.name}: ${limitsText(lim) || "none"}.`)).catch((e) => this._toast("Could not save the limits: " + (e.message || e)));
+      this._limRender(true);
+    }
+    // ---------------------------------------------------------- privacy
+    // A PIN or discreet mode covers the card until it is opened; it locks
+    // again after a while unused. The PIN is checked by Home Assistant.
+    get _needsLock() {
+      return Boolean(this._privacy && (this._privacy.pin || this._privacy.discreet));
+    }
+    _lockedNow() {
+      if (!this._needsLock) return false;
+      let at = 0;
+      try {
+        at = Number(sessionStorage.getItem(UNLOCK_KEY)) || 0;
+      } catch (_) {
+        at = this._unlockAt || 0;
+      }
+      if (!at) return true;
+      const minutes = this._privacy.auto_lock || 0;
+      if (minutes && !this._claimed.size && Date.now() - at > minutes * 6e4) return true;
+      return false;
+    }
+    _touched() {
+      if (!this._needsLock || this._isLocked) return;
+      const now = Date.now();
+      if (now - (this._unlockAt || 0) < 5e3) return;
+      this._unlockAt = now;
+      try {
+        sessionStorage.setItem(UNLOCK_KEY, String(now));
+      } catch (_) {
+      }
+    }
+    _unlocked() {
+      this._unlockAt = Date.now();
+      try {
+        sessionStorage.setItem(UNLOCK_KEY, String(this._unlockAt));
+      } catch (_) {
+      }
+      this._el("pin").value = "";
+      this._el("covermsg").textContent = "";
+      this._privacyShow();
+    }
+    _lock() {
+      this._unlockAt = 0;
+      try {
+        sessionStorage.removeItem(UNLOCK_KEY);
+      } catch (_) {
+      }
+      this._privacyShow();
+    }
+    async _pinTry() {
+      const $ = this._el;
+      const pin = $("pin").value;
+      if (!pin || this._pinBusy) return;
+      this._pinBusy = true;
+      try {
+        const r = await this._hass.callWS({ type: "oggstudio/unlock", pin });
+        if (r && r.ok) this._unlocked();
+        else {
+          $("pin").value = "";
+          $("covermsg").textContent = r && r.wait ? `Too many tries. Wait ${r.wait} s.` : "That is not the PIN.";
+        }
+      } catch (e) {
+        $("covermsg").textContent = "Could not check the PIN: " + (e.message || e);
+      }
+      this._pinBusy = false;
+    }
+    _privacyShow() {
+      if (!this._el) return;
+      const $ = this._el;
+      const p = this._privacy || {};
+      const me = this._hass && this._hass.user && this._hass.user.id;
+      const hide = Boolean(p.users && p.users.length && me && !p.users.includes(me));
+      if (this.hidden !== hide) {
+        this.hidden = hide;
+        this.style.display = hide ? "none" : "";
+      }
+      const cardEl = this.shadowRoot.querySelector("ha-card");
+      if (this._claimed.size) this._touched();
+      const locked = this._lockedNow();
+      this._isLocked = locked;
+      cardEl.classList.toggle("locked", locked);
+      $("cover").hidden = !locked;
+      const neutral = p.discreet || locked;
+      const title = neutral ? p.name || "Studio" : this._config.title || this._variant.name;
+      if ($("title").textContent !== title) $("title").textContent = title;
+      if ($("covername").textContent !== (p.name || "Studio")) $("covername").textContent = p.name || "Studio";
+      $("sub").hidden = Boolean(p.discreet);
+      $("lockbtn").hidden = !this._needsLock;
+      $("coverpin").hidden = !p.pin;
+      $("coveropen").hidden = Boolean(p.pin);
+      if (this._needsLock && !this._lockTimer) this._lockTimer = setInterval(() => this._privacyShow(), 2e4);
+    }
+  };
+
+  // frontend/src/lib/tools.js
+  var HEAT_FULL_SPEED = 400;
+  function heatmap(script, buckets) {
+    const len = duration(script);
+    const out = new Array(buckets).fill(0);
+    if (!len || !buckets) return out;
+    const tracks = [script.actions];
+    if (script.channels && script.channels.V1 && script.channels.V1.actions.length) tracks.push(script.channels.V1.actions);
+    const stroke = isStroke(script);
+    const step = len / buckets;
+    for (const actions of tracks) {
+      if (stroke) {
+        for (let i = 1; i < actions.length; i++) {
+          const a = actions[i - 1], b = actions[i];
+          const dt = b.at - a.at;
+          if (dt <= 0) continue;
+          const speed = Math.abs(b.pos - a.pos) / dt * 1e3;
+          const first = Math.min(buckets - 1, Math.floor(a.at / step)), last = Math.min(buckets - 1, Math.floor((b.at - 1e-3) / step));
+          for (let k = first; k <= last; k++) {
+            const share = (Math.min(b.at, (k + 1) * step) - Math.max(a.at, k * step)) / step;
+            out[k] = Math.max(out[k], Math.min(1, speed / HEAT_FULL_SPEED) * Math.min(1, Math.max(0, share) * 1.5));
+          }
+        }
+      } else {
+        for (let k = 0; k < buckets; k++) {
+          let sum = 0;
+          for (let j = 0; j < 4; j++) sum += sampleAt(actions, (k + (j + 0.5) / 4) * step);
+          out[k] = Math.max(out[k], sum / 400);
+        }
+      }
+    }
+    return out;
+  }
+  function heatColor(v) {
+    const x = Math.min(1, Math.max(0, v));
+    const hue = 215 - 215 * Math.min(1, x * 1.15);
+    return `hsl(${Math.round(hue)},${Math.round(55 + 30 * x)}%,${Math.round(22 + 30 * x)}%)`;
+  }
+  var cutTrack = (actions, from, to) => {
+    if (!actions.length) return [];
+    const inside = actions.filter((a) => a.at > from && a.at < to).map((a) => ({ at: Math.round(a.at - from), pos: a.pos }));
+    const edge = (ms) => Math.round(sampleAt(actions, ms));
+    return [{ at: 0, pos: edge(from) }, ...inside, { at: Math.round(to - from), pos: edge(to) }];
+  };
+  var withTracks = (script, main, second) => {
+    const out = { ...script, actions: main };
+    delete out.mood;
+    delete out.channels;
+    if (second && second.length) out.channels = { V1: { actions: second } };
+    return out;
+  };
+  var secondOf = (script) => script.channels && script.channels.V1 && script.channels.V1.actions.length ? script.channels.V1.actions : null;
+  function trimScript(script, from, to) {
+    const len = duration(script);
+    const a = Math.min(len, Math.max(0, Math.round(from))), b = Math.min(len, Math.max(0, Math.round(to)));
+    if (b - a < 100) throw new Error("Nothing left: keep at least a tenth of a second");
+    const second = secondOf(script);
+    return withTracks(script, cutTrack(script.actions, a, b), second && cutTrack(second, a, b));
+  }
+  var shifted = (actions, by) => actions.map((a) => ({ at: a.at + by, pos: a.pos }));
+  var joined = (first, next, by) => {
+    const out = first.slice();
+    for (const a of shifted(next, by)) {
+      const last = out[out.length - 1];
+      if (last && a.at <= last.at) {
+        if (a.pos === last.pos) continue;
+        a.at = last.at + 1;
+      }
+      out.push(a);
+    }
+    return out;
+  };
+  function loopScript(script, n) {
+    const times = Math.min(50, Math.max(1, Math.round(n)));
+    const len = duration(script);
+    if (!len) throw new Error("The script is empty");
+    const second = secondOf(script);
+    let main = [], other = [];
+    for (let i = 0; i < times; i++) {
+      main = joined(main, script.actions, i * len);
+      if (second) other = joined(other, second, i * len);
+    }
+    return withTracks(script, main, second && other);
+  }
+  function stitchScripts(a, b, gapMs = 500) {
+    if (isStroke(a) !== isStroke(b)) throw new Error("A stroke script and a vibration script cannot be joined");
+    const by = duration(a) + Math.max(0, Math.round(gapMs));
+    const sa = secondOf(a), sb = secondOf(b);
+    const second = sa || sb ? joined(sa || a.actions, sb || b.actions, by) : null;
+    return withTracks(a, joined(a.actions, b.actions, by), second);
+  }
+
+  // frontend/src/card/tools.js
+  var QUEUE_KEY = "oggstudio_queue";
+  var TAKE_HEAT = "\0take";
+  var paintHeat = (canvas, heat) => {
+    canvas.width = heat.length;
+    canvas.height = 1;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    heat.forEach((v, i) => {
+      ctx.fillStyle = heatColor(v);
+      ctx.fillRect(i, 0, 1, 1);
+    });
+  };
+  var ToolsPart = class {
+    // ---------------------------------------------------------- script tools
+    // A heatmap on the replay bar and in the picker; trim, repeat and stitch
+    // (each result becomes the current take); and a queue of scripts and moods.
+    _bindTools() {
+      const $ = this._el;
+      $("tlbtn").addEventListener("click", () => {
+        $("tlbox").hidden = !$("tlbox").hidden;
+        $("plbox").hidden = true;
+        this._toolsUpdate();
+      });
+      $("plbtn").addEventListener("click", () => {
+        $("plbox").hidden = !$("plbox").hidden;
+        $("tlbox").hidden = true;
+        this._toolsUpdate();
+        this._plShow();
+      });
+      $("tlstart").addEventListener("click", () => this._tlTrim(false));
+      $("tlend").addEventListener("click", () => this._tlTrim(true));
+      $("tlloop").addEventListener("click", () => this._tlEdit((raw) => loopScript(raw, Number($("tln").value)), `Repeated ${$("tln").value} times.`));
+      $("tlstitch").addEventListener("click", () => this._tlStitch());
+      $("tln").replaceChildren(...[2, 3, 4, 5, 8, 10, 20].map((n) => new Option(`× ${n}`, String(n))));
+      let kept = null;
+      try {
+        kept = JSON.parse(localStorage.getItem(QUEUE_KEY) || "null");
+      } catch (_) {
+      }
+      const items = kept && Array.isArray(kept.items) ? kept.items.filter((it) => it && (typeof it.script === "string" || typeof it.mood === "string")) : [];
+      this._pl = { items, loop: Boolean(kept && kept.loop), i: -1, on: false, run: 0, busy: false };
+      $("plloop").checked = this._pl.loop;
+      $("plloop").addEventListener("change", () => {
+        this._pl.loop = $("plloop").checked;
+        this._plKeep();
+      });
+      $("pladdbtn").addEventListener("click", () => {
+        const v = $("pladd").value;
+        if (!v) return;
+        this._pl.items.push(v.startsWith("m:") ? { mood: v.slice(2) } : { script: v.slice(2) });
+        this._plKeep();
+        this._plShow();
+      });
+      $("plplay").addEventListener("click", () => {
+        if (this._pl.on) {
+          this._plOff();
+          this._rpStop();
+        } else this._plPlay(0);
+      });
+      $("plsaved").addEventListener("change", () => this._plLoadSaved());
+      $("plsave").addEventListener("click", () => this._plSave());
+      $("pldel").addEventListener("click", () => this._plDelete());
+      $("pllist").addEventListener("click", (e) => {
+        const b = e.target.closest("button");
+        if (!b) return;
+        const i = Number(b.parentElement.dataset.i), pl = this._pl;
+        const act = b.dataset.act;
+        if (act === "go") {
+          this._plPlay(i);
+          return;
+        }
+        if (pl.on) {
+          this._plOff();
+          this._rpStop();
+        }
+        if (act === "x") pl.items.splice(i, 1);
+        const j = act === "up" ? i - 1 : act === "down" ? i + 1 : -1;
+        if (j >= 0 && j < pl.items.length) [pl.items[i], pl.items[j]] = [pl.items[j], pl.items[i]];
+        this._plKeep();
+        this._plShow();
+      });
+      this._plShow();
+    }
+    _savedNames() {
+      const saved = this._studio && this._hass && this._hass.states[this._studio.saved];
+      return (saved && saved.attributes.options || []).filter((n) => n && !/^\(.*\)$/.test(n));
+    }
+    // Called from _update: the lists that follow the library.
+    _toolsUpdate() {
+      if (!this._pl) return;
+      const $ = this._el;
+      const names = this._savedNames();
+      const saved = this._studio && this._hass.states[this._studio.saved];
+      const lists = Object.keys(saved && saved.attributes.playlists || {}).sort((a, b) => a.localeCompare(b));
+      const key = JSON.stringify([names, lists]);
+      if ($("tlbox").dataset.key === key) return;
+      $("tlbox").dataset.key = key;
+      $("tlother").replaceChildren(new Option(names.length ? "Choose a saved script…" : "No saved scripts yet", ""), ...names.map((n) => new Option(n, n)));
+      $("pladd").replaceChildren(
+        new Option("Add a script or mood…", ""),
+        ...names.map((n) => new Option(n, `s:${n}`)),
+        ...Object.entries(MOODS).map(([k, m]) => new Option(`${m.icon} Mood: ${m.label}`, `m:${k}`))
+      );
+      $("plsaved").replaceChildren(new Option(lists.length ? "Open a saved queue…" : "No saved queues yet", ""), ...lists.map((n) => new Option(n, n)));
+    }
+    // ---- heatmap
+    _heatShow() {
+      const rp = this._rp;
+      if (!this._el || !rp || this._heatFor === rp.raw) return;
+      this._heatFor = rp.raw;
+      const canvas = this._el("rpheat");
+      this._el("rpbar").classList.toggle("heat", Boolean(rp.raw));
+      if (rp.raw) paintHeat(canvas, heatmap(rp.raw, 240));
+    }
+    // Small heatmaps under the picker's entries, fetched one at a time.
+    async _pickHeats() {
+      const run = this._heatRun = (this._heatRun || 0) + 1;
+      this._heatCache = this._heatCache || {};
+      for (const b of [...this._el("rplist").querySelectorAll("button[data-heat]")]) {
+        const name = b.dataset.heat;
+        let heat;
+        if (name === TAKE_HEAT) heat = this._take && heatmap(this._take, 80);
+        else {
+          const info = this._scriptInfo(name);
+          const key = `${name}:${info && info.duration_ms || 0}`;
+          heat = this._heatCache[key];
+          if (!heat) {
+            try {
+              heat = this._heatCache[key] = heatmap(await this._getSaved(name), 80);
+            } catch (_) {
+              continue;
+            }
+          }
+        }
+        if (run !== this._heatRun || this._el("rppop").hidden) return;
+        if (!heat) continue;
+        const c = document.createElement("canvas");
+        c.className = "pkheat";
+        paintHeat(c, heat);
+        b.appendChild(c);
+      }
+    }
+    // ---- trim, repeat, stitch
+    _tlEdit(fn, done) {
+      const rp = this._rp;
+      if (!rp.raw) {
+        this._toast("Choose a script first.");
+        return;
+      }
+      if (rp.raw.mood) {
+        this._toast("A mood cannot be edited: it is made new each time.");
+        return;
+      }
+      try {
+        const out = fn(rp.raw);
+        out.metadata = { ...out.metadata || {} };
+        this._plOff();
+        this._take = out;
+        this._rpLoad(out, "Current take", null);
+        this._update();
+        this._toast(`${done} It is now the current take (${fmt(duration(out))}): save it under a name to keep it.`);
+      } catch (e) {
+        this._toast(e.message || String(e));
+      }
+    }
+    _tlTrim(end) {
+      const t = this._rp.t, len = this._rp.len;
+      this._tlEdit((raw) => end ? trimScript(raw, 0, t) : trimScript(raw, t, len), end ? `Cut everything after ${fmt(t)}.` : `Cut everything before ${fmt(t)}.`);
+    }
+    async _tlStitch() {
+      const name = this._el("tlother").value;
+      if (!name) {
+        this._toast("Choose the script to add first.");
+        return;
+      }
+      let other;
+      try {
+        other = await this._getSaved(name);
+      } catch (e) {
+        this._toast("Could not load the script: " + (e.message || e));
+        return;
+      }
+      this._tlEdit((raw) => stitchScripts(raw, other), `Added "${name}" after it.`);
+    }
+    // ---- queue
+    _plKeep() {
+      try {
+        localStorage.setItem(QUEUE_KEY, JSON.stringify({ items: this._pl.items, loop: this._pl.loop }));
+      } catch (_) {
+      }
+    }
+    _plLabel(it) {
+      if (it.mood) {
+        const m = MOODS[it.mood];
+        return m ? `${m.icon} Mood: ${m.label}` : `Mood: ${it.mood}`;
+      }
+      return it.script;
+    }
+    _plShow() {
+      if (!this._el || !this._pl) return;
+      const $ = this._el;
+      const pl = this._pl;
+      const label = pl.items.length ? `☰ Queue (${pl.items.length})` : "☰ Queue";
+      if ($("plbtn").textContent !== label) $("plbtn").textContent = label;
+      $("plbtn").classList.toggle("on", pl.on);
+      $("plplay").textContent = pl.on ? "■ Stop queue" : "▶ Play queue";
+      $("plplay").classList.toggle("stop", pl.on);
+      if ($("plbox").hidden) return;
+      $("pllist").innerHTML = pl.items.map((it, i) => `<div class="plitem${pl.on && i === pl.i ? " on" : ""}" data-i="${i}"><button type="button" class="plname" data-act="go">${i + 1}. ${esc(this._plLabel(it))}</button><button type="button" data-act="up" aria-label="Move up"${i ? "" : " disabled"}>↑</button><button type="button" data-act="down" aria-label="Move down"${i < pl.items.length - 1 ? "" : " disabled"}>↓</button><button type="button" data-act="x" aria-label="Remove">✕</button></div>`).join("") || '<div class="hint">The queue is empty: add scripts and moods below. They play in order. A mood plays one of its combos, then the queue moves on.</div>';
+    }
+    // The queue stops following (what is playing carries on).
+    _plOff() {
+      const pl = this._pl;
+      if (!pl || !pl.on) return;
+      pl.on = false;
+      pl.i = -1;
+      pl.run += 1;
+      this._plShow();
+    }
+    _plNext() {
+      const pl = this._pl;
+      if (pl.busy) return;
+      pl.busy = true;
+      this._plPlay(pl.i + 1).finally(() => {
+        pl.busy = false;
+      });
+    }
+    async _plPlay(start) {
+      const pl = this._pl;
+      if (!pl.items.length) {
+        this._toast("The queue is empty.");
+        return;
+      }
+      const run = pl.run += 1;
+      let i = start, done = false;
+      for (let tried = 0; tried < pl.items.length; tried++, i++) {
+        if (i >= pl.items.length) {
+          if (!pl.loop) {
+            done = true;
+            break;
+          }
+          i = 0;
+        }
+        const it = pl.items[i];
+        pl.on = true;
+        pl.i = i;
+        this._plShow();
+        if (it.mood) {
+          if (!MOODS[it.mood]) continue;
+          this._mood = { key: it.mood, combo: -1 };
+          this._moodNext(true);
+          return;
+        }
+        let script;
+        try {
+          script = await this._getSaved(it.script);
+        } catch (_) {
+          script = null;
+        }
+        if (run !== pl.run) return;
+        if (!script) {
+          this._toast(`"${it.script}" is no longer in the library: skipped.`);
+          continue;
+        }
+        this._mood = null;
+        this._rpLoad(script, it.script, it.script);
+        this._rpPlay();
+        return;
+      }
+      pl.on = false;
+      pl.i = -1;
+      this._rpStop();
+      this._plShow();
+      this._toast(done ? "The queue has finished." : "Nothing in the queue could be played.");
+    }
+    _plLoadSaved() {
+      const $ = this._el;
+      const name = $("plsaved").value;
+      const saved = this._studio && this._hass.states[this._studio.saved];
+      const list = name && saved && saved.attributes.playlists && saved.attributes.playlists[name];
+      if (!list) return;
+      if (this._pl.on) {
+        this._plOff();
+        this._rpStop();
+      }
+      this._pl.items = (list.items || []).map((it) => ({ ...it }));
+      this._pl.loop = Boolean(list.loop);
+      $("plloop").checked = this._pl.loop;
+      $("plname").value = name;
+      this._plKeep();
+      this._plShow();
+    }
+    async _plSave() {
+      const name = this._el("plname").value.trim();
+      if (!name) {
+        this._toast("Type a name for the queue first.");
+        return;
+      }
+      if (!this._pl.items.length) {
+        this._toast("The queue is empty.");
+        return;
+      }
+      try {
+        await this._hass.callService("oggstudio", "save_playlist", { name, items: this._pl.items, loop: this._pl.loop });
+        this._toast(`Saved the queue "${name}".`);
+      } catch (e) {
+        this._toast(e.message || String(e));
+      }
+    }
+    async _plDelete() {
+      const name = this._el("plsaved").value || this._el("plname").value.trim();
+      if (!name || !confirm(`Delete the saved queue "${name}"?`)) return;
+      try {
+        await this._hass.callService("oggstudio", "delete_playlist", { name });
+        this._toast(`Deleted the queue "${name}".`);
+      } catch (e) {
+        this._toast(e.message || String(e));
+      }
+    }
+  };
+
+  // frontend/src/lib/audio.js
+  var AUDIO_MODES = { beat: "Beat: a pulse on every beat", bass: "Bass: follows the low end", volume: "Volume: follows the loudness" };
+  var AUDIO_GATE = 0.02;
+  var band = (bins, hzPerBin, from, to) => {
+    const a = Math.max(1, Math.floor(from / hzPerBin)), b = Math.min(bins.length - 1, Math.ceil(to / hzPerBin));
+    let sum = 0;
+    for (let i = a; i <= b; i++) sum += bins[i];
+    return b >= a ? sum / ((b - a + 1) * 255) : 0;
+  };
+  var AudioFeel = class {
+    constructor(sampleRate, fftSize) {
+      this.hz = sampleRate / fftSize;
+      this.reset();
+    }
+    reset() {
+      this.hist = [];
+      this.peak = { bass: 0.1, mid: 0.1, all: 0.1 };
+      this.pulse = 0;
+      this.beatAt = -1e9;
+      this.last = null;
+      this.smooth = [0, 0];
+      this.beats = 0;
+    }
+    // One reading. sens 0-1: how easily it reacts. Returns { levels, beat }.
+    step(bins, now, mode = "beat", sens = 0.5) {
+      const dt = this.last === null ? 50 : Math.min(250, Math.max(1, now - this.last));
+      this.last = now;
+      const bass = band(bins, this.hz, 30, 180);
+      const mid = band(bins, this.hz, 300, 4e3);
+      const all = band(bins, this.hz, 30, 8e3);
+      const fade = Math.pow(0.5, dt / 6e3);
+      for (const [key, v] of [["bass", bass], ["mid", mid], ["all", all]]) this.peak[key] = Math.max(v, this.peak[key] * fade, 0.05);
+      const gain = 0.6 + sens * 0.9;
+      const rel = (v, key) => all < AUDIO_GATE ? 0 : Math.min(1, v / this.peak[key] * gain);
+      const avg = this.hist.length ? this.hist.reduce((a, b) => a + b, 0) / this.hist.length : bass;
+      this.hist.push(bass);
+      while (this.hist.length > 24) this.hist.shift();
+      const clear = 1.55 - sens * 0.45;
+      const beat = all >= AUDIO_GATE && this.hist.length > 4 && bass > avg * clear && bass > 0.06 && now - this.beatAt > 200;
+      if (beat) {
+        this.beatAt = now;
+        this.beats += 1;
+        this.pulse = Math.min(1, 0.55 + rel(bass, "bass") * 0.45);
+      } else this.pulse *= Math.pow(0.5, dt / 130);
+      let first;
+      if (mode === "bass") first = rel(bass, "bass");
+      else if (mode === "volume") first = rel(all, "all");
+      else first = Math.max(this.pulse, rel(bass, "bass") * 0.25);
+      const second = rel(mid, "mid");
+      const ease = (prev, v) => v >= prev ? v : prev + (v - prev) * Math.min(1, dt / 120);
+      this.smooth = [ease(this.smooth[0], first), ease(this.smooth[1], second)];
+      return { levels: this.smooth.map((v) => Math.round(v * 100)), beat };
+    }
+  };
+
+  // frontend/src/card/audio.js
+  var AUDIO_KEY = "oggstudio_audio";
+  var AUDIO_HINT = "Sound drives the devices: a pulse on each beat, or following the bass or the loudness. Nothing is recorded or sent anywhere; only the levels reach the devices.";
+  var AudioPart = class {
+    // ---------------------------------------------------------- audio
+    // The sound is analysed here in the browser, a few times a second.
+    _bindAudio() {
+      const $ = this._el;
+      $("aumode").replaceChildren(...Object.entries(AUDIO_MODES).map(([v, t]) => new Option(t, v)));
+      let kept = {};
+      try {
+        kept = JSON.parse(localStorage.getItem(AUDIO_KEY) || "{}") || {};
+      } catch (_) {
+      }
+      if ([...$("ausrc").options].some((o) => o.value === kept.src)) $("ausrc").value = kept.src;
+      if (AUDIO_MODES[kept.mode]) $("aumode").value = kept.mode;
+      if (Number.isFinite(kept.sens)) $("ausens").value = String(kept.sens);
+      const keep = () => {
+        $("ausensv").textContent = `${$("ausens").value}%`;
+        try {
+          localStorage.setItem(AUDIO_KEY, JSON.stringify({ src: $("ausrc").value, mode: $("aumode").value, sens: Number($("ausens").value) }));
+        } catch (_) {
+        }
+      };
+      $("ausrc").addEventListener("change", () => {
+        this._auStop();
+        keep();
+        this._auShow();
+      });
+      $("aumode").addEventListener("change", keep);
+      $("ausens").addEventListener("input", keep);
+      $("aufile").addEventListener("change", () => {
+        const f = $("aufile").files[0];
+        this._auStop();
+        if (this._auUrl) URL.revokeObjectURL(this._auUrl);
+        this._auUrl = f ? URL.createObjectURL(f) : null;
+        if (f) $("auel").src = this._auUrl;
+        else $("auel").removeAttribute("src");
+        this._auShow();
+      });
+      $("augo").addEventListener("click", () => this._au ? this._auStop() : this._auStart());
+      $("ausensv").textContent = `${$("ausens").value}%`;
+      this._auShow();
+    }
+    async _auStart() {
+      const $ = this._el;
+      const src = $("ausrc").value;
+      let stream = null;
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) throw new Error("this browser cannot analyse sound");
+        const ctx = this._auCtx || (this._auCtx = new AC());
+        if (ctx.state === "suspended") await ctx.resume();
+        const an = ctx.createAnalyser();
+        an.fftSize = 2048;
+        an.smoothingTimeConstant = 0.3;
+        let node;
+        if (src === "mic" || src === "tab") {
+          if (!window.isSecureContext || !navigator.mediaDevices) throw new Error("the microphone and shared audio need Home Assistant opened over https (or in its app). A music file or the video works anywhere");
+          if (src === "mic") stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+          else {
+            if (!navigator.mediaDevices.getDisplayMedia) throw new Error("this browser cannot share audio from another tab");
+            stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+          }
+          const track = stream.getAudioTracks()[0];
+          if (!track) throw new Error('no sound was shared: pick a browser tab and tick "Also share tab audio"');
+          for (const t of stream.getVideoTracks()) t.enabled = false;
+          node = ctx.createMediaStreamSource(stream);
+          node.connect(an);
+          track.addEventListener("ended", () => {
+            if (this._au && this._au.stream === stream) this._auStop();
+          });
+        } else {
+          const el = src === "video" ? $("video") : $("auel");
+          if (!el.currentSrc && !el.src) throw new Error(src === "video" ? "load a video in Video sync first" : "choose a music file first");
+          this._auNodes = this._auNodes || /* @__PURE__ */ new Map();
+          node = this._auNodes.get(el);
+          if (!node) {
+            node = ctx.createMediaElementSource(el);
+            node.connect(ctx.destination);
+            this._auNodes.set(el, node);
+          }
+          node.connect(an);
+          if (src === "file") el.play().catch(() => {
+          });
+        }
+        this._rpStop();
+        this._au = { src, an, node, stream, feel: new AudioFeel(ctx.sampleRate, an.fftSize), bins: new Uint8Array(an.frequencyBinCount), outAt: 0 };
+        clearInterval(this._auTimer);
+        this._auTimer = setInterval(() => this._auTick(), 50);
+        this._toast("");
+      } catch (e) {
+        if (stream) for (const t of stream.getTracks()) t.stop();
+        const denied = e && (e.name === "NotAllowedError" || e.name === "SecurityError");
+        this._toast(denied ? "Audio: permission was not given." : `Audio: ${e.message || e}.`);
+      }
+      this._auShow();
+    }
+    _auTick() {
+      const au = this._au;
+      if (!au || !this._el) return;
+      const $ = this._el;
+      const now = performance.now();
+      au.an.getByteFrequencyData(au.bins);
+      const r = au.feel.step(au.bins, now, $("aumode").value, Number($("ausens").value) / 100);
+      $("aum1").style.width = `${r.levels[0]}%`;
+      $("aum2").style.width = `${r.levels[1]}%`;
+      if (now - au.outAt < 100) return;
+      au.outAt = now;
+      this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._mapLive(i, r.levels[i], 0)), 0.6);
+      if (now - (au.shownAt || 0) > 1e3) {
+        au.shownAt = now;
+        this._auShow();
+      }
+    }
+    _auStop() {
+      const au = this._au;
+      if (!au) return;
+      this._au = null;
+      clearInterval(this._auTimer);
+      this._auTimer = null;
+      try {
+        au.node.disconnect(au.an);
+      } catch (_) {
+      }
+      if (au.stream) for (const t of au.stream.getTracks()) t.stop();
+      if (au.src === "file" && this._el) this._el("auel").pause();
+      this._outStop();
+      this._auShow();
+    }
+    _auShow() {
+      if (!this._el) return;
+      const $ = this._el;
+      const au = this._au;
+      $("aufilebox").hidden = $("ausrc").value !== "file";
+      $("augo").textContent = au ? "■ Stop" : "♪ Start";
+      $("augo").classList.toggle("stop", Boolean(au));
+      if (!au) {
+        $("aum1").style.width = "0";
+        $("aum2").style.width = "0";
+      }
+      const from = { mic: "the microphone", file: "the music file", video: "the video", tab: "the shared audio" };
+      $("auinfo").textContent = au ? `Listening to ${from[au.src]} · ${au.feel.beats} beats` : AUDIO_HINT;
+      const tab = this.shadowRoot.querySelector('.ctltabs [data-ctl="audio"]');
+      if (tab) tab.classList.toggle("live", Boolean(au));
+    }
+  };
+
+  // frontend/src/card/together.js
+  var TG_LINK = /^https?:\/\/[^\s/]+(\/[^\s?#]*)?\/api\/oggstudio\/together\/[\w-]+\/?$/;
+  var TG_FRESH_MS = 1500;
+  var TogetherPart = class {
+    // ---------------------------------------------------------- together
+    // Two people, two places: each one's slider drives the other's devices,
+    // by feel and inside the limits each has set. Only levels (0-100) travel;
+    // a partner never reaches Home Assistant itself. Whoever starts shares a
+    // link; the other opens it in a browser, or joins from their own card.
+    _bindTogether() {
+      const $ = this._el;
+      $("tgstart").addEventListener("click", () => this._tgStart());
+      $("tgjoin").addEventListener("click", () => this._tgJoin());
+      $("tglink").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") this._tgJoin();
+      });
+      $("tgcopy").addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText($("tgshare").value);
+          this._toast("Link copied. Send it only to your partner: whoever has it can join.");
+        } catch (_) {
+          $("tgshare").select();
+          this._toast("Copy the selected link.");
+        }
+      });
+      $("tgsend").addEventListener("input", () => {
+        $("tgsendv").textContent = `${$("tgsend").value}%`;
+      });
+      $("tgaccept").addEventListener("change", () => this._tgShow());
+      $("tgstop").addEventListener("click", () => {
+        this._tgStopLocal(true);
+        this._toast("Stopped both sides.");
+      });
+      $("tgend").addEventListener("click", () => this._tgEnd());
+      this._tgShow();
+    }
+    _tgNew(role) {
+      if (this._tg) this._tgEnd();
+      const tg = { role, joined: false, theirs: false, name: "", in: null, link: "", token: null, sentAccept: null, lastOut: 0, outAt: 0, pingAt: 0, driving: false };
+      this._tg = tg;
+      clearInterval(this._tgTimer);
+      this._tgTimer = setInterval(() => this._tgTick(), 100);
+      return tg;
+    }
+    async _tgStart() {
+      const conn = this._hass && this._hass.connection;
+      if (!conn || !conn.subscribeMessage) {
+        this._toast("Not connected to Home Assistant.");
+        return;
+      }
+      const tg = this._tgNew("host");
+      try {
+        const unsub = await conn.subscribeMessage((ev) => this._tgEvent(tg, ev), { type: "oggstudio/together" });
+        if (this._tg !== tg) {
+          unsub();
+          return;
+        }
+        tg.unsub = unsub;
+      } catch (e) {
+        if (this._tg === tg) this._tgEnd();
+        this._toast("Could not start a session: " + (e.message || e));
+      }
+      this._tgShow();
+    }
+    _tgEvent(tg, ev) {
+      if (this._tg !== tg || !ev) return;
+      if (ev.event === "open") {
+        tg.token = ev.token;
+        tg.link = String(ev.base || location.origin).replace(/\/+$/, "") + ev.path;
+      } else if (ev.event === "join") this._tgJoined(tg);
+      else if (ev.event === "leave") {
+        tg.joined = false;
+        tg.theirs = false;
+        tg.in = null;
+        tg.sentAccept = null;
+        this._toast("Your partner left. The link still works if they come back.");
+      } else if (ev.event === "msg") this._tgMsg(tg, ev.data || {});
+      this._tgShow();
+    }
+    _tgJoined(tg) {
+      tg.joined = true;
+      tg.sentAccept = null;
+      const discreet = this._privacy && this._privacy.discreet;
+      const name = !discreet && this._hass && this._hass.user && String(this._hass.user.name || "").trim();
+      if (name) this._tgSend({ name: name.slice(0, 30) });
+    }
+    _tgJoin() {
+      const $ = this._el;
+      const link = $("tglink").value.trim();
+      if (!TG_LINK.test(link)) {
+        this._toast("That is not a Together link: paste the whole link you were sent.");
+        return;
+      }
+      if (location.protocol === "https:" && link.startsWith("http:")) {
+        this._toast("This page is secure (https) and the link is not, so the browser will not connect. Open the link itself in a browser instead.");
+        return;
+      }
+      let ws;
+      try {
+        ws = new WebSocket(link.replace(/^http/, "ws").replace(/\/+$/, "") + "/ws");
+      } catch (e) {
+        this._toast("Could not connect: " + (e.message || e));
+        return;
+      }
+      const tg = this._tgNew("guest");
+      tg.ws = ws;
+      ws.addEventListener("open", () => {
+        if (this._tg !== tg) return;
+        $("tglink").value = "";
+        this._tgJoined(tg);
+        this._tgShow();
+      });
+      ws.addEventListener("message", (e) => {
+        if (this._tg !== tg) return;
+        let data = null;
+        try {
+          data = JSON.parse(e.data);
+        } catch (_) {
+          return;
+        }
+        if (data && typeof data === "object") {
+          this._tgMsg(tg, data);
+          this._tgShow();
+        }
+      });
+      ws.addEventListener("close", () => {
+        if (this._tg !== tg) return;
+        this._toast(tg.joined ? "The session has ended." : "Could not join: the link has ended, or someone has already joined it.");
+        this._tgEnd();
+      });
+      this._tgShow();
+    }
+    _tgSend(data) {
+      const tg = this._tg;
+      if (!tg || !tg.joined) return;
+      if (tg.role === "host") {
+        if (tg.token) this._hass.callWS({ type: "oggstudio/together_send", token: tg.token, data }).catch(() => {
+        });
+      } else if (tg.ws && tg.ws.readyState === 1) tg.ws.send(JSON.stringify(data));
+    }
+    _tgMsg(tg, d) {
+      if (Array.isArray(d.v) && d.v.length && d.v.every((x) => Number.isFinite(x))) tg.in = { v: d.v.slice(0, 2).map((x) => Math.min(100, Math.max(0, x))), at: performance.now() };
+      if (typeof d.accept === "boolean") tg.theirs = d.accept;
+      if (typeof d.name === "string") tg.name = d.name.slice(0, 30);
+      if (d.stop === true) {
+        this._tgStopLocal(false);
+        this._toast("Your partner stopped both sides.");
+      }
+    }
+    // My devices follow my partner only while I say so, on the Together tab.
+    get _tgAccepting() {
+      const tg = this._tg;
+      return Boolean(tg && tg.joined && this._ctl === "together" && this._el("tgaccept").checked);
+    }
+    _tgTick() {
+      const tg = this._tg;
+      if (!tg || !this._el) return;
+      const $ = this._el;
+      const now = performance.now();
+      const accept = this._tgAccepting;
+      if (tg.joined) {
+        if (accept !== tg.sentAccept) {
+          tg.sentAccept = accept;
+          this._tgSend({ accept });
+        }
+        const out = Number($("tgsend").value) || 0;
+        if (out !== tg.lastOut || out > 0 && now - tg.outAt >= 500) {
+          tg.lastOut = out;
+          tg.outAt = now;
+          this._tgSend({ v: [out] });
+        }
+        if (now - tg.pingAt >= 1e4) {
+          tg.pingAt = now;
+          this._tgSend({ ping: true });
+        }
+      }
+      const fresh = Boolean(tg.in && now - tg.in.at < TG_FRESH_MS);
+      $("tgin").style.width = `${fresh ? Math.max(...tg.in.v) : 0}%`;
+      if (accept && fresh) {
+        tg.driving = true;
+        const v = tg.in.v;
+        this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._mapLive(i, v[i] ?? v[0], 0)), 0.6);
+      } else if (tg.driving) {
+        tg.driving = false;
+        this._outStop();
+      }
+    }
+    // Stop here: nothing in, nothing out. With `tell`, the partner's side stops too.
+    _tgStopLocal(tell) {
+      const tg = this._tg;
+      if (!tg || !this._el) return;
+      const $ = this._el;
+      $("tgaccept").checked = false;
+      $("tgsend").value = "0";
+      $("tgsendv").textContent = "0%";
+      tg.in = null;
+      if (tell) this._tgSend({ stop: true });
+      if (tg.driving) {
+        tg.driving = false;
+        this._outStop();
+      }
+      this._tgShow();
+    }
+    _tgEnd() {
+      const tg = this._tg;
+      if (!tg) return;
+      this._tg = null;
+      clearInterval(this._tgTimer);
+      this._tgTimer = null;
+      if (tg.unsub) {
+        try {
+          Promise.resolve(tg.unsub()).catch(() => {
+          });
+        } catch (_) {
+        }
+      }
+      if (tg.ws) {
+        try {
+          tg.ws.close();
+        } catch (_) {
+        }
+      }
+      if (tg.driving) this._outStop();
+      if (this._el) {
+        const $ = this._el;
+        $("tgaccept").checked = false;
+        $("tgsend").value = "0";
+        $("tgsendv").textContent = "0%";
+        $("tgin").style.width = "0";
+      }
+      this._tgShow();
+    }
+    _tgShow() {
+      if (!this._el) return;
+      const $ = this._el;
+      const tg = this._tg;
+      $("tgidle").hidden = Boolean(tg);
+      $("tglive").hidden = !tg;
+      const tab = this.shadowRoot.querySelector('.ctltabs [data-ctl="together"]');
+      if (tab) tab.classList.toggle("live", Boolean(tg));
+      if (!tg) return;
+      $("tgsharebox").hidden = tg.role !== "host" || !tg.link;
+      if ($("tgshare").value !== tg.link) $("tgshare").value = tg.link;
+      const who = tg.name || "Your partner";
+      let text;
+      if (!tg.joined) text = tg.role === "host" ? "Waiting for your partner to open the link…" : "Connecting…";
+      else text = `${who} is here · ${tg.theirs ? "your slider drives their devices" : "they have not let you control yet"} · ${$("tgaccept").checked ? "they drive your devices" : "your devices do not follow them"}`;
+      if ($("tgstat").textContent !== text) $("tgstat").textContent = text;
     }
   };
 
   // frontend/src/index.js
-  for (const part of [StrokePart, GamepadPart, VideoPart, CastPart, ReplayPart, OutputsPart]) {
+  for (const part of [StrokePart, GamepadPart, VideoPart, CastPart, ReplayPart, OutputsPart, SafetyPart, ToolsPart, AudioPart, TogetherPart]) {
     for (const [key, desc] of Object.entries(Object.getOwnPropertyDescriptors(part.prototype))) {
       if (key !== "constructor") Object.defineProperty(OggStudioCard.prototype, key, desc);
     }

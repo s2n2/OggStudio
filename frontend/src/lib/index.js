@@ -6,3 +6,6 @@ export * from './ai.js';
 export * from './moods.js';
 export * from './outputs.js';
 export * from './gamepad.js';
+export * from './limits.js';
+export * from './tools.js';
+export * from './audio.js';

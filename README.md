@@ -18,6 +18,12 @@ Record, import, save and replay vibration patterns on devices controlled by
   play, by speed, position, both, or downstrokes or upstrokes only. Each saved script
   remembers the mode last used for it.
 * **No device**: record without a device connected.
+* **Safety**: Stop all on every card, a button, a service, a controller button and a
+  notification action; per-device limits nothing can exceed; auto-stop when the browser goes.
+* **Privacy**: no history, discreet cards, chosen users only, and a PIN lock.
+* **Audio**: music, a video's sound, the microphone or another tab drives the devices.
+* **Script tools**: heatmaps, trim, repeat and stitch; **queues** of scripts and moods.
+* **Together**: a remote partner drives your devices and you theirs, by feel, through a link.
 
 Playback runs inside Ogg's own frame loop (Ogg 2.1+), so timing does not
 depend on the dashboard or network.
@@ -289,6 +295,99 @@ status line says so. You can fix it by:
 Use Chrome itself rather than the Companion app if the Companion app doesn't see the
 controller.
 
+## Safety
+
+* **■ Stop all** (top of every card, and on a locked card) stops every Ogg device, not only
+  the ones this card drives, and halts whatever each open card was doing. The same stop is
+  available as:
+  * the **Stop everything** button entity, for a dashboard or a physical button
+    (point a Zigbee button automation at it);
+  * the `oggstudio.panic` service, for automations and voice;
+  * a controller button (**Stop everything** in Learn controls; Select / Back by default);
+  * a notification action: add `{"action": "OGGSTUDIO_PANIC", "title": "Stop"}` to the
+    `actions` of any notification you send, and tapping it stops everything.
+  Each stop also fires the `oggstudio_panic` event.
+* **⚙ Limits**, under the device pickers: a top intensity per vibrating device, and a stroke
+  range and top stroke speed per stroker. Nothing goes past them, whatever is driving: pads,
+  scripts, moods, audio, video or a remote partner. They are kept in Home Assistant, so they
+  hold on every card and for `oggstudio.play`. `oggstudio.set_limits` sets them from an automation.
+* **Auto-stop**: a card tells Home Assistant it is alive while it is open. If the browser
+  closes, crashes or drops off the network, the devices that card was driving are stopped.
+
+## Privacy
+
+Settings → Devices & services → OggStudio → **Configure**:
+
+* **Keep Ogg and OggStudio out of history and the logbook** clears what the recorder kept
+  about their entities, at start and every half hour. To have nothing written at all, also
+  exclude them in `configuration.yaml` (change the patterns to match your entity ids, which
+  include your device names):
+
+  ```yaml
+  recorder:
+    exclude:
+      entity_globs:
+        - "*.oggstudio_*"
+  logbook:
+    exclude:
+      entity_globs:
+        - "*.oggstudio_*"
+  ```
+
+* **Discreet cards** open covered, with a neutral title (yours to choose), devices shown as
+  "Device A", "Device B", and no version line.
+* **Who may use OggStudio**: other Home Assistant users do not see the cards and cannot call
+  the services. Stopping always works for everyone.
+* **PIN**: cards open locked until the PIN is typed, and lock again after the idle time you
+  set. Home Assistant checks the PIN and slows down repeated wrong tries. The PIN locks the
+  OggStudio cards, not Home Assistant: an administrator can still reach the services.
+
+Videos are never stored on Home Assistant: a video stays on your device, and a cast video is
+passed through from the browser while it plays.
+
+## Audio
+
+**♪ Audio** drives the devices from sound: **Beat** gives a pulse on every beat, **Bass**
+follows the low end, **Volume** follows the loudness; the second pad follows the mids and
+highs. Choose the sound from:
+
+* **A music file** on this device, or **the video** loaded in Video sync: work anywhere.
+* **The microphone**, or **another tab** (share a browser tab and tick "Also share tab
+  audio"): the browser only allows these when Home Assistant is opened over https, or in its
+  app. Sharing a tab works on desktop browsers.
+
+The sound is analysed in the browser. Nothing is recorded or sent; only the levels reach the
+devices, inside your limits.
+
+## Script tools and queue
+
+In **▶ Replay**:
+
+* The bar under a script is a **heatmap**: blue is calm, red is intense (strength for a
+  vibration script, speed for a stroke script). The script picker shows one for every saved script.
+* **✂ Tools**: move the bar to a point and **cut before** or **cut after** it, **repeat** the
+  script a number of times, or **add another saved script** after it. The result becomes the
+  current take; the saved script is not changed until you save over it.
+* **☰ Queue**: add saved scripts and moods, reorder them, and play them in order (once or
+  looped). A queue can be saved by name; saved queues are kept in Home Assistant.
+
+## Together
+
+**🤝 Together** lets two people in two places play together. **Start a session** gives a
+link; send it to your partner. They open it in any browser (no Home Assistant account, no
+app), or paste it into their own OggStudio card to bring their devices.
+
+* Each of you has a slider that drives the other's devices, by feel.
+* Your devices follow your partner only while **Let my partner control my devices** is
+  ticked, and always inside your own limits. Untick it to take control back.
+* **■ Stop both** stops both sides at once; Stop all does too.
+* Only levels (0 to 100) travel. Your partner never reaches Home Assistant itself, the link
+  works for one partner at a time, and it stops working when you end the session or close the card.
+
+The link uses Home Assistant's external URL (Settings → System → Network), so your partner
+must be able to reach that address: Nabu Casa or your own https address. Anyone who has the
+link can join while the session is open, so send it only to your partner.
+
 ## Format
 
 Scripts are standard [funscript](https://github.com/OpenFunscripter/OFS)
@@ -320,9 +419,10 @@ it says it is a vibration script.
 | `oggstudio.set_mode` | Remember the run mode for a saved stroke script |
 | `oggstudio.claim` | Claim, refresh or release live control of a device (used by the cards) |
 | `oggstudio.stop` | Stop playback on a device |
+| `oggstudio.panic` | Stop every Ogg device and every card, now |
+| `oggstudio.set_limits` | Set a device's limits: `max` (top intensity), `lo` and `hi` (stroke range), `speed` (top stroke speed), all in % |
+| `oggstudio.save_playlist` / `delete_playlist` | Save or delete a named queue (`items`: a list of `{script: name}` or `{mood: key}`, `loop`) |
 | `oggstudio.save` / `delete` / `rename` | Manage the library |
 | `oggstudio.get_script` | Return a saved script (for export) |
 
-Entities: **Saved script** (select) and **Replay speed** (select).
-
-Synced video playback (following a media player's position) is planned.
+Entities: **Saved script** (select), **Replay speed** (select) and **Stop everything** (button).

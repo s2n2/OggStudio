@@ -119,6 +119,7 @@ export class VideoPart {
 
   // Drive the follow-along devices from the video (outputs on this card).
   _videoOut() {
+    if (this._au) return;          // Audio mode has the devices (the video's own sound drives them)
     const now = performance.now();
     const value = this._videoValue();
     const dt = now - (this._vOutAt || now);
@@ -433,6 +434,8 @@ export class VideoPart {
   _update() {
     if (!this._el || !this._hass) return;
     const $ = this._el;
+    this._safetyUpdate();
+    this._toolsUpdate();
     this._fillVideoScripts();
     const sel = $('device');
     const key = JSON.stringify([this._rememberedLoaded, ...this._devices.map((d) => [d.id, d.name, this._online(d)])]);
