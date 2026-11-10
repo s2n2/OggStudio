@@ -42,15 +42,13 @@ if node:
             acts.append({"at": at, "pos": rng.randint(0, 100)})
         cases.append(acts)
     js = f"""
-      const src = require('fs').readFileSync({json.dumps(str(ROOT / 'custom_components/oggstudio/frontend/oggstudio-card.js'))}, 'utf8');
-      const grab = (a, b) => src.slice(src.indexOf(a), src.indexOf(b));
-      const J = eval(grab('  // Run modes:', '  // Live: intensity now') + '; ({{ RUN_MODES, toIntensity }})');
+      import {{ RUN_MODES, toIntensity }} from {json.dumps((ROOT / 'frontend/src/lib/convert.js').as_uri())};
       const cases = {json.dumps(cases)};
       const out = {{}};
-      for (const m of Object.keys(J.RUN_MODES)) out[m] = cases.map((c) => J.toIntensity(c, m));
+      for (const m of Object.keys(RUN_MODES)) out[m] = cases.map((c) => toIntensity(c, m));
       console.log(JSON.stringify(out));
     """
-    proc = subprocess.run([node, "-e", js], capture_output=True, text=True)
+    proc = subprocess.run([node, "--input-type=module", "-e", js], capture_output=True, text=True)
     assert proc.returncode == 0, proc.stderr[-2000:]
     result = json.loads(proc.stdout)
     assert sorted(result) == sorted(convert.RUN_MODES)

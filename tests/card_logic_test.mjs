@@ -1,18 +1,20 @@
-// Checks OggStudio card logic without a browser: import conversion and share codes.
-const fs = require('fs');
-const assert = require('assert');
-const path = require('path');
+// Checks OggStudio card logic without a browser. The card's shared logic is
+// imported from frontend/src/lib; the built card is read for markup checks.
+import fs from 'fs';
+import assert from 'assert';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import * as lib from '../frontend/src/lib/index.js';
 
-global.window = globalThis;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+globalThis.window = globalThis;
+Object.assign(globalThis, lib);       // the tests use the helpers by name
 const src = fs.readFileSync(path.join(__dirname, '../custom_components/oggstudio/frontend/oggstudio-card.js'), 'utf8');
-const grab = (start, end) => src.slice(src.indexOf(start), src.indexOf(end));
-// eslint-disable-next-line no-eval
-const { isStroke, STROKE_SPEEDS, STROKE_LIMITS_RESET, parseTarget, MOODS, VIBE_PATTERNS, moodSoften } = eval(grab('  const b64 =', '  // Run modes:') + grab('  // Run modes:', '  const duration =')
-  + '; globalThis.toIntensity = toIntensity; ({ isStroke, STROKE_SPEEDS, STROKE_LIMITS_RESET, parseTarget, MOODS, VIBE_PATTERNS, moodSoften })');
+const { isStroke, STROKE_SPEEDS, STROKE_LIMITS_RESET, parseTarget, MOODS, VIBE_PATTERNS, moodSoften } = lib;
 
 // Card variants: each tag shows a valid subset of the parts, and every part needs a take box to save into.
 {
-  const { PARTS, VARIANTS } = eval(grab('  const PARTS =', '  const esc =') + '; ({ PARTS, VARIANTS })');
+  const { PARTS, VARIANTS } = lib;
   assert.deepStrictEqual(Object.keys(VARIANTS), ['oggstudio-card', 'oggstudio-recorder-card', 'oggstudio-player-card', 'oggstudio-video-card', 'oggstudio-stroke-card']);
   assert.deepStrictEqual(VARIANTS['oggstudio-card'].parts, PARTS.filter((p) => p !== 'stroke'), 'the full card stays as it was; the stroke recorder is its own card');
   assert.deepStrictEqual(VARIANTS['oggstudio-stroke-card'].parts, ['stroke', 'take']);
@@ -58,7 +60,7 @@ const { isStroke, STROKE_SPEEDS, STROKE_LIMITS_RESET, parseTarget, MOODS, VIBE_P
   const btn = (pressed) => ({ pressed, value: pressed ? 1 : 0 });
   const pad = (pressed = [], axes = [0, 0, 0, 0]) => ({ buttons: Array.from({ length: 17 }, (_, i) => btn(pressed.includes(i))), axes });
   const keys = new Set();
-  const { GP_DEFAULT_MAP, GP_SPEEDS, GP_ACTIONS, gpDescribe, gpPressed, gpRaw, ST_ACTIONS, ST_DEFAULT_MAP, GP_PROFILES } = eval(grab('  // Game controller.', '  const duration =') + '; ({ GP_DEFAULT_MAP, GP_SPEEDS, GP_ACTIONS, gpDescribe, gpPressed, gpRaw, ST_ACTIONS, ST_DEFAULT_MAP, GP_PROFILES })');
+  const { GP_DEFAULT_MAP, GP_SPEEDS, GP_ACTIONS, gpDescribe, gpPressed, gpRaw, ST_ACTIONS, ST_DEFAULT_MAP, GP_PROFILES } = lib;
   // Standard D-pad buttons, an analog stick (proportional, with dead zone) and keyboard mode.
   assert.strictEqual(gpRead(GP_DEFAULT_MAP, pad([12]), keys).up, 1);
   assert.strictEqual(gpRead(GP_DEFAULT_MAP, pad([0]), keys).rec, 1);
@@ -160,7 +162,7 @@ assert.deepStrictEqual(toIntensity([{ at: 0, pos: 30 }, { at: 1, pos: 50 }, { at
 assert.strictEqual(liveIntensity('upper', 75, 0), 50);
 // File names: ".vib.funscript" marks a vibration track.
 {
-  const { fileKind, fileTitle } = eval(grab('  const VIB_FILE =', '  // Speed of a move as intensity') + '; ({ fileKind, fileTitle })');
+  const { fileKind, fileTitle } = lib;
   assert.strictEqual(fileKind('Clip.vib.funscript', 'auto'), 'vibration');
   assert.strictEqual(fileKind('Clip.funscript', 'auto'), 'auto');
   assert.strictEqual(fileKind('Clip.vib.funscript', 'stroke'), 'stroke', 'an explicit choice wins');
