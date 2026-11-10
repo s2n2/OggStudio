@@ -209,6 +209,10 @@ def ws_relay(hass: HomeAssistant, connection: websocket_api.ActiveConnection, ms
     """Open a relay for one video; it lasts as long as this subscription."""
     relays: dict[str, Relay] = hass.data.setdefault(RELAYS, {})
     user_id = connection.user.id if connection.user else None
+    allow = hass.data.get("oggstudio_allow")
+    if allow and not allow(user_id):
+        connection.send_error(msg["id"], "unauthorized", "Not allowed")
+        return
     mine = [r for r in relays.values() if r.user_id == user_id]
     for old in mine[: max(0, len(mine) - MAX_PER_USER + 1)]:
         old.close()

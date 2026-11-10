@@ -19,6 +19,53 @@ from .convert import RUN_MODES, is_stroke
 MAX_ACTIONS = 200_000
 CLAIM_SECONDS = 12   # a controller refreshes its claim every few seconds
 MAX_MS = 6 * 60 * 60 * 1000
+MAX_PLAYLISTS = 50
+MAX_PLAYLIST_ITEMS = 200
+NO_LIMITS = {"max": 100, "lo": 0, "hi": 100, "speed": 100}
+
+
+def clean_limits(data: Any) -> dict[str, int]:
+    """Per-device safety limits: top intensity, stroke range and top stroke speed (all %)."""
+    def num(key: str, low: int) -> int:
+        value = data.get(key, NO_LIMITS[key]) if isinstance(data, dict) else NO_LIMITS[key]
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+            raise HomeAssistantError(f"Invalid limit: {key}")
+        return int(round(min(100, max(low, value))))
+    limits = {"max": num("max", 0), "lo": num("lo", 0), "hi": num("hi", 0), "speed": num("speed", 5)}
+    if limits["hi"] - limits["lo"] < 5:
+        raise HomeAssistantError("The stroke range must be at least 5% long")
+    return limits
+
+
+def limit_script(script: dict[str, Any], limits: dict[str, int] | None) -> dict[str, Any]:
+    """A vibration script scaled to a device's top intensity."""
+    if not limits or limits["max"] >= 100:
+        return script
+    k = limits["max"] / 100
+
+    def scale(actions: list[dict[str, int]]) -> list[dict[str, int]]:
+        return [{"at": a["at"], "pos": int(round(a["pos"] * k))} for a in actions]
+
+    out = {**script, "actions": scale(script["actions"])}
+    if "channels" in script:
+        out["channels"] = {"V1": {"actions": scale(script["channels"]["V1"]["actions"])}}
+    return out
+
+
+def clean_playlist(items: Any) -> list[dict[str, str]]:
+    """A playlist: saved scripts and moods, in order."""
+    if not isinstance(items, list) or not items or len(items) > MAX_PLAYLIST_ITEMS:
+        raise HomeAssistantError("A playlist needs a list of items")
+    clean = []
+    for item in items:
+        if not isinstance(item, dict):
+            raise HomeAssistantError("Invalid playlist item")
+        kind = "script" if "script" in item else "mood" if "mood" in item else None
+        value = item.get(kind) if kind else None
+        if not isinstance(value, str) or not value.strip() or len(value) > MAX_NAME_LENGTH:
+            raise HomeAssistantError("A playlist item is a saved script or a mood")
+        clean.append({kind: value.strip()})
+    return clean
 
 
 def _clean_actions(raw: Any) -> list[dict[str, int]]:
@@ -83,6 +130,10 @@ class Library:
         # Which OggStudio card (phone/browser) is driving each device live.
         # Kept in memory only; a claim lapses if it is not refreshed.
         self.claims: dict[str, dict[str, Any]] = {}
+        self.limits: dict[str, dict[str, int]] = {}       # stop entity -> limits
+        self.playlists: dict[str, dict[str, Any]] = {}    # name -> {items, loop}
+        self.panic_at = 0                                  # ms; cards halt when it changes
+        self.settings: dict[str, Any] = {}                 # what the cards need of the options
 
     async def async_load(self) -> None:
         data = await self._store.async_load() or {}
@@ -98,6 +149,16 @@ class Library:
                         self.scripts[name]["mode"] = record["mode"]
                 except (HomeAssistantError, AttributeError):
                     continue
+        for entity_id, limits in (data.get("limits") or {}).items():
+            try:
+                self.limits[entity_id] = clean_limits(limits)
+            except HomeAssistantError:
+                continue
+        for name, record in (data.get("playlists") or {}).items():
+            try:
+                self.playlists[name] = {"items": clean_playlist(record.get("items")), "loop": bool(record.get("loop"))}
+            except (HomeAssistantError, AttributeError):
+                continue
         if data.get("speed") in SPEEDS:
             self.speed = data["speed"]
         if data.get("selected") in self.scripts:
@@ -105,7 +166,8 @@ class Library:
 
     def _save(self) -> None:
         self._store.async_delay_save(
-            lambda: {"scripts": self.scripts, "speed": self.speed, "selected": self.selected}, 1
+            lambda: {"scripts": self.scripts, "speed": self.speed, "selected": self.selected,
+                     "limits": self.limits, "playlists": self.playlists}, 1
         )
 
     @callback
@@ -215,6 +277,49 @@ class Library:
             async_call_later(self.hass, CLAIM_SECONDS + 0.5, self._expire)
         if changed:
             self._notify()
+
+    def release_owner(self, owner: str) -> list[str]:
+        """Drop every claim of one card; returns the devices it was driving."""
+        gone = [k for k, v in self.claims.items() if v["owner"] == owner]
+        for key in gone:
+            del self.claims[key]
+        if gone:
+            self._notify()
+        return gone
+
+    def set_limits(self, entity_id: str, limits: Any) -> None:
+        clean = clean_limits(limits)
+        if clean == NO_LIMITS:
+            self.limits.pop(entity_id, None)
+        else:
+            self.limits[entity_id] = clean
+        self._save()
+        self._notify()
+
+    def save_playlist(self, name: Any, items: Any, loop: bool = False) -> str:
+        name = self._name(name)
+        if name not in self.playlists and len(self.playlists) >= MAX_PLAYLISTS:
+            raise HomeAssistantError("Too many playlists; delete one first")
+        self.playlists[name] = {"items": clean_playlist(items), "loop": bool(loop)}
+        self._save()
+        self._notify()
+        return name
+
+    def delete_playlist(self, name: Any) -> None:
+        if self.playlists.pop(self._name(name), None) is None:
+            raise HomeAssistantError("No playlist has that name")
+        self._save()
+        self._notify()
+
+    def panic(self) -> None:
+        """Everything stops: claims go, and every card halts when it sees the new time."""
+        self.claims.clear()
+        self.panic_at = max(self.panic_at + 1, int(time.time() * 1000))
+        self._notify()
+
+    def set_settings(self, settings: dict[str, Any]) -> None:
+        self.settings = settings
+        self._notify()
 
     def _prune(self, now: float) -> bool:
         gone = [k for k, v in self.claims.items() if v["until"] <= now]

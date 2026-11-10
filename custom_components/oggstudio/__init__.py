@@ -20,7 +20,10 @@ from homeassistant.helpers.typing import ConfigType
 from .const import DOMAIN, OGG_DOMAIN, PLATFORMS, SPEEDS
 from .dashboard_resource import async_register_card
 from .convert import RUN_MODES, run_script
-from .library import Library, clean_script, script_info
+from .library import Library, clean_script, limit_script, script_info
+from .privacy import async_setup_privacy, async_setup_privacy_entry, require_user
+from .safety import async_panic, async_setup_safety, device_limits
+from .together import async_setup_together
 from .video import async_setup_video
 
 _LOGGER = logging.getLogger(__name__)
@@ -51,6 +54,17 @@ CLAIM_SCHEMA = vol.Schema(
         vol.Optional("release", default=False): cv.boolean,
     }
 )
+LIMITS_SCHEMA = vol.Schema(
+    {
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Optional("max", default=100): vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),
+        vol.Optional("lo", default=0): vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),
+        vol.Optional("hi", default=100): vol.All(vol.Coerce(float), vol.Range(min=0, max=100)),
+        vol.Optional("speed", default=100): vol.All(vol.Coerce(float), vol.Range(min=5, max=100)),
+    }
+)
+PLAYLIST_SCHEMA = vol.Schema({vol.Required("name"): cv.string, vol.Required("items"): list,
+                              vol.Optional("loop", default=False): cv.boolean})
 
 
 def _library(hass: HomeAssistant) -> Library:
@@ -66,6 +80,30 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     except Exception:  # noqa: BLE001 - an optional card must never break the integration
         _LOGGER.exception("Could not register the OggStudio card")
     await async_setup_video(hass)
+    await async_setup_safety(hass)
+    await async_setup_privacy(hass)
+    await async_setup_together(hass)
+
+    def guarded(handler: Any) -> Any:
+        """Only the allowed users (when some are chosen); automations always."""
+        async def run(call: ServiceCall) -> Any:
+            require_user(hass, call.context.user_id)
+            return await handler(call)
+        return run
+
+    async def panic(call: ServiceCall) -> ServiceResponse:
+        stopped = await async_panic(hass)
+        return {"stopped": stopped} if call.return_response else None
+
+    async def set_limits(call: ServiceCall) -> None:
+        _library(hass).set_limits(call.data["entity_id"], {k: call.data[k] for k in ("max", "lo", "hi", "speed")})
+
+    async def save_playlist(call: ServiceCall) -> ServiceResponse:
+        name = _library(hass).save_playlist(call.data["name"], call.data["items"], call.data["loop"])
+        return {"name": name} if call.return_response else None
+
+    async def delete_playlist(call: ServiceCall) -> None:
+        _library(hass).delete_playlist(call.data["name"])
 
     async def save(call: ServiceCall) -> ServiceResponse:
         name = _library(hass).save(call.data["name"], call.data["script"], call.data.get("mode"))
@@ -104,6 +142,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         if name and mode:
             library.set_mode(name, mode)
         script = run_script(script, mode or (library.mode(name) if name else None))
+        script = limit_script(script, device_limits(hass, library, call.data["entity_id"]))
         speed: Any = call.data.get("speed", library.speed)
         factor = float(str(speed).rstrip("x"))
         await hass.services.async_call(
@@ -119,16 +158,23 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             OGG_DOMAIN, "stop_script", {"entity_id": call.data["entity_id"]}, blocking=True
         )
 
-    hass.services.async_register(DOMAIN, "save", save, schema=SAVE_SCHEMA,
+    hass.services.async_register(DOMAIN, "save", guarded(save), schema=SAVE_SCHEMA,
                                  supports_response=SupportsResponse.OPTIONAL)
-    hass.services.async_register(DOMAIN, "delete", delete, schema=NAME_SCHEMA)
-    hass.services.async_register(DOMAIN, "set_mode", set_mode, schema=MODE_SCHEMA)
-    hass.services.async_register(DOMAIN, "claim", claim, schema=CLAIM_SCHEMA)
-    hass.services.async_register(DOMAIN, "rename", rename, schema=RENAME_SCHEMA)
-    hass.services.async_register(DOMAIN, "get_script", get_script, schema=NAME_SCHEMA,
+    hass.services.async_register(DOMAIN, "delete", guarded(delete), schema=NAME_SCHEMA)
+    hass.services.async_register(DOMAIN, "set_mode", guarded(set_mode), schema=MODE_SCHEMA)
+    hass.services.async_register(DOMAIN, "claim", guarded(claim), schema=CLAIM_SCHEMA)
+    hass.services.async_register(DOMAIN, "rename", guarded(rename), schema=RENAME_SCHEMA)
+    hass.services.async_register(DOMAIN, "get_script", guarded(get_script), schema=NAME_SCHEMA,
                                  supports_response=SupportsResponse.ONLY)
-    hass.services.async_register(DOMAIN, "play", play, schema=PLAY_SCHEMA)
+    hass.services.async_register(DOMAIN, "play", guarded(play), schema=PLAY_SCHEMA)
+    hass.services.async_register(DOMAIN, "set_limits", guarded(set_limits), schema=LIMITS_SCHEMA)
+    hass.services.async_register(DOMAIN, "save_playlist", guarded(save_playlist), schema=PLAYLIST_SCHEMA,
+                                 supports_response=SupportsResponse.OPTIONAL)
+    hass.services.async_register(DOMAIN, "delete_playlist", guarded(delete_playlist), schema=NAME_SCHEMA)
+    # Stopping is never refused.
     hass.services.async_register(DOMAIN, "stop", stop, schema=STOP_SCHEMA)
+    hass.services.async_register(DOMAIN, "panic", panic, schema=vol.Schema({}),
+                                 supports_response=SupportsResponse.OPTIONAL)
     return True
 
 
@@ -136,6 +182,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: OggStudioConfigEntry) ->
     library = Library(hass, entry.entry_id)
     await library.async_load()
     entry.runtime_data = library
+    async_setup_privacy_entry(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 

@@ -40,6 +40,8 @@ class ScriptSelect(_Base):
     """Saved scripts; the selection is what OggStudio plays by default."""
 
     _attr_icon = "mdi:playlist-music"
+    # Kept out of the recorder: none of this belongs in the history database.
+    _unrecorded_attributes = frozenset({"scripts", "controllers", "limits", "playlists", "panic", "settings", "options"})
 
     def __init__(self, entry: ConfigEntry, library: Library) -> None:
         super().__init__(entry, library, "saved_script")
@@ -58,7 +60,9 @@ class ScriptSelect(_Base):
         for name, record in self.library.scripts.items():
             details[name] = {**script_info(record["script"]), "saved": record.get("saved"),
                              "mode": record.get("mode")}
-        return {"scripts": details, "controllers": self.library.controllers}
+        return {"scripts": details, "controllers": self.library.controllers, "limits": self.library.limits,
+                "playlists": self.library.playlists, "panic": self.library.panic_at,
+                "settings": self.library.settings}
 
     async def async_select_option(self, option: str) -> None:
         self.library.select(option)
