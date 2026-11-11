@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.15.4";
+  var VERSION = "0.15.5";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -4598,8 +4598,8 @@ ${STYLES}
       this._outStop();
       Object.assign(this._outs[i], change);
       this._outSave();
-      if (this._simple) this._autoKind();
       this._outRender();
+      if (this._simple) this._autoKind();
       this._update();
     }
     // The saved target if it still exists, else a sensible default.
@@ -6678,10 +6678,12 @@ ${STYLES}
       const p = parseTarget(this._outTargetValue(i));
       return Boolean(p && p.motor === "l");
     }
-    // No Vibrate / Stroke choice here: a stroker as the device means stroke.
+    // No Vibrate / Stroke choice here: the first device's way of following
+    // decides. "Stroker" (position) gets the stroke range and speed; any
+    // other way gets intensity.
     _autoKind() {
       if (!this._simple || !this._outs || this._autoKindBusy) return;
-      const kind = [0, 1].some((i) => !(i && !this._twoPads) && this._isLinear(i)) ? "stroke" : "vibrate";
+      const kind = parseTarget(this._outTargetValue(0)) && this._outs[0].m === FOLLOW_STROKER ? "stroke" : "vibrate";
       if (kind === this._recKind) return;
       this._autoKindBusy = true;
       try {

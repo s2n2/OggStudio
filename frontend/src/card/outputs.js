@@ -33,8 +33,8 @@ export class OutputsPart {
     this._outStop();
     Object.assign(this._outs[i], change);
     this._outSave();
-    if (this._simple) this._autoKind();
     this._outRender();
+    if (this._simple) this._autoKind();
     this._update();
   }
 
