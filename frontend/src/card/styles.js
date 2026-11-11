@@ -158,7 +158,7 @@ button.rppick{width:100%;text-align:left;background:#18233d;overflow:hidden;text
 .kind button.on{background:linear-gradient(110deg,#2fbfa9,#67e0c8);color:#062a24}
 ha-card.tg #gp,ha-card.tg .ctltabs{display:none}
 ha-card.simple section .rechead,ha-card.simple .vhide,ha-card.simple #rptools{display:none}
-ha-card:not(.simple) .vside,ha-card:not(.simple) .vslide,ha-card:not(.simple) .vshow,ha-card.simple .vfold:not(.open){display:none}
+ha-card:not(.simple) .vside,ha-card:not(.simple) .vshow,ha-card.simple .vfold:not(.open){display:none}
 ha-card.simple #ctlbox{padding:10px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.035)}
 ha-card.simple .ctltabs{flex-wrap:nowrap;gap:4px}
 ha-card.simple .ctltabs button{flex:1 1 0;min-width:0;padding:2px 2px;font-size:12px;line-height:1.2;white-space:normal}
@@ -176,8 +176,12 @@ ha-card.simple .ctltabs button{flex:1 1 0;min-width:0;padding:2px 2px;font-size:
 #ptbox .moodrow label{flex:0 0 64px}
 .vwrap{display:flex;gap:8px;align-items:stretch}
 .vstage{flex:1;min-width:0}
-.vslide{flex:0 0 58px;display:flex;flex-direction:column;margin-top:8px}
-.hbar.vert{flex:1;height:auto;min-height:220px;margin-top:0;cursor:ns-resize}
+.hbar.vert{cursor:ns-resize}
+.vstage{position:relative}
+.vstage.full{display:flex;align-items:center;justify-content:center;background:#000;width:100%;height:100%}
+.vstage.full video{width:100%;height:100%;max-height:none!important;margin:0;object-fit:contain;border-radius:0}
+.hbar.ovl{position:absolute;right:max(14px,env(safe-area-inset-right));top:12%;bottom:20%;width:70px;height:auto;margin:0;z-index:2;background:rgba(20,29,51,.35);border-color:rgba(255,255,255,.25);opacity:.6;transition:opacity .2s}
+.hbar.ovl.active,.hbar.ovl:hover{opacity:.95}
 .hbar.vert .fill{top:auto;right:0;bottom:0;width:auto!important;height:0;background:linear-gradient(0deg,rgba(47,191,169,.55),rgba(103,224,200,.85))}
 .hbar.vert .lab{left:50%;top:10px;transform:translateX(-50%);writing-mode:vertical-rl;font-size:10.5px}
 .hbar.vert .pct{right:auto;left:50%;top:auto;bottom:8px;transform:translateX(-50%);font-size:13px}

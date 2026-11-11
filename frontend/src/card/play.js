@@ -16,8 +16,6 @@ export class PlayPart {
 
   _bindPlay() {
     const $ = this._el;
-    // The device slider stands beside the video, full height.
-    if (this._simple) for (const id of ['hb1', 'hb2']) { $(id).classList.add('vert'); $('vslide').appendChild($(id)); $(id).setAttribute('aria-orientation', 'vertical'); }
     $('urec').addEventListener('click', () => this._urecToggle());
     // Patterns.
     for (const b of this.shadowRoot.querySelectorAll('.ptbtn')) b.addEventListener('click', () => this._ptStart(b.dataset.pt));
@@ -41,6 +39,15 @@ export class PlayPart {
     $('vscast').addEventListener('click', () => $('vcast').click());
     $('vsaud').addEventListener('click', () => this._vaSet(!this._vaudio));
     $('vsoff').addEventListener('click', () => { $('voffbox').classList.toggle('open'); this._vsideShow(); });
+    $('vsfull').addEventListener('click', () => this._vFull());
+    if (this._simple) {
+      // Full screen is this card's own, so the slider can sit over the video.
+      video.setAttribute('controlslist', 'nofullscreen');
+      video.addEventListener('dblclick', (e) => { e.preventDefault(); this._vFull(); });
+    }
+    const onFull = () => this._vFullShow();
+    document.addEventListener('fullscreenchange', onFull);
+    document.addEventListener('webkitfullscreenchange', onFull);
     for (const type of ['play', 'pause', 'ended', 'emptied', 'loadedmetadata']) video.addEventListener(type, () => this._vsideShow());
     if (this._simple) {
       // Here the video's sound is switched on beside the video, not picked as a source.
@@ -303,6 +310,49 @@ export class PlayPart {
     $('vsscript').classList.toggle('has', Boolean(this._vscript));
     $('vsoff').classList.toggle('on', $('voffbox').classList.contains('open'));
     $('vsfile').classList.toggle('has', has);
+  }
+
+  // Full screen: the video and the slider over it (on its right, under the
+  // thumb). The browser's own full screen shows the video alone, so this
+  // card puts its whole video area full screen instead. iPhones only allow
+  // the video itself, so there it is the plain video.
+  _vFull() {
+    const $ = this._el;
+    if (!this._vurl) { this._toast('Choose a video first'); return; }
+    const stage = this.shadowRoot.querySelector('.vstage');
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if (fsEl) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+    const req = stage.requestFullscreen || stage.webkitRequestFullscreen;
+    if (req) {
+      try { const r = req.call(stage); if (r && r.catch) r.catch((e) => this._toast('Full screen was refused: ' + (e.message || e))); } catch (e) { this._toast('Full screen was refused: ' + (e.message || e)); }
+      return;
+    }
+    const video = $('video');
+    if (video.webkitEnterFullscreen) { video.webkitEnterFullscreen(); this._toast('This phone only allows the video itself full screen, so the slider cannot show over it.'); return; }
+    this._toast('This browser has no full screen.');
+  }
+
+  _vFullShow() {
+    if (!this._el) return;
+    const $ = this._el;
+    const stage = this.shadowRoot.querySelector('.vstage');
+    const on = this.shadowRoot.fullscreenElement === stage || (document.webkitFullscreenElement && this.shadowRoot.webkitFullscreenElement === stage);
+    const bar = $('hb1');
+    if (on === bar.classList.contains('ovl')) return;
+    if (on) {
+      this._hbHome = bar.nextSibling;
+      stage.appendChild(bar);
+    } else if (this._hbHome && this._hbHome.parentNode) {
+      this._hbHome.parentNode.insertBefore(bar, this._hbHome);
+    }
+    bar.classList.toggle('vert', on);
+    bar.classList.toggle('ovl', on);
+    bar.setAttribute('aria-orientation', on ? 'vertical' : 'horizontal');
+    const fill = bar.querySelector('.fill');
+    fill.style.width = ''; fill.style.height = '';
+    this._showHBar(0, this._hvals[0]);
+    stage.classList.toggle('full', on);
+    $('vsfull').classList.toggle('on', on);
   }
 
   // The video's own sound drives the devices: the audio settings sit under

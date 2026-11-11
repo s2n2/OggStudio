@@ -328,9 +328,9 @@ ${STYLES}
               <button id="vsaud" type="button" title="Audio from video: the sound of the video drives the devices" aria-label="Audio from video">♪</button>
               <button id="vscast" type="button" title="Play the video on a TV" aria-label="Cast to a TV">📺</button>
               <button id="vsoff" type="button" title="Sync offset" aria-label="Sync offset">⏱</button>
+              <button id="vsfull" type="button" title="Full screen, with the slider over the video" aria-label="Full screen">⛶</button>
             </div>
           <div class="vwrap">
-            <div class="vslide" id="vslide"></div>
             <div class="vstage">
               <button class="vempty" id="vempty" type="button" hidden>🎬 Choose a video<small>It plays from this phone or computer. Nothing is uploaded.</small></button>
               <video id="video" controls playsinline preload="metadata" disableremoteplayback hidden></video>
@@ -349,7 +349,7 @@ ${STYLES}
           <div class="hint">Positive values send each moment slightly early to make up for Bluetooth delay. Pause, seek and playback speed all stay in sync.</div></div>
           <div id="vaubox"></div>
           <div class="hint vhide">To make a script for this video: press ● Rec, play the video and drag the slider (position in the Stroke view, intensity in Vibrate). You can pause, scrub back and record a section again; the newer pass replaces it. While a script plays, the slider shows it; hold the slider to take over until you let go.</div>
-          <div class="hint vshow">The slider beside the video drives your devices while you watch: slide up for more. ● Record follows the video: play it and use the slider, or let a script (📂) or the sound of the video (♪) do the playing. Pause and it waits; go back and the new pass replaces what came after.</div>
+          <div class="hint vshow">The slider under the video drives your devices while you watch (⛶ puts it over the video, full screen). ● Record follows the video: play it and use the slider, or let a script (📂) or the sound of the video (♪) do the playing. Pause and it waits; go back and the new pass replaces what came after.</div>
         </section>
         <section data-part="import">
           <h3>Import</h3>

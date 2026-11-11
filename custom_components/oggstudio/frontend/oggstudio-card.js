@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.15.1";
+  var VERSION = "0.15.2";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -1507,7 +1507,7 @@ button.rppick{width:100%;text-align:left;background:#18233d;overflow:hidden;text
 .kind button.on{background:linear-gradient(110deg,#2fbfa9,#67e0c8);color:#062a24}
 ha-card.tg #gp,ha-card.tg .ctltabs{display:none}
 ha-card.simple section .rechead,ha-card.simple .vhide,ha-card.simple #rptools{display:none}
-ha-card:not(.simple) .vside,ha-card:not(.simple) .vslide,ha-card:not(.simple) .vshow,ha-card.simple .vfold:not(.open){display:none}
+ha-card:not(.simple) .vside,ha-card:not(.simple) .vshow,ha-card.simple .vfold:not(.open){display:none}
 ha-card.simple #ctlbox{padding:10px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.035)}
 ha-card.simple .ctltabs{flex-wrap:nowrap;gap:4px}
 ha-card.simple .ctltabs button{flex:1 1 0;min-width:0;padding:2px 2px;font-size:12px;line-height:1.2;white-space:normal}
@@ -1525,8 +1525,12 @@ ha-card.simple .ctltabs button{flex:1 1 0;min-width:0;padding:2px 2px;font-size:
 #ptbox .moodrow label{flex:0 0 64px}
 .vwrap{display:flex;gap:8px;align-items:stretch}
 .vstage{flex:1;min-width:0}
-.vslide{flex:0 0 58px;display:flex;flex-direction:column;margin-top:8px}
-.hbar.vert{flex:1;height:auto;min-height:220px;margin-top:0;cursor:ns-resize}
+.hbar.vert{cursor:ns-resize}
+.vstage{position:relative}
+.vstage.full{display:flex;align-items:center;justify-content:center;background:#000;width:100%;height:100%}
+.vstage.full video{width:100%;height:100%;max-height:none!important;margin:0;object-fit:contain;border-radius:0}
+.hbar.ovl{position:absolute;right:max(14px,env(safe-area-inset-right));top:12%;bottom:20%;width:70px;height:auto;margin:0;z-index:2;background:rgba(20,29,51,.35);border-color:rgba(255,255,255,.25);opacity:.6;transition:opacity .2s}
+.hbar.ovl.active,.hbar.ovl:hover{opacity:.95}
 .hbar.vert .fill{top:auto;right:0;bottom:0;width:auto!important;height:0;background:linear-gradient(0deg,rgba(47,191,169,.55),rgba(103,224,200,.85))}
 .hbar.vert .lab{left:50%;top:10px;transform:translateX(-50%);writing-mode:vertical-rl;font-size:10.5px}
 .hbar.vert .pct{right:auto;left:50%;top:auto;bottom:8px;transform:translateX(-50%);font-size:13px}
@@ -1887,9 +1891,9 @@ ${STYLES}
               <button id="vsaud" type="button" title="Audio from video: the sound of the video drives the devices" aria-label="Audio from video">♪</button>
               <button id="vscast" type="button" title="Play the video on a TV" aria-label="Cast to a TV">📺</button>
               <button id="vsoff" type="button" title="Sync offset" aria-label="Sync offset">⏱</button>
+              <button id="vsfull" type="button" title="Full screen, with the slider over the video" aria-label="Full screen">⛶</button>
             </div>
           <div class="vwrap">
-            <div class="vslide" id="vslide"></div>
             <div class="vstage">
               <button class="vempty" id="vempty" type="button" hidden>🎬 Choose a video<small>It plays from this phone or computer. Nothing is uploaded.</small></button>
               <video id="video" controls playsinline preload="metadata" disableremoteplayback hidden></video>
@@ -1908,7 +1912,7 @@ ${STYLES}
           <div class="hint">Positive values send each moment slightly early to make up for Bluetooth delay. Pause, seek and playback speed all stay in sync.</div></div>
           <div id="vaubox"></div>
           <div class="hint vhide">To make a script for this video: press ● Rec, play the video and drag the slider (position in the Stroke view, intensity in Vibrate). You can pause, scrub back and record a section again; the newer pass replaces it. While a script plays, the slider shows it; hold the slider to take over until you let go.</div>
-          <div class="hint vshow">The slider beside the video drives your devices while you watch: slide up for more. ● Record follows the video: play it and use the slider, or let a script (📂) or the sound of the video (♪) do the playing. Pause and it waits; go back and the new pass replaces what came after.</div>
+          <div class="hint vshow">The slider under the video drives your devices while you watch (⛶ puts it over the video, full screen). ● Record follows the video: play it and use the slider, or let a script (📂) or the sound of the video (♪) do the playing. Pause and it waits; go back and the new pass replaces what came after.</div>
         </section>
         <section data-part="import">
           <h3>Import</h3>
@@ -3503,6 +3507,7 @@ ${STYLES}
   };
 
   // frontend/src/card/cast.js
+  var LOCAL_CAST = "local";
   var CastPart = class {
     // Casting. A TV fetches what it plays, so a video that only exists in this
     // browser cannot be cast directly (Chrome's own cast refuses it, and the
@@ -3519,7 +3524,7 @@ ${STYLES}
       this.shadowRoot.addEventListener("pointerdown", (e) => {
         if ($("castpop").hidden) return;
         const path = e.composedPath();
-        if (!path.includes($("castpop")) && !path.includes($("vcast"))) this._castPicker(false);
+        if (!path.includes($("castpop")) && !path.includes($("vcast")) && !path.includes($("vscast"))) this._castPicker(false);
       });
       this._castShow();
     }
@@ -3529,6 +3534,7 @@ ${STYLES}
       return Object.entries(states).map(([id, st]) => ({ ...st, entity_id: id })).filter((st) => st.entity_id.startsWith("media_player.") && CAST_PLATFORMS.includes(plat[st.entity_id]) && st.state !== "unavailable" && (st.attributes.supported_features || 0) & 512).sort((x, y) => CAST_PLATFORMS.indexOf(plat[x.entity_id]) - CAST_PLATFORMS.indexOf(plat[y.entity_id]) || String(x.attributes.friendly_name || x.entity_id).localeCompare(String(y.attributes.friendly_name || y.entity_id)));
     }
     _castName(entity) {
+      if (entity === LOCAL_CAST) return "the TV";
       const st = this._hass && this._hass.states[entity];
       return st && st.attributes.friendly_name || entity;
     }
@@ -3554,13 +3560,23 @@ ${STYLES}
         this._castPicker(false);
         this._castEnd(true);
       }));
+      if (this._canCastLocal && !(this._cast && this._cast.entity === LOCAL_CAST)) {
+        items.push(item("📱 A TV near this phone", "Chromecast or AirPlay, found by this browser", () => this._castStart(LOCAL_CAST)));
+      }
+      const targets = this._castTargets();
+      if (targets.length) {
+        const d = document.createElement("div");
+        d.className = "hint";
+        d.textContent = "Through Home Assistant (TVs at home):";
+        items.push(d);
+      }
       const plat = this._mpPlatform || {};
-      for (const st of this._castTargets()) {
+      for (const st of targets) {
         if (this._cast && this._cast.entity === st.entity_id) continue;
         const kind = { cast: "Cast", dlna_dmr: "DLNA", kodi: "Kodi", apple_tv: "Apple TV" }[plat[st.entity_id]] || "";
         items.push(item(st.attributes.friendly_name || st.entity_id, `${kind} · ${st.state}`, () => this._castStart(st.entity_id)));
       }
-      if (!items.length) {
+      if (!targets.length && !this._canCastLocal) {
         const d = document.createElement("div");
         d.className = "hint";
         d.textContent = "No TV found: add your Chromecast or TV to Home Assistant (the Google Cast or DLNA integration) and it shows here.";
@@ -3568,6 +3584,37 @@ ${STYLES}
       }
       $("castlist").replaceChildren(...items);
       $("castpop").hidden = false;
+    }
+    // Chrome (not in the Home Assistant app) and Safari can cast from here.
+    get _canCastLocal() {
+      return typeof HTMLMediaElement !== "undefined" && "remote" in HTMLMediaElement.prototype;
+    }
+    // The browser's own picker. The TV is handed the relay's private link on
+    // the address this page came from, so it must be able to reach Home
+    // Assistant there (your Nabu Casa or other outside address when away).
+    async _castLocalStart(cast, url) {
+      const rv = document.createElement("video");
+      rv.hidden = true;
+      rv.preload = "metadata";
+      rv.src = new URL(url, location.origin).href;
+      this.shadowRoot.querySelector(".vstage").appendChild(rv);
+      cast.rv = rv;
+      rv.remote.onconnect = () => {
+        if (this._cast !== cast) return;
+        try {
+          if (cast.startAt > 1) rv.currentTime = cast.startAt;
+        } catch (_) {
+        }
+        rv.play().catch(() => {
+        });
+      };
+      rv.remote.ondisconnect = () => {
+        if (this._cast === cast) {
+          this._castQuiet("pause");
+          this._castEnd(false, "The TV was disconnected.");
+        }
+      };
+      await rv.remote.prompt();
     }
     // Open the relay: Home Assistant asks for blocks of the file, this answers them.
     async _castRelay(file, cast) {
@@ -3651,11 +3698,14 @@ ${STYLES}
         this._castWasMuted = video.muted;
         video.muted = true;
         this._castQuiet("pause");
-        await this._hass.callService("media_player", "play_media", {
-          entity_id: entity,
-          media_content_id: url,
-          media_content_type: file.type || "video/mp4"
-        });
+        if (entity === LOCAL_CAST) await this._castLocalStart(cast, url);
+        else {
+          await this._hass.callService("media_player", "play_media", {
+            entity_id: entity,
+            media_content_id: url,
+            media_content_type: file.type || "video/mp4"
+          });
+        }
         if (!this._castTimer) this._castTimer = setInterval(() => this._castSync(), 250);
       } catch (e) {
         if (this._cast !== cast) return;
@@ -3682,7 +3732,16 @@ ${STYLES}
         video.muted = this._castWasMuted;
         this._castWasMuted = void 0;
       }
-      if (stopTv && cast.relay && this._hass) this._hass.callService("media_player", "media_stop", { entity_id: cast.entity }, void 0, false).catch(() => {
+      if (cast.rv) {
+        const rv = cast.rv;
+        try {
+          rv.pause();
+          rv.removeAttribute("src");
+          rv.load();
+        } catch (_) {
+        }
+        rv.remove();
+      } else if (stopTv && cast.relay && this._hass) this._hass.callService("media_player", "media_stop", { entity_id: cast.entity }, void 0, false).catch(() => {
       });
       this._toast(message || "Casting stopped.");
       this._castShow();
@@ -3718,6 +3777,18 @@ ${STYLES}
       if (this._castExpected(service === "media_play" ? "play" : service === "media_pause" ? "pause" : "seek") || cast.phase !== "on") return;
       cast.cmdUntil = performance.now() + CAST_GRACE;
       if (service === "media_seek") cast.pos = null;
+      if (cast.rv) {
+        const rv = cast.rv;
+        try {
+          if (service === "media_play") rv.play().catch(() => {
+          });
+          else if (service === "media_pause") rv.pause();
+          else if (service === "media_seek") rv.currentTime = data.seek_position;
+        } catch (e) {
+          this._toast("The TV did not take that: " + (e && e.message || e));
+        }
+        return;
+      }
       this._hass.callService("media_player", service, { entity_id: cast.entity, ...data || {} }, void 0, false).catch((e) => this._toast("The TV did not take that: " + (e && e.message || e)));
     }
     // Where the TV is now, from what Home Assistant last heard from it.
@@ -3737,6 +3808,10 @@ ${STYLES}
     _castSync() {
       const cast = this._cast;
       if (!cast || !cast.relay || !this._el) return;
+      if (cast.rv) {
+        this._castSyncLocal(cast);
+        return;
+      }
       const st = this._hass.states[cast.entity];
       const video = this._el("video");
       if (!st) return;
@@ -3780,6 +3855,33 @@ ${STYLES}
       if (pos !== null && Number.isFinite(video.duration) && Math.abs(video.currentTime - pos) > CAST_DRIFT && pos < video.duration) {
         this._castQuiet({ seek: pos });
       }
+      this._castShow();
+    }
+    // The same, for a TV the browser cast to: it reports where it is itself.
+    _castSyncLocal(cast) {
+      const rv = cast.rv;
+      const video = this._el("video");
+      const now = performance.now();
+      if (cast.phase === "starting") {
+        if (rv.remote.state === "connected" && !rv.paused) {
+          cast.phase = "on";
+          this._toast("Casting to the TV. The devices follow it.");
+          if (cast.startAt > 1) this._castQuiet({ seek: cast.startAt });
+          this._castQuiet("play");
+          this._castShow();
+        } else if (now - cast.since > 6e4) {
+          this._castEnd(false, "The TV did not start the video. It must be able to reach Home Assistant at " + location.origin + ".");
+        }
+        return;
+      }
+      if (now < (cast.cmdUntil || 0)) {
+        this._castShow();
+        return;
+      }
+      if (!rv.paused && video.paused && !video.ended) this._castQuiet("play");
+      if (rv.paused && !video.paused) this._castQuiet("pause");
+      const pos = rv.currentTime;
+      if (Number.isFinite(pos) && Number.isFinite(video.duration) && Math.abs(video.currentTime - pos) > CAST_DRIFT && pos < video.duration) this._castQuiet({ seek: pos });
       this._castShow();
     }
     _castShow() {
@@ -6022,11 +6124,6 @@ ${STYLES}
     }
     _bindPlay() {
       const $ = this._el;
-      if (this._simple) for (const id of ["hb1", "hb2"]) {
-        $(id).classList.add("vert");
-        $("vslide").appendChild($(id));
-        $(id).setAttribute("aria-orientation", "vertical");
-      }
       $("urec").addEventListener("click", () => this._urecToggle());
       for (const b of this.shadowRoot.querySelectorAll(".ptbtn")) b.addEventListener("click", () => this._ptStart(b.dataset.pt));
       let kept = {};
@@ -6063,6 +6160,17 @@ ${STYLES}
         $("voffbox").classList.toggle("open");
         this._vsideShow();
       });
+      $("vsfull").addEventListener("click", () => this._vFull());
+      if (this._simple) {
+        video.setAttribute("controlslist", "nofullscreen");
+        video.addEventListener("dblclick", (e) => {
+          e.preventDefault();
+          this._vFull();
+        });
+      }
+      const onFull = () => this._vFullShow();
+      document.addEventListener("fullscreenchange", onFull);
+      document.addEventListener("webkitfullscreenchange", onFull);
       for (const type of ["play", "pause", "ended", "emptied", "loadedmetadata"]) video.addEventListener(type, () => this._vsideShow());
       if (this._simple) {
         const opt = [...$("ausrc").options].find((o) => o.value === "video");
@@ -6337,6 +6445,63 @@ ${STYLES}
       $("vsscript").classList.toggle("has", Boolean(this._vscript));
       $("vsoff").classList.toggle("on", $("voffbox").classList.contains("open"));
       $("vsfile").classList.toggle("has", has);
+    }
+    // Full screen: the video and the slider over it (on its right, under the
+    // thumb). The browser's own full screen shows the video alone, so this
+    // card puts its whole video area full screen instead. iPhones only allow
+    // the video itself, so there it is the plain video.
+    _vFull() {
+      const $ = this._el;
+      if (!this._vurl) {
+        this._toast("Choose a video first");
+        return;
+      }
+      const stage = this.shadowRoot.querySelector(".vstage");
+      const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+      if (fsEl) {
+        (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+        return;
+      }
+      const req = stage.requestFullscreen || stage.webkitRequestFullscreen;
+      if (req) {
+        try {
+          const r = req.call(stage);
+          if (r && r.catch) r.catch((e) => this._toast("Full screen was refused: " + (e.message || e)));
+        } catch (e) {
+          this._toast("Full screen was refused: " + (e.message || e));
+        }
+        return;
+      }
+      const video = $("video");
+      if (video.webkitEnterFullscreen) {
+        video.webkitEnterFullscreen();
+        this._toast("This phone only allows the video itself full screen, so the slider cannot show over it.");
+        return;
+      }
+      this._toast("This browser has no full screen.");
+    }
+    _vFullShow() {
+      if (!this._el) return;
+      const $ = this._el;
+      const stage = this.shadowRoot.querySelector(".vstage");
+      const on = this.shadowRoot.fullscreenElement === stage || document.webkitFullscreenElement && this.shadowRoot.webkitFullscreenElement === stage;
+      const bar = $("hb1");
+      if (on === bar.classList.contains("ovl")) return;
+      if (on) {
+        this._hbHome = bar.nextSibling;
+        stage.appendChild(bar);
+      } else if (this._hbHome && this._hbHome.parentNode) {
+        this._hbHome.parentNode.insertBefore(bar, this._hbHome);
+      }
+      bar.classList.toggle("vert", on);
+      bar.classList.toggle("ovl", on);
+      bar.setAttribute("aria-orientation", on ? "vertical" : "horizontal");
+      const fill = bar.querySelector(".fill");
+      fill.style.width = "";
+      fill.style.height = "";
+      this._showHBar(0, this._hvals[0]);
+      stage.classList.toggle("full", on);
+      $("vsfull").classList.toggle("on", on);
     }
     // The video's own sound drives the devices: the audio settings sit under
     // the video while it is on.

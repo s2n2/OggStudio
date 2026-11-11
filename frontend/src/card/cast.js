@@ -1,6 +1,8 @@
 // Part of the OggStudio card. Built into custom_components/oggstudio/frontend/oggstudio-card.js (npm run build).
 import { CAST_DRIFT, CAST_GRACE, CAST_PLATFORMS, duration, esc } from '../lib/core.js';
 
+const LOCAL_CAST = 'local';      // a TV this browser casts to itself
+
 // Methods mixed into OggStudioCard.
 export class CastPart {
   // Casting. A TV fetches what it plays, so a video that only exists in this
@@ -18,7 +20,7 @@ export class CastPart {
     this.shadowRoot.addEventListener('pointerdown', (e) => {
       if ($('castpop').hidden) return;
       const path = e.composedPath();
-      if (!path.includes($('castpop')) && !path.includes($('vcast'))) this._castPicker(false);
+      if (!path.includes($('castpop')) && !path.includes($('vcast')) && !path.includes($('vscast'))) this._castPicker(false);
     });
     this._castShow();
   }
@@ -34,6 +36,7 @@ export class CastPart {
   }
 
   _castName(entity) {
+    if (entity === LOCAL_CAST) return 'the TV';
     const st = this._hass && this._hass.states[entity];
     return (st && st.attributes.friendly_name) || entity;
   }
@@ -45,19 +48,47 @@ export class CastPart {
     const item = (label, tag, fn) => { const b = document.createElement('button'); b.type = 'button'; b.innerHTML = `<span>${esc(label)}</span><small>${esc(tag)}</small>`; b.addEventListener('click', fn); return b; };
     const items = [];
     if (this._cast) items.push(item(`■ Stop casting to ${this._castName(this._cast.entity)}`, '', () => { this._castPicker(false); this._castEnd(true); }));
+    // A TV where this phone is: the browser finds it (Chromecast or AirPlay).
+    if (this._canCastLocal && !(this._cast && this._cast.entity === LOCAL_CAST)) {
+      items.push(item('📱 A TV near this phone', 'Chromecast or AirPlay, found by this browser', () => this._castStart(LOCAL_CAST)));
+    }
+    const targets = this._castTargets();
+    if (targets.length) { const d = document.createElement('div'); d.className = 'hint'; d.textContent = 'Through Home Assistant (TVs at home):'; items.push(d); }
     const plat = this._mpPlatform || {};
-    for (const st of this._castTargets()) {
+    for (const st of targets) {
       if (this._cast && this._cast.entity === st.entity_id) continue;
       const kind = { cast: 'Cast', dlna_dmr: 'DLNA', kodi: 'Kodi', apple_tv: 'Apple TV' }[plat[st.entity_id]] || '';
       items.push(item(st.attributes.friendly_name || st.entity_id, `${kind} · ${st.state}`, () => this._castStart(st.entity_id)));
     }
-    if (!items.length) {
+    if (!targets.length && !this._canCastLocal) {
       const d = document.createElement('div'); d.className = 'hint';
       d.textContent = 'No TV found: add your Chromecast or TV to Home Assistant (the Google Cast or DLNA integration) and it shows here.';
       items.push(d);
     }
     $('castlist').replaceChildren(...items);
     $('castpop').hidden = false;
+  }
+
+  // Chrome (not in the Home Assistant app) and Safari can cast from here.
+  get _canCastLocal() { return typeof HTMLMediaElement !== 'undefined' && 'remote' in HTMLMediaElement.prototype; }
+
+  // The browser's own picker. The TV is handed the relay's private link on
+  // the address this page came from, so it must be able to reach Home
+  // Assistant there (your Nabu Casa or other outside address when away).
+  async _castLocalStart(cast, url) {
+    const rv = document.createElement('video');
+    rv.hidden = true;
+    rv.preload = 'metadata';
+    rv.src = new URL(url, location.origin).href;
+    this.shadowRoot.querySelector('.vstage').appendChild(rv);
+    cast.rv = rv;
+    rv.remote.onconnect = () => {
+      if (this._cast !== cast) return;
+      try { if (cast.startAt > 1) rv.currentTime = cast.startAt; } catch (_) { /* not loaded yet */ }
+      rv.play().catch(() => {});
+    };
+    rv.remote.ondisconnect = () => { if (this._cast === cast) { this._castQuiet('pause'); this._castEnd(false, 'The TV was disconnected.'); } };
+    await rv.remote.prompt();
   }
 
   // Open the relay: Home Assistant asks for blocks of the file, this answers them.
@@ -117,9 +148,12 @@ export class CastPart {
       this._castWasMuted = video.muted;
       video.muted = true;                   // the sound comes from the TV
       this._castQuiet('pause');
-      await this._hass.callService('media_player', 'play_media', {
-        entity_id: entity, media_content_id: url, media_content_type: file.type || 'video/mp4',
-      });
+      if (entity === LOCAL_CAST) await this._castLocalStart(cast, url);
+      else {
+        await this._hass.callService('media_player', 'play_media', {
+          entity_id: entity, media_content_id: url, media_content_type: file.type || 'video/mp4',
+        });
+      }
       if (!this._castTimer) this._castTimer = setInterval(() => this._castSync(), 250);
     } catch (e) {
       if (this._cast !== cast) return;
@@ -139,7 +173,11 @@ export class CastPart {
     this._castWake(false);
     const video = this._el && this._el('video');
     if (video && this._castWasMuted !== undefined) { video.muted = this._castWasMuted; this._castWasMuted = undefined; }
-    if (stopTv && cast.relay && this._hass) this._hass.callService('media_player', 'media_stop', { entity_id: cast.entity }, undefined, false).catch(() => {});
+    if (cast.rv) {
+      const rv = cast.rv;
+      try { rv.pause(); rv.removeAttribute('src'); rv.load(); } catch (_) { /* gone */ }
+      rv.remove();
+    } else if (stopTv && cast.relay && this._hass) this._hass.callService('media_player', 'media_stop', { entity_id: cast.entity }, undefined, false).catch(() => {});
     this._toast(message || 'Casting stopped.');
     this._castShow();
   }
@@ -172,6 +210,15 @@ export class CastPart {
     if (this._castExpected(service === 'media_play' ? 'play' : service === 'media_pause' ? 'pause' : 'seek') || cast.phase !== 'on') return;
     cast.cmdUntil = performance.now() + CAST_GRACE;
     if (service === 'media_seek') cast.pos = null;
+    if (cast.rv) {
+      const rv = cast.rv;
+      try {
+        if (service === 'media_play') rv.play().catch(() => {});
+        else if (service === 'media_pause') rv.pause();
+        else if (service === 'media_seek') rv.currentTime = data.seek_position;
+      } catch (e) { this._toast('The TV did not take that: ' + ((e && e.message) || e)); }
+      return;
+    }
     this._hass.callService('media_player', service, { entity_id: cast.entity, ...(data || {}) }, undefined, false)
       .catch((e) => this._toast('The TV did not take that: ' + ((e && e.message) || e)));
   }
@@ -194,6 +241,7 @@ export class CastPart {
   _castSync() {
     const cast = this._cast;
     if (!cast || !cast.relay || !this._el) return;
+    if (cast.rv) { this._castSyncLocal(cast); return; }
     const st = this._hass.states[cast.entity];
     const video = this._el('video');
     if (!st) return;
@@ -234,6 +282,31 @@ export class CastPart {
     if (pos !== null && Number.isFinite(video.duration) && Math.abs(video.currentTime - pos) > CAST_DRIFT && pos < video.duration) {
       this._castQuiet({ seek: pos });
     }
+    this._castShow();
+  }
+
+  // The same, for a TV the browser cast to: it reports where it is itself.
+  _castSyncLocal(cast) {
+    const rv = cast.rv;
+    const video = this._el('video');
+    const now = performance.now();
+    if (cast.phase === 'starting') {
+      if (rv.remote.state === 'connected' && !rv.paused) {
+        cast.phase = 'on';
+        this._toast('Casting to the TV. The devices follow it.');
+        if (cast.startAt > 1) this._castQuiet({ seek: cast.startAt });
+        this._castQuiet('play');
+        this._castShow();
+      } else if (now - cast.since > 60000) {
+        this._castEnd(false, 'The TV did not start the video. It must be able to reach Home Assistant at ' + location.origin + '.');
+      }
+      return;
+    }
+    if (now < (cast.cmdUntil || 0)) { this._castShow(); return; }
+    if (!rv.paused && video.paused && !video.ended) this._castQuiet('play');
+    if (rv.paused && !video.paused) this._castQuiet('pause');
+    const pos = rv.currentTime;
+    if (Number.isFinite(pos) && Number.isFinite(video.duration) && Math.abs(video.currentTime - pos) > CAST_DRIFT && pos < video.duration) this._castQuiet({ seek: pos });
     this._castShow();
   }
 
