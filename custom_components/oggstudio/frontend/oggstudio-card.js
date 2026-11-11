@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.15.9";
+  var VERSION = "0.15.10";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -1817,7 +1817,7 @@ ${STYLES}
           <div id="ctlbox">
             <div class="ctltabs" role="tablist">${(simple ? [["record", "✋ Manual"], ["pattern", "〰 Pattern"], ["mood", "◎ Mood"], ["audio", "♪ Audio"], ["video", "🎬 Video"]] : [["record", "● Record"], ["replay", "▶ Replay"], ["mood", "◎ Mood"], ["audio", "♪ Audio"], ["together", "🤝 Together"]]).map(([k, t]) => `<button type="button" data-ctl="${k}">${t}</button>`).join("")}</div>
             <div id="urecrow" hidden>
-              <div class="urechead"><button id="urec" class="rec" type="button">● Record</button></div>
+              <div class="urechead"><button id="urec" class="rec" type="button">● Record</button><div class="kind" role="group" aria-label="Vibrate or stroke"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div></div>
               <div class="val" id="utimer"></div>
             </div>
             <div id="ptbox" hidden>
@@ -4633,7 +4633,7 @@ ${STYLES}
       Object.assign(this._outs[i], change);
       this._outSave();
       this._outRender();
-      if (this._simple) this._autoKind();
+      if (this._simple && "t" in change) this._autoKind();
       this._update();
     }
     // The saved target if it still exists, else a sensible default.
@@ -6413,7 +6413,6 @@ ${STYLES}
       return tap.video ? this._el("video").currentTime * 1e3 : now - tap.t0;
     }
     _urecShow() {
-      this._autoKind();
       if (!this._el || !this._simple) return;
       const $ = this._el;
       const on = this._urecOn;
@@ -6715,12 +6714,11 @@ ${STYLES}
       const p = parseTarget(this._outTargetValue(i));
       return Boolean(p && p.motor === "l");
     }
-    // No Vibrate / Stroke choice here: the first device's way of following
-    // decides. "Stroker" (position) gets the stroke range and speed; any
-    // other way gets intensity.
+    // Vibrate / Stroke is chosen by hand; picking a device sets it to suit
+    // (a stroker: stroke, anything else: vibrate), and can be switched back.
     _autoKind() {
       if (!this._simple || !this._outs || this._autoKindBusy) return;
-      const kind = parseTarget(this._outTargetValue(0)) && this._outs[0].m === FOLLOW_STROKER ? "stroke" : "vibrate";
+      const kind = this._isLinear(0) ? "stroke" : "vibrate";
       if (kind === this._recKind) return;
       this._autoKindBusy = true;
       try {

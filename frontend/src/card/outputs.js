@@ -34,7 +34,7 @@ export class OutputsPart {
     Object.assign(this._outs[i], change);
     this._outSave();
     this._outRender();
-    if (this._simple) this._autoKind();
+    if (this._simple && 't' in change) this._autoKind();
     this._update();
   }
 

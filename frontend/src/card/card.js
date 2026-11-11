@@ -227,7 +227,7 @@ ${STYLES}
               : [['record', '● Record'], ['replay', '▶ Replay'], ['mood', '◎ Mood'], ['audio', '♪ Audio'], ['together', '🤝 Together']]
             ).map(([k, t]) => `<button type="button" data-ctl="${k}">${t}</button>`).join('')}</div>
             <div id="urecrow" hidden>
-              <div class="urechead"><button id="urec" class="rec" type="button">● Record</button></div>
+              <div class="urechead"><button id="urec" class="rec" type="button">● Record</button><div class="kind" role="group" aria-label="Vibrate or stroke"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div></div>
               <div class="val" id="utimer"></div>
             </div>
             <div id="ptbox" hidden>

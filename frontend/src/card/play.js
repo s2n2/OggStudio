@@ -95,7 +95,6 @@ export class PlayPart {
   }
 
   _urecShow() {
-    this._autoKind();
     if (!this._el || !this._simple) return;
     const $ = this._el;
     const on = this._urecOn;
@@ -373,12 +372,11 @@ export class PlayPart {
 
   _isLinear(i) { const p = parseTarget(this._outTargetValue(i)); return Boolean(p && p.motor === 'l'); }
 
-  // No Vibrate / Stroke choice here: the first device's way of following
-  // decides. "Stroker" (position) gets the stroke range and speed; any
-  // other way gets intensity.
+  // Vibrate / Stroke is chosen by hand; picking a device sets it to suit
+  // (a stroker: stroke, anything else: vibrate), and can be switched back.
   _autoKind() {
     if (!this._simple || !this._outs || this._autoKindBusy) return;
-    const kind = parseTarget(this._outTargetValue(0)) && this._outs[0].m === FOLLOW_STROKER ? 'stroke' : 'vibrate';
+    const kind = this._isLinear(0) ? 'stroke' : 'vibrate';
     if (kind === this._recKind) return;
     this._autoKindBusy = true;
     try { this._setRecKind(kind); } finally { this._autoKindBusy = false; }
