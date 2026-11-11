@@ -180,8 +180,17 @@ ha-card.simple .ctltabs button{flex:1 1 0;min-width:0;padding:2px 2px;font-size:
 .vstage{position:relative}
 .vstage.full{display:flex;align-items:center;justify-content:center;background:#000;width:100%;height:100%}
 .vstage.full video{width:100%;height:100%;max-height:none!important;margin:0;object-fit:contain;border-radius:0}
-.hbar.ovl{position:absolute;right:max(14px,env(safe-area-inset-right));top:12%;bottom:20%;width:70px;height:auto;margin:0;z-index:2;background:rgba(20,29,51,.35);border-color:rgba(255,255,255,.25);opacity:.6;transition:opacity .2s}
-.hbar.ovl.active,.hbar.ovl:hover{opacity:.95}
+.hbar.ovl{position:absolute;right:max(6px,env(safe-area-inset-right));top:12%;bottom:20%;width:56px;height:auto;margin:0;z-index:2;background:transparent;border:0;border-radius:0;overflow:visible;opacity:.75;transition:opacity .2s}
+.hbar.ovl.active{opacity:1}
+.hbar.ovl .fill,.hbar.ovl .lab,.hbar.ovl .pct{display:none}
+.hbar.ovl::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:2px;margin-left:-1px;background:rgba(255,255,255,.35);box-shadow:0 0 2px rgba(0,0,0,.6)}
+.hbar.ovl::after{content:'';position:absolute;left:50%;bottom:calc(var(--v,0) * 1%);width:18px;height:18px;margin:0 0 -9px -9px;border-radius:50%;background:#67e0c8;box-shadow:0 0 0 2px rgba(0,0,0,.45)}
+.hbar.ovl.active::after{background:#fff}
+video.castrv{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.vlim{position:absolute;right:calc(max(6px,env(safe-area-inset-right)) + 56px);top:12%;bottom:20%;width:44px;z-index:2;touch-action:none;cursor:ns-resize;opacity:.8}
+.vlim::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:2px;margin-left:-1px;background:rgba(255,176,87,.3)}
+.vlim .band{position:absolute;left:50%;width:4px;margin-left:-2px;background:rgba(255,176,87,.75)}
+.vlim .h{position:absolute;left:50%;width:30px;height:16px;margin:0 0 -8px -15px;border-radius:5px;background:#ffb057;color:#2a1600;font-size:9.5px;font-weight:800;line-height:16px;text-align:center;box-shadow:0 0 0 2px rgba(0,0,0,.4)}
 .hbar.vert .fill{top:auto;right:0;bottom:0;width:auto!important;height:0;background:linear-gradient(0deg,rgba(47,191,169,.55),rgba(103,224,200,.85))}
 .hbar.vert .lab{left:50%;top:10px;transform:translateX(-50%);writing-mode:vertical-rl;font-size:10.5px}
 .hbar.vert .pct{right:auto;left:50%;top:auto;bottom:8px;transform:translateX(-50%);font-size:13px}

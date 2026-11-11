@@ -189,6 +189,11 @@ export class ReplayPart {
   _moodStrength() { return Number(this._el('moodstr').value || 100) / 100; }
 
   _goalFrom(i, raw, ms, rate, cache) {
+    const g = this._goalFromRaw(i, raw, ms, rate, cache);
+    return g && this._simple ? { ...g, goal: this._lim(g.goal) } : g;
+  }
+
+  _goalFromRaw(i, raw, ms, rate, cache) {
     if (raw.mood) {
       const next = nextAction(raw.actions, ms);
       return next ? { goal: moodSoften(next.pos, this._moodStrength(), next.at), dur: (next.at - ms) / (rate || 1) } : null;

@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.15.2";
+  var VERSION = "0.15.3";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -1529,8 +1529,17 @@ ha-card.simple .ctltabs button{flex:1 1 0;min-width:0;padding:2px 2px;font-size:
 .vstage{position:relative}
 .vstage.full{display:flex;align-items:center;justify-content:center;background:#000;width:100%;height:100%}
 .vstage.full video{width:100%;height:100%;max-height:none!important;margin:0;object-fit:contain;border-radius:0}
-.hbar.ovl{position:absolute;right:max(14px,env(safe-area-inset-right));top:12%;bottom:20%;width:70px;height:auto;margin:0;z-index:2;background:rgba(20,29,51,.35);border-color:rgba(255,255,255,.25);opacity:.6;transition:opacity .2s}
-.hbar.ovl.active,.hbar.ovl:hover{opacity:.95}
+.hbar.ovl{position:absolute;right:max(6px,env(safe-area-inset-right));top:12%;bottom:20%;width:56px;height:auto;margin:0;z-index:2;background:transparent;border:0;border-radius:0;overflow:visible;opacity:.75;transition:opacity .2s}
+.hbar.ovl.active{opacity:1}
+.hbar.ovl .fill,.hbar.ovl .lab,.hbar.ovl .pct{display:none}
+.hbar.ovl::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:2px;margin-left:-1px;background:rgba(255,255,255,.35);box-shadow:0 0 2px rgba(0,0,0,.6)}
+.hbar.ovl::after{content:'';position:absolute;left:50%;bottom:calc(var(--v,0) * 1%);width:18px;height:18px;margin:0 0 -9px -9px;border-radius:50%;background:#67e0c8;box-shadow:0 0 0 2px rgba(0,0,0,.45)}
+.hbar.ovl.active::after{background:#fff}
+video.castrv{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.vlim{position:absolute;right:calc(max(6px,env(safe-area-inset-right)) + 56px);top:12%;bottom:20%;width:44px;z-index:2;touch-action:none;cursor:ns-resize;opacity:.8}
+.vlim::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:2px;margin-left:-1px;background:rgba(255,176,87,.3)}
+.vlim .band{position:absolute;left:50%;width:4px;margin-left:-2px;background:rgba(255,176,87,.75)}
+.vlim .h{position:absolute;left:50%;width:30px;height:16px;margin:0 0 -8px -15px;border-radius:5px;background:#ffb057;color:#2a1600;font-size:9.5px;font-weight:800;line-height:16px;text-align:center;box-shadow:0 0 0 2px rgba(0,0,0,.4)}
 .hbar.vert .fill{top:auto;right:0;bottom:0;width:auto!important;height:0;background:linear-gradient(0deg,rgba(47,191,169,.55),rgba(103,224,200,.85))}
 .hbar.vert .lab{left:50%;top:10px;transform:translateX(-50%);writing-mode:vertical-rl;font-size:10.5px}
 .hbar.vert .pct{right:auto;left:50%;top:auto;bottom:8px;transform:translateX(-50%);font-size:13px}
@@ -1790,7 +1799,7 @@ ${STYLES}
           <div id="ctlbox">
             <div class="ctltabs" role="tablist">${(simple ? [["record", "✋ Manual"], ["pattern", "〰 Pattern"], ["mood", "◎ Mood"], ["audio", "♪ Audio"], ["video", "🎬 Video"]] : [["record", "● Record"], ["replay", "▶ Replay"], ["mood", "◎ Mood"], ["audio", "♪ Audio"], ["together", "🤝 Together"]]).map(([k, t]) => `<button type="button" data-ctl="${k}">${t}</button>`).join("")}</div>
             <div id="urecrow" hidden>
-              <div class="urechead"><button id="urec" class="rec" type="button">● Record</button><div class="kind" role="group" aria-label="Recording type"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div></div>
+              <div class="urechead"><button id="urec" class="rec" type="button">● Record</button></div>
               <div class="val" id="utimer"></div>
             </div>
             <div id="ptbox" hidden>
@@ -1897,6 +1906,7 @@ ${STYLES}
             <div class="vstage">
               <button class="vempty" id="vempty" type="button" hidden>🎬 Choose a video<small>It plays from this phone or computer. Nothing is uploaded.</small></button>
               <video id="video" controls playsinline preload="metadata" disableremoteplayback hidden></video>
+              <div class="vlim" id="vlim" hidden aria-label="Stroke limits"><div class="band"></div><div class="h" id="vlimup"></div><div class="h" id="vlimlo"></div></div>
             </div>
           </div>
           <div style="position:relative"><div class="rppop" id="castpop" style="top:4px" hidden><div id="castlist"></div></div></div>
@@ -3075,6 +3085,7 @@ ${STYLES}
       const bar = this._el("hb" + (index + 1));
       const v = Math.round(Math.min(100, Math.max(0, value)));
       bar.querySelector(".fill").style[bar.classList.contains("vert") ? "height" : "width"] = v + "%";
+      bar.style.setProperty("--v", String(v));
       bar.querySelector(".pct").textContent = v + "%";
       bar.setAttribute("aria-valuenow", String(v));
     }
@@ -3542,12 +3553,14 @@ ${STYLES}
       const $ = this._el;
       if (!open) {
         $("castpop").hidden = true;
+        this._castUnprep();
         return;
       }
       if (!this._vurl) {
         this._toast("Choose a video first");
         return;
       }
+      if (this._canCastLocal && !this._cast) this._castPrepare();
       const item = (label, tag, fn) => {
         const b = document.createElement("button");
         b.type = "button";
@@ -3561,7 +3574,9 @@ ${STYLES}
         this._castEnd(true);
       }));
       if (this._canCastLocal && !(this._cast && this._cast.entity === LOCAL_CAST)) {
-        items.push(item("📱 A TV near this phone", "Chromecast or AirPlay, found by this browser", () => this._castStart(LOCAL_CAST)));
+        const b = item("📱 A TV near this phone", this._castPrepText(), () => this._castLocalGo());
+        b.id = "castlocal";
+        items.push(b);
       }
       const targets = this._castTargets();
       if (targets.length) {
@@ -3589,24 +3604,113 @@ ${STYLES}
     get _canCastLocal() {
       return typeof HTMLMediaElement !== "undefined" && "remote" in HTMLMediaElement.prototype;
     }
-    // The browser's own picker. The TV is handed the relay's private link on
-    // the address this page came from, so it must be able to reach Home
-    // Assistant there (your Nabu Casa or other outside address when away).
-    async _castLocalStart(cast, url) {
-      const rv = document.createElement("video");
-      rv.hidden = true;
-      rv.preload = "metadata";
-      rv.src = new URL(url, location.origin).href;
-      this.shadowRoot.querySelector(".vstage").appendChild(rv);
-      cast.rv = rv;
+    // A TV near this phone: the browser's own picker (Chromecast, AirPlay).
+    // It must be opened straight from the tap, so the relay's link is made
+    // ready when this menu opens. The TV gets the link on the address this
+    // page came from, so it must be able to reach Home Assistant there (your
+    // Nabu Casa or other outside address when away from home).
+    _castPrepare() {
+      const file = this._vfileObj;
+      const old = this._castPrep;
+      if (old && old.fileObj === file) return;
+      this._castUnprep();
+      if (!file) return;
+      const cast = { entity: LOCAL_CAST, phase: "starting", prep: true, fileObj: file, state: "Getting the link ready…" };
+      this._castPrep = cast;
+      this._castRelay(file, cast).then((url) => {
+        if (this._castPrep !== cast) return;
+        const rv = document.createElement("video");
+        rv.preload = "metadata";
+        rv.muted = true;
+        rv.playsInline = true;
+        rv.className = "castrv";
+        rv.src = new URL(url, location.origin).href;
+        this.shadowRoot.querySelector(".vstage").appendChild(rv);
+        cast.rv = rv;
+        cast.state = "Looking for TVs…";
+        this._castPrepSay();
+        try {
+          rv.remote.watchAvailability((yes) => {
+            cast.avail = yes;
+            cast.state = yes ? "Found nearby: tap to choose" : "No TV found by this browser yet";
+            this._castPrepSay();
+          }).catch(() => {
+            cast.state = "Tap to look for a TV";
+            this._castPrepSay();
+          });
+        } catch (_) {
+          cast.state = "Tap to look for a TV";
+          this._castPrepSay();
+        }
+      }).catch((e) => {
+        if (this._castPrep !== cast) return;
+        cast.state = "Could not get a link: " + (e && e.message || e);
+        this._castPrepSay();
+      });
+    }
+    _castPrepText() {
+      return this._castPrep && this._castPrep.state || "Chromecast or AirPlay, found by this browser";
+    }
+    _castPrepSay() {
+      const el = this._el && this._el("castlocal");
+      if (el) el.querySelector("small").textContent = this._castPrepText();
+    }
+    _castUnprep() {
+      const cast = this._castPrep;
+      if (!cast) return;
+      this._castPrep = null;
+      cast.cancelled = true;
+      if (cast.unsub) {
+        try {
+          cast.unsub();
+        } catch (_) {
+        }
+      }
+      if (cast.rv) {
+        try {
+          cast.rv.remote.cancelWatchAvailability().catch(() => {
+          });
+        } catch (_) {
+        }
+        cast.rv.removeAttribute("src");
+        cast.rv.remove();
+      }
+    }
+    // Straight from the tap: the browser asks which TV.
+    _castLocalGo() {
+      const cast = this._castPrep;
+      if (!cast || !cast.rv) {
+        this._toast(cast && cast.state ? cast.state : "Getting the link ready… tap again in a moment.");
+        return;
+      }
+      const rv = cast.rv;
+      let asked;
+      try {
+        asked = rv.remote.prompt();
+      } catch (e) {
+        asked = Promise.reject(e);
+      }
+      this._castPrep = null;
+      cast.prep = false;
+      this._el("castpop").hidden = true;
+      if (this._cast) this._castEnd(true);
+      const video = this._el("video");
+      cast.startAt = video.currentTime || 0;
+      cast.since = performance.now();
+      cast.file = cast.relay;
+      this._cast = cast;
+      this._castWake(true);
+      this._castWasMuted = video.muted;
+      video.muted = true;
+      this._castQuiet("pause");
       rv.remote.onconnect = () => {
         if (this._cast !== cast) return;
+        rv.muted = false;
         try {
           if (cast.startAt > 1) rv.currentTime = cast.startAt;
         } catch (_) {
         }
-        rv.play().catch(() => {
-        });
+        rv.play().catch((e) => this._toast("The TV would not start: " + (e && e.message || e)));
       };
       rv.remote.ondisconnect = () => {
         if (this._cast === cast) {
@@ -3614,7 +3718,13 @@ ${STYLES}
           this._castEnd(false, "The TV was disconnected.");
         }
       };
-      await rv.remote.prompt();
+      asked.catch((e) => {
+        if (this._cast !== cast) return;
+        const why = e && e.name === "NotFoundError" ? "this browser found no TV it can cast to here" : e && e.name === "NotSupportedError" ? "this browser cannot cast this (in the Home Assistant app, open Home Assistant in Chrome or Safari instead)" : e && e.name === "NotAllowedError" ? "no TV was chosen" : `${e && e.name || "error"}: ${e && e.message || e}`;
+        this._castEnd(false, "Not cast: " + why + ".");
+      });
+      this._castShow();
+      if (!this._castTimer) this._castTimer = setInterval(() => this._castSync(), 250);
     }
     // Open the relay: Home Assistant asks for blocks of the file, this answers them.
     async _castRelay(file, cast) {
@@ -3626,7 +3736,7 @@ ${STYLES}
       const answer = async (req, start, length) => {
         try {
           const body = await file.slice(start, start + length).arrayBuffer();
-          if (this._cast !== cast) return;
+          if (this._cast !== cast && this._castPrep !== cast) return;
           const r = await this._hass.fetchWithAuth(`/api/oggstudio/relay_data/${cast.relay}/${req}`, { method: "POST", body });
           if (r.ok) {
             cast.sent = (cast.sent || 0) + length;
@@ -3641,7 +3751,7 @@ ${STYLES}
           ready(m.url);
         } else if (m.req !== void 0) answer(m.req, m.start, m.length);
       }, { type: "oggstudio/relay", name: file.name, size: file.size, mime: file.type || "video/mp4" }, { resubscribe: false });
-      if (this._cast !== cast) {
+      if (this._cast !== cast && this._castPrep !== cast) {
         cast.unsub();
         throw new Error("cancelled");
       }
@@ -3698,14 +3808,11 @@ ${STYLES}
         this._castWasMuted = video.muted;
         video.muted = true;
         this._castQuiet("pause");
-        if (entity === LOCAL_CAST) await this._castLocalStart(cast, url);
-        else {
-          await this._hass.callService("media_player", "play_media", {
-            entity_id: entity,
-            media_content_id: url,
-            media_content_type: file.type || "video/mp4"
-          });
-        }
+        await this._hass.callService("media_player", "play_media", {
+          entity_id: entity,
+          media_content_id: url,
+          media_content_type: file.type || "video/mp4"
+        });
         if (!this._castTimer) this._castTimer = setInterval(() => this._castSync(), 250);
       } catch (e) {
         if (this._cast !== cast) return;
@@ -3870,7 +3977,7 @@ ${STYLES}
           this._castQuiet("play");
           this._castShow();
         } else if (now - cast.since > 6e4) {
-          this._castEnd(false, "The TV did not start the video. It must be able to reach Home Assistant at " + location.origin + ".");
+          this._castEnd(false, "The TV did not start the video. It must be able to reach Home Assistant at " + location.origin + " (a home-only or VPN address will not do).");
         }
         return;
       }
@@ -4149,6 +4256,10 @@ ${STYLES}
       return Number(this._el("moodstr").value || 100) / 100;
     }
     _goalFrom(i, raw, ms, rate, cache) {
+      const g = this._goalFromRaw(i, raw, ms, rate, cache);
+      return g && this._simple ? { ...g, goal: this._lim(g.goal) } : g;
+    }
+    _goalFromRaw(i, raw, ms, rate, cache) {
       if (raw.mood) {
         const next2 = nextAction(raw.actions, ms);
         return next2 ? { goal: moodSoften(next2.pos, this._moodStrength(), next2.at), dur: (next2.at - ms) / (rate || 1) } : null;
@@ -4470,6 +4581,7 @@ ${STYLES}
       this._outStop();
       Object.assign(this._outs[i], change);
       this._outSave();
+      if (this._simple) this._autoKind();
       this._outRender();
       this._update();
     }
@@ -5579,7 +5691,7 @@ ${STYLES}
   };
 
   // frontend/src/lib/audio.js
-  var AUDIO_MODES = { beat: "Beat: a pulse on every beat", bass: "Bass: follows the low end", volume: "Volume: follows the loudness" };
+  var AUDIO_MODES = { beat: "Beat: a pulse on every beat", updown: "Up and down: each beat goes to the other end", bass: "Bass: follows the low end", volume: "Volume: follows the loudness" };
   var AMP = new Float32Array(256);
   for (let b = 0; b < 256; b++) AMP[b] = Math.pow(10, (b / 255 - 1) * 3.5);
   var QUIET = AMP[0];
@@ -5620,6 +5732,7 @@ ${STYLES}
       this.last = null;
       this.smooth = [0, 0];
       this.beats = 0;
+      this.side = false;
     }
     _range(from, to, n) {
       return [Math.max(1, Math.floor(from / this.hz)), Math.min(n - 1, Math.ceil(to / this.hz))];
@@ -5668,10 +5781,16 @@ ${STYLES}
       if (beat) {
         this.beatAt = now;
         this.beats += 1;
+        this.side = !this.side;
         this.pulse = curve(0.45 + 0.55 * Math.min(1, flux / (this.fluxPeak || flux)));
       } else this.pulse *= Math.pow(0.5, dt / PULSE_HALF_MS);
       if (!live) this.pulse = 0;
       const ease = (prev, v) => v >= prev ? v : prev + (v - prev) * Math.min(1, dt / 120);
+      if (mode === "updown") {
+        this.smooth = this.side ? [1, 0] : [0, 1];
+        if (!this.beats) this.smooth = [0, 0];
+        return { levels: this.smooth.map((v) => v * 100), beat };
+      }
       let first;
       if (mode === "beat") first = this.pulse;
       else first = ease(this.smooth[0], live ? curve(mode === "bass" ? nBass : nAll) : 0);
@@ -5812,12 +5931,15 @@ ${STYLES}
         if (this._strokeKind) {
           const st = this._st;
           if (st.drag === null && this._stSpeed() === null) {
-            st.pos = r.levels[0];
+            st.pos = this._lim(r.levels[0]);
             this._stShow();
           }
         } else for (const i of [0, 1]) if (!this._padActive[i]) this._setPad(i, r.levels[i]);
       }
-      this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._mapLevel(i, r.levels[i])), 0.6);
+      if (this._simple) {
+        this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._isLinear(i) ? { goal: this._lim(r.levels[0]), dur: 180 } : this._mapLevel(i, r.levels[i])), 0.6);
+        if (this._ctl === "video" && !this._hbActive && !this._vrec) this._showHBar(0, this._strokeKind ? this._lim(r.levels[0]) : r.levels[0]);
+      } else this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._mapLevel(i, r.levels[i])), 0.6);
       if (now - (au.shownAt || 0) > 1e3) {
         au.shownAt = now;
         this._auShow();
@@ -6161,6 +6283,7 @@ ${STYLES}
         this._vsideShow();
       });
       $("vsfull").addEventListener("click", () => this._vFull());
+      this._bindVlim();
       if (this._simple) {
         video.setAttribute("controlslist", "nofullscreen");
         video.addEventListener("dblclick", (e) => {
@@ -6216,6 +6339,7 @@ ${STYLES}
       return tap.video ? this._el("video").currentTime * 1e3 : now - tap.t0;
     }
     _urecShow() {
+      this._autoKind();
       if (!this._el || !this._simple) return;
       const $ = this._el;
       const on = this._urecOn;
@@ -6445,6 +6569,7 @@ ${STYLES}
       $("vsscript").classList.toggle("has", Boolean(this._vscript));
       $("vsoff").classList.toggle("on", $("voffbox").classList.contains("open"));
       $("vsfile").classList.toggle("has", has);
+      this._vlimShow();
     }
     // Full screen: the video and the slider over it (on its right, under the
     // thumb). The browser's own full screen shows the video alone, so this
@@ -6502,6 +6627,89 @@ ${STYLES}
       this._showHBar(0, this._hvals[0]);
       stage.classList.toggle("full", on);
       $("vsfull").classList.toggle("on", on);
+      this._vlimShow();
+    }
+    // A stroker on the Play card keeps sound and scripts inside its limits
+    // (set on the full screen line, or in the stroke recorder): 0-100 is
+    // scaled into lower-upper.
+    _lim(v) {
+      const st = this._st;
+      if (!this._simple || !st) return v;
+      return Math.round(st.lower + Math.min(100, Math.max(0, v)) / 100 * (st.upper - st.lower));
+    }
+    _isLinear(i) {
+      const p = parseTarget(this._outTargetValue(i));
+      return Boolean(p && p.motor === "l");
+    }
+    // No Vibrate / Stroke choice here: a stroker as the device means stroke.
+    _autoKind() {
+      if (!this._simple || !this._outs || this._autoKindBusy) return;
+      const kind = [0, 1].some((i) => !(i && !this._twoPads) && this._isLinear(i)) ? "stroke" : "vibrate";
+      if (kind === this._recKind) return;
+      this._autoKindBusy = true;
+      try {
+        this._setRecKind(kind);
+      } finally {
+        this._autoKindBusy = false;
+      }
+    }
+    // The limits on the full screen line: shown for a stroker when sound or a
+    // script is doing the moving.
+    _vlimShow() {
+      if (!this._el) return;
+      const $ = this._el;
+      const st = this._st;
+      const full = $("hb1").classList.contains("ovl");
+      const show = Boolean(full && st && this._strokeKind && (this._au || this._vraw));
+      $("vlim").hidden = !show;
+      if (!show) return;
+      $("vlimup").style.bottom = st.upper + "%";
+      $("vlimlo").style.bottom = st.lower + "%";
+      const band = $("vlim").querySelector(".band");
+      band.style.bottom = st.lower + "%";
+      band.style.height = st.upper - st.lower + "%";
+      $("vlimup").textContent = String(st.upper);
+      $("vlimlo").textContent = String(st.lower);
+    }
+    _bindVlim() {
+      const $ = this._el;
+      const box = $("vlim");
+      let which = null;
+      const at = (e) => {
+        const r = box.getBoundingClientRect();
+        return Math.round(Math.min(100, Math.max(0, (r.bottom - e.clientY) / r.height * 100)));
+      };
+      const move = (e) => {
+        const st = this._st;
+        const p = at(e);
+        if (which === "upper") st.upper = Math.max(st.lower + 5, p);
+        else st.lower = Math.min(st.upper - 5, p);
+        st.last = which;
+        this._vlimShow();
+      };
+      box.addEventListener("pointerdown", (e) => {
+        const st = this._st;
+        if (!st) return;
+        e.preventDefault();
+        const p = at(e);
+        which = Math.abs(p - st.upper) <= Math.abs(p - st.lower) ? "upper" : "lower";
+        try {
+          box.setPointerCapture(e.pointerId);
+        } catch (_) {
+        }
+        move(e);
+      });
+      box.addEventListener("pointermove", (e) => {
+        if (which) move(e);
+      });
+      const done = () => {
+        if (!which) return;
+        which = null;
+        const st = this._st;
+        this._gpSave(STROKE_LIMIT_KEY, { lower: st.lower, upper: st.upper, last: st.last });
+        if (this._stShow) this._stShow();
+      };
+      for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) box.addEventListener(type, done);
     }
     // The video's own sound drives the devices: the audio settings sit under
     // the video while it is on.

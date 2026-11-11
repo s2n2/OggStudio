@@ -4,6 +4,7 @@ import { liveIntensity } from '../lib/convert.js';
 import { SAMPLE_MS, duration, fmt } from '../lib/core.js';
 import { FOLLOW_STROKER, parseTarget } from '../lib/outputs.js';
 import { PATTERNS, PATTERNS_DUAL, PATTERN_RANDOM, RandomProgram, patternDual, patternLevel, patternPeriod } from '../lib/patterns.js';
+import { STROKE_LIMIT_KEY } from '../lib/stroke.js';
 
 const PATTERN_KEY = 'oggstudio_pattern';
 const PATTERN_HINT = 'Ogg\'s patterns, played from here: they show on the pads, stay inside your limits and can be recorded.';
@@ -40,6 +41,7 @@ export class PlayPart {
     $('vsaud').addEventListener('click', () => this._vaSet(!this._vaudio));
     $('vsoff').addEventListener('click', () => { $('voffbox').classList.toggle('open'); this._vsideShow(); });
     $('vsfull').addEventListener('click', () => this._vFull());
+    this._bindVlim();
     if (this._simple) {
       // Full screen is this card's own, so the slider can sit over the video.
       video.setAttribute('controlslist', 'nofullscreen');
@@ -91,6 +93,7 @@ export class PlayPart {
   }
 
   _urecShow() {
+    this._autoKind();
     if (!this._el || !this._simple) return;
     const $ = this._el;
     const on = this._urecOn;
@@ -310,6 +313,7 @@ export class PlayPart {
     $('vsscript').classList.toggle('has', Boolean(this._vscript));
     $('vsoff').classList.toggle('on', $('voffbox').classList.contains('open'));
     $('vsfile').classList.toggle('has', has);
+    this._vlimShow();
   }
 
   // Full screen: the video and the slider over it (on its right, under the
@@ -353,6 +357,78 @@ export class PlayPart {
     this._showHBar(0, this._hvals[0]);
     stage.classList.toggle('full', on);
     $('vsfull').classList.toggle('on', on);
+    this._vlimShow();
+  }
+
+  // A stroker on the Play card keeps sound and scripts inside its limits
+  // (set on the full screen line, or in the stroke recorder): 0-100 is
+  // scaled into lower-upper.
+  _lim(v) {
+    const st = this._st;
+    if (!this._simple || !st) return v;
+    return Math.round(st.lower + (Math.min(100, Math.max(0, v)) / 100) * (st.upper - st.lower));
+  }
+
+  _isLinear(i) { const p = parseTarget(this._outTargetValue(i)); return Boolean(p && p.motor === 'l'); }
+
+  // No Vibrate / Stroke choice here: a stroker as the device means stroke.
+  _autoKind() {
+    if (!this._simple || !this._outs || this._autoKindBusy) return;
+    const kind = [0, 1].some((i) => !(i && !this._twoPads) && this._isLinear(i)) ? 'stroke' : 'vibrate';
+    if (kind === this._recKind) return;
+    this._autoKindBusy = true;
+    try { this._setRecKind(kind); } finally { this._autoKindBusy = false; }
+  }
+
+  // The limits on the full screen line: shown for a stroker when sound or a
+  // script is doing the moving.
+  _vlimShow() {
+    if (!this._el) return;
+    const $ = this._el;
+    const st = this._st;
+    const full = $('hb1').classList.contains('ovl');
+    const show = Boolean(full && st && this._strokeKind && (this._au || this._vraw));
+    $('vlim').hidden = !show;
+    if (!show) return;
+    $('vlimup').style.bottom = st.upper + '%';
+    $('vlimlo').style.bottom = st.lower + '%';
+    const band = $('vlim').querySelector('.band');
+    band.style.bottom = st.lower + '%';
+    band.style.height = (st.upper - st.lower) + '%';
+    $('vlimup').textContent = String(st.upper);
+    $('vlimlo').textContent = String(st.lower);
+  }
+
+  _bindVlim() {
+    const $ = this._el;
+    const box = $('vlim');
+    let which = null;
+    const at = (e) => { const r = box.getBoundingClientRect(); return Math.round(Math.min(100, Math.max(0, ((r.bottom - e.clientY) / r.height) * 100))); };
+    const move = (e) => {
+      const st = this._st;
+      const p = at(e);
+      if (which === 'upper') st.upper = Math.max(st.lower + 5, p); else st.lower = Math.min(st.upper - 5, p);
+      st.last = which;
+      this._vlimShow();
+    };
+    box.addEventListener('pointerdown', (e) => {
+      const st = this._st;
+      if (!st) return;
+      e.preventDefault();
+      const p = at(e);
+      which = Math.abs(p - st.upper) <= Math.abs(p - st.lower) ? 'upper' : 'lower';
+      try { box.setPointerCapture(e.pointerId); } catch (_) { /* fine */ }
+      move(e);
+    });
+    box.addEventListener('pointermove', (e) => { if (which) move(e); });
+    const done = () => {
+      if (!which) return;
+      which = null;
+      const st = this._st;
+      this._gpSave(STROKE_LIMIT_KEY, { lower: st.lower, upper: st.upper, last: st.last });
+      if (this._stShow) this._stShow();
+    };
+    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) box.addEventListener(type, done);
   }
 
   // The video's own sound drives the devices: the audio settings sit under

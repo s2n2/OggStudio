@@ -3,7 +3,7 @@
 // Audio into vibration. Fed with an analyser's frequency bins (0-255 each)
 // a few times a second, it gives two levels (0-100): the first follows the
 // beat, the bass or the loudness, the second the mids and highs.
-export const AUDIO_MODES = { beat: 'Beat: a pulse on every beat', bass: 'Bass: follows the low end', volume: 'Volume: follows the loudness' };
+export const AUDIO_MODES = { beat: 'Beat: a pulse on every beat', updown: 'Up and down: each beat goes to the other end', bass: 'Bass: follows the low end', volume: 'Volume: follows the loudness' };
 
 // The analyser's bytes are decibels (0 = -100 dB, 255 = -30 dB). Read as
 // they are, loud music is "nearly full" everywhere and nothing stands out,
@@ -61,6 +61,7 @@ export class AudioFeel {
     this.last = null;
     this.smooth = [0, 0];
     this.beats = 0;
+    this.side = false;                   // up and down: which end the last beat went to
   }
 
   _range(from, to, n) { return [Math.max(1, Math.floor(from / this.hz)), Math.min(n - 1, Math.ceil(to / this.hz))]; }
@@ -116,6 +117,7 @@ export class AudioFeel {
     if (beat) {
       this.beatAt = now;
       this.beats += 1;
+      this.side = !this.side;
       // A harder hit gives a stronger pulse.
       this.pulse = curve(0.45 + 0.55 * Math.min(1, flux / (this.fluxPeak || flux)));
     } else this.pulse *= Math.pow(0.5, dt / PULSE_HALF_MS);
@@ -123,6 +125,13 @@ export class AudioFeel {
 
     // Rise at once, fall a little slower: motors feel better for it.
     const ease = (prev, v) => (v >= prev ? v : prev + (v - prev) * Math.min(1, dt / 120));
+    if (mode === 'updown') {
+      // One beat up, the next down (the second motor the other way): a
+      // stroker strokes to the music, a vibrator goes high and low.
+      this.smooth = this.side ? [1, 0] : [0, 1];
+      if (!this.beats) this.smooth = [0, 0];
+      return { levels: this.smooth.map((v) => v * 100), beat };
+    }
     let first;
     if (mode === 'beat') first = this.pulse;            // nothing between the beats
     else first = ease(this.smooth[0], live ? curve(mode === 'bass' ? nBass : nAll) : 0);

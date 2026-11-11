@@ -43,14 +43,17 @@ export class CastPart {
 
   _castPicker(open) {
     const $ = this._el;
-    if (!open) { $('castpop').hidden = true; return; }
+    if (!open) { $('castpop').hidden = true; this._castUnprep(); return; }
     if (!this._vurl) { this._toast('Choose a video first'); return; }
+    if (this._canCastLocal && !this._cast) this._castPrepare();
     const item = (label, tag, fn) => { const b = document.createElement('button'); b.type = 'button'; b.innerHTML = `<span>${esc(label)}</span><small>${esc(tag)}</small>`; b.addEventListener('click', fn); return b; };
     const items = [];
     if (this._cast) items.push(item(`■ Stop casting to ${this._castName(this._cast.entity)}`, '', () => { this._castPicker(false); this._castEnd(true); }));
     // A TV where this phone is: the browser finds it (Chromecast or AirPlay).
     if (this._canCastLocal && !(this._cast && this._cast.entity === LOCAL_CAST)) {
-      items.push(item('📱 A TV near this phone', 'Chromecast or AirPlay, found by this browser', () => this._castStart(LOCAL_CAST)));
+      const b = item('📱 A TV near this phone', this._castPrepText(), () => this._castLocalGo());
+      b.id = 'castlocal';
+      items.push(b);
     }
     const targets = this._castTargets();
     if (targets.length) { const d = document.createElement('div'); d.className = 'hint'; d.textContent = 'Through Home Assistant (TVs at home):'; items.push(d); }
@@ -72,23 +75,95 @@ export class CastPart {
   // Chrome (not in the Home Assistant app) and Safari can cast from here.
   get _canCastLocal() { return typeof HTMLMediaElement !== 'undefined' && 'remote' in HTMLMediaElement.prototype; }
 
-  // The browser's own picker. The TV is handed the relay's private link on
-  // the address this page came from, so it must be able to reach Home
-  // Assistant there (your Nabu Casa or other outside address when away).
-  async _castLocalStart(cast, url) {
-    const rv = document.createElement('video');
-    rv.hidden = true;
-    rv.preload = 'metadata';
-    rv.src = new URL(url, location.origin).href;
-    this.shadowRoot.querySelector('.vstage').appendChild(rv);
-    cast.rv = rv;
+  // A TV near this phone: the browser's own picker (Chromecast, AirPlay).
+  // It must be opened straight from the tap, so the relay's link is made
+  // ready when this menu opens. The TV gets the link on the address this
+  // page came from, so it must be able to reach Home Assistant there (your
+  // Nabu Casa or other outside address when away from home).
+  _castPrepare() {
+    const file = this._vfileObj;
+    const old = this._castPrep;
+    if (old && old.fileObj === file) return;
+    this._castUnprep();
+    if (!file) return;
+    const cast = { entity: LOCAL_CAST, phase: 'starting', prep: true, fileObj: file, state: 'Getting the link ready…' };
+    this._castPrep = cast;
+    this._castRelay(file, cast).then((url) => {
+      if (this._castPrep !== cast) return;
+      const rv = document.createElement('video');
+      rv.preload = 'metadata';
+      rv.muted = true;
+      rv.playsInline = true;
+      rv.className = 'castrv';
+      rv.src = new URL(url, location.origin).href;
+      this.shadowRoot.querySelector('.vstage').appendChild(rv);
+      cast.rv = rv;
+      cast.state = 'Looking for TVs…';
+      this._castPrepSay();
+      try {
+        rv.remote.watchAvailability((yes) => { cast.avail = yes; cast.state = yes ? 'Found nearby: tap to choose' : 'No TV found by this browser yet'; this._castPrepSay(); })
+          .catch(() => { cast.state = 'Tap to look for a TV'; this._castPrepSay(); });
+      } catch (_) { cast.state = 'Tap to look for a TV'; this._castPrepSay(); }
+    }).catch((e) => {
+      if (this._castPrep !== cast) return;
+      cast.state = 'Could not get a link: ' + ((e && e.message) || e);
+      this._castPrepSay();
+    });
+  }
+
+  _castPrepText() { return (this._castPrep && this._castPrep.state) || 'Chromecast or AirPlay, found by this browser'; }
+
+  _castPrepSay() {
+    const el = this._el && this._el('castlocal');
+    if (el) el.querySelector('small').textContent = this._castPrepText();
+  }
+
+  _castUnprep() {
+    const cast = this._castPrep;
+    if (!cast) return;
+    this._castPrep = null;
+    cast.cancelled = true;
+    if (cast.unsub) { try { cast.unsub(); } catch (_) { /* connection gone */ } }
+    if (cast.rv) { try { cast.rv.remote.cancelWatchAvailability().catch(() => {}); } catch (_) { /* fine */ } cast.rv.removeAttribute('src'); cast.rv.remove(); }
+  }
+
+  // Straight from the tap: the browser asks which TV.
+  _castLocalGo() {
+    const cast = this._castPrep;
+    if (!cast || !cast.rv) { this._toast(cast && cast.state ? cast.state : 'Getting the link ready… tap again in a moment.'); return; }
+    const rv = cast.rv;
+    let asked;
+    try { asked = rv.remote.prompt(); } catch (e) { asked = Promise.reject(e); }
+    this._castPrep = null;
+    cast.prep = false;
+    this._el('castpop').hidden = true;
+    if (this._cast) this._castEnd(true);
+    const video = this._el('video');
+    cast.startAt = video.currentTime || 0;
+    cast.since = performance.now();
+    cast.file = cast.relay;
+    this._cast = cast;
+    this._castWake(true);
+    this._castWasMuted = video.muted;
+    video.muted = true;                   // the sound comes from the TV
+    this._castQuiet('pause');
     rv.remote.onconnect = () => {
       if (this._cast !== cast) return;
+      rv.muted = false;
       try { if (cast.startAt > 1) rv.currentTime = cast.startAt; } catch (_) { /* not loaded yet */ }
-      rv.play().catch(() => {});
+      rv.play().catch((e) => this._toast('The TV would not start: ' + ((e && e.message) || e)));
     };
     rv.remote.ondisconnect = () => { if (this._cast === cast) { this._castQuiet('pause'); this._castEnd(false, 'The TV was disconnected.'); } };
-    await rv.remote.prompt();
+    asked.catch((e) => {
+      if (this._cast !== cast) return;
+      const why = e && e.name === 'NotFoundError' ? 'this browser found no TV it can cast to here'
+        : e && e.name === 'NotSupportedError' ? 'this browser cannot cast this (in the Home Assistant app, open Home Assistant in Chrome or Safari instead)'
+        : e && e.name === 'NotAllowedError' ? 'no TV was chosen'
+        : `${(e && e.name) || 'error'}: ${(e && e.message) || e}`;
+      this._castEnd(false, 'Not cast: ' + why + '.');
+    });
+    this._castShow();
+    if (!this._castTimer) this._castTimer = setInterval(() => this._castSync(), 250);
   }
 
   // Open the relay: Home Assistant asks for blocks of the file, this answers them.
@@ -98,7 +173,7 @@ export class CastPart {
     const answer = async (req, start, length) => {
       try {
         const body = await file.slice(start, start + length).arrayBuffer();
-        if (this._cast !== cast) return;
+        if (this._cast !== cast && this._castPrep !== cast) return;
         const r = await this._hass.fetchWithAuth(`/api/oggstudio/relay_data/${cast.relay}/${req}`, { method: 'POST', body });
         if (r.ok) { cast.sent = (cast.sent || 0) + length; this._castShowSoon(); }
       } catch (_) { /* the TV asks again */ }
@@ -106,7 +181,7 @@ export class CastPart {
     cast.unsub = await this._hass.connection.subscribeMessage((m) => {
       if (m.ready) { cast.relay = m.id; ready(m.url); } else if (m.req !== undefined) answer(m.req, m.start, m.length);
     }, { type: 'oggstudio/relay', name: file.name, size: file.size, mime: file.type || 'video/mp4' }, { resubscribe: false });
-    if (this._cast !== cast) { cast.unsub(); throw new Error('cancelled'); }
+    if (this._cast !== cast && this._castPrep !== cast) { cast.unsub(); throw new Error('cancelled'); }
     return link;
   }
 
@@ -148,12 +223,9 @@ export class CastPart {
       this._castWasMuted = video.muted;
       video.muted = true;                   // the sound comes from the TV
       this._castQuiet('pause');
-      if (entity === LOCAL_CAST) await this._castLocalStart(cast, url);
-      else {
-        await this._hass.callService('media_player', 'play_media', {
-          entity_id: entity, media_content_id: url, media_content_type: file.type || 'video/mp4',
-        });
-      }
+      await this._hass.callService('media_player', 'play_media', {
+        entity_id: entity, media_content_id: url, media_content_type: file.type || 'video/mp4',
+      });
       if (!this._castTimer) this._castTimer = setInterval(() => this._castSync(), 250);
     } catch (e) {
       if (this._cast !== cast) return;
@@ -298,7 +370,7 @@ export class CastPart {
         this._castQuiet('play');
         this._castShow();
       } else if (now - cast.since > 60000) {
-        this._castEnd(false, 'The TV did not start the video. It must be able to reach Home Assistant at ' + location.origin + '.');
+        this._castEnd(false, 'The TV did not start the video. It must be able to reach Home Assistant at ' + location.origin + ' (a home-only or VPN address will not do).');
       }
       return;
     }

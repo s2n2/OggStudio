@@ -104,6 +104,17 @@ const between = rs.filter((r, i) => i > 20 && i % 10 >= 6);
 assert.ok(avg(between) < 15, `between beats ${avg(between)}`);
 assert.ok(avg(rs.slice(20)) < 45, `beat mode is not stuck on full: ${avg(rs.slice(20))}`);
 
+// Up and down: each beat goes to the other end.
+feel = new AudioFeel(rate, fft);
+rs = run(feel, 200, (i) => frame(i % 10 === 0 ? 235 : 150, 170, 6), 'updown', 0.5);
+{
+  let flips = 0;
+  for (let i = 1; i < rs.length; i++) if (rs[i].levels[0] !== rs[i - 1].levels[0]) flips += 1;
+  assert.ok(rs.every((r) => [0, 100].includes(r.levels[0])), 'only the two ends');
+  assert.ok(Math.abs(flips - feel.beats) <= 1, `flips ${flips} beats ${feel.beats}`);
+  assert.ok(rs.filter((r) => r.beat).every((r) => r.levels[0] + r.levels[1] === 100));
+}
+
 // Loud sound with no beat (a held chord, a fan, hiss): no stream of pulses,
 // and no mode sits at full.
 for (const mode of ['beat', 'bass', 'volume']) {

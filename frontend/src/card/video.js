@@ -204,6 +204,7 @@ export class VideoPart {
     const bar = this._el('hb' + (index + 1));
     const v = Math.round(Math.min(100, Math.max(0, value)));
     bar.querySelector('.fill').style[bar.classList.contains('vert') ? 'height' : 'width'] = v + '%';
+    bar.style.setProperty('--v', String(v));
     bar.querySelector('.pct').textContent = v + '%';
     bar.setAttribute('aria-valuenow', String(v));
   }

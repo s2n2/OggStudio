@@ -105,10 +105,13 @@ export class AudioPart {
     au.outAt = now;
     if (this._simple) {
       // The pads (or the stroke bar) show it, so Record can follow it.
-      if (this._strokeKind) { const st = this._st; if (st.drag === null && this._stSpeed() === null) { st.pos = r.levels[0]; this._stShow(); } }
+      if (this._strokeKind) { const st = this._st; if (st.drag === null && this._stSpeed() === null) { st.pos = this._lim(r.levels[0]); this._stShow(); } }
       else for (const i of [0, 1]) if (!this._padActive[i]) this._setPad(i, r.levels[i]);
     }
-    this._outApply([0, 1].map((i) => (i && !this._twoPads ? null : this._mapLevel(i, r.levels[i]))), 0.6);
+    if (this._simple) {
+      this._outApply([0, 1].map((i) => (i && !this._twoPads ? null : this._isLinear(i) ? { goal: this._lim(r.levels[0]), dur: 180 } : this._mapLevel(i, r.levels[i]))), 0.6);
+      if (this._ctl === 'video' && !this._hbActive && !this._vrec) this._showHBar(0, this._strokeKind ? this._lim(r.levels[0]) : r.levels[0]);
+    } else this._outApply([0, 1].map((i) => (i && !this._twoPads ? null : this._mapLevel(i, r.levels[i]))), 0.6);
     if (now - (au.shownAt || 0) > 1000) { au.shownAt = now; this._auShow(); }
   }
 
