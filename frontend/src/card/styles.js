@@ -156,5 +156,38 @@ button.rppick{width:100%;text-align:left;background:#18233d;overflow:hidden;text
 .kind{display:flex;border:1px solid #33415f;border-radius:12px;overflow:hidden;flex:0 0 auto}
 .kind button{border:0;border-radius:0;min-height:38px;padding:0 14px;background:#141d33;color:var(--muted)}
 .kind button.on{background:linear-gradient(110deg,#2fbfa9,#67e0c8);color:#062a24}
+ha-card.tg #gp,ha-card.tg .ctltabs{display:none}
+#outfoot{order:90;margin-top:10px}
+#outfoot:empty{display:none}
+ha-card.simple section .rechead,ha-card.simple .vhide,ha-card.simple #rptools{display:none}
+ha-card:not(.simple) .vside,ha-card:not(.simple) .vshow,ha-card.simple .vfold:not(.open){display:none}
+ha-card.simple #ctlbox{padding:10px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.035)}
+ha-card.simple .ctltabs button{flex:1 1 0;padding:0 4px;font-size:13px}
+#urecrow{margin-top:8px}
+.urechead{display:flex;gap:8px;align-items:stretch}
+.urechead button.rec{flex:1;width:auto}
+.urechead .kind button{min-height:56px;padding:0 10px}
+#utimer{text-align:center;margin-top:4px;min-height:0}
+#utimer:empty{display:none}
+#takebox.busy>:not(h3):not(.take){display:none}
+#takebox.busy .take{color:#ffd2da;font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;margin:0}
+.ptgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px;margin-top:8px}
+.ptgrid button.ptbtn{min-height:40px;padding:0 4px;background:#18233d}
+.ptgrid button.ptbtn.on{background:linear-gradient(110deg,#ff5c7a,#ff8aa0);color:#2a0710;border-color:transparent}
+#ptbox .moodrow label{flex:0 0 64px}
+.vwrap{display:flex;gap:8px;align-items:flex-start}
+.vstage{flex:1;min-width:0}
+.vside{flex:0 0 46px;display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.vside button{width:46px;min-height:44px;padding:0;font-size:19px;background:#18233d}
+.vside button.has{border-color:#67e0c8}
+.vside button.on{background:linear-gradient(110deg,#2fbfa9,#67e0c8);border-color:transparent}
+.vside button:disabled{opacity:.4}
+button.vempty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;width:100%;min-height:294px;margin-top:8px;border:2px dashed #33415f;background:#0e1730;font-size:15px}
+button.vempty small{font-weight:600;color:var(--muted);font-size:11.5px;padding:0 12px}
+ha-card.simple video{max-height:78vh}
+ha-card.simple #videobox{padding:8px}
+#aubox.fromvideo #ausrcbox,#aubox.fromvideo #aufilebox,#aubox.fromvideo #augo{display:none!important}
+#aubox.fromvideo{margin-top:8px;padding:10px;border-radius:14px;border:1px solid #293552;background:#0e1730}
+#aubox.fromvideo>label:first-of-type{margin-top:0}
 [hidden],.off{display:none!important}
 `;

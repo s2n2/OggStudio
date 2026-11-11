@@ -44,6 +44,8 @@ export class SafetyPart {
     this._holdUntil = performance.now() + PANIC_HOLD_MS;
     if (this._recording) this._stopRecording();
     if (this._stRecording) this._stStop();
+    this._tapStop();
+    this._ptStop();
     if (this._live) { $('live').checked = false; this._setLive(false); }
     $('stlive').checked = false;
     if (this._st) { this._st.touch = null; this._st.pad = null; this._st.drag = null; this._st.latch = null; }

@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.14.2";
+  var VERSION = "0.15.0";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -50,6 +50,22 @@
       parts: ["stroke", "take"],
       size: 8,
       description: "Stroke recorder: set an upper and lower limit, hold a speed to stroke between them, record a stroke funscript."
+    },
+    "oggstudio-play-card": {
+      name: "OggStudio Play",
+      sub: "Manual, pattern, mood, audio or video: record any of them",
+      parts: ["record", "video", "take"],
+      simple: true,
+      size: 8,
+      description: "One simple card: play by hand, a pattern, a mood, to sound or to a video, with one Record button for all of them."
+    },
+    "oggstudio-together-card": {
+      name: "OggStudio Together",
+      sub: "Play together from two places",
+      parts: [],
+      together: true,
+      size: 4,
+      description: "Start or join a Together session: each of you drives the devices of the other, inside the limits each has set."
     }
   };
   var capture = (el, e) => {
@@ -1160,6 +1176,178 @@
     return { stroke: s.done(), vibe: two ? [v1.done(), v2.done()] : [v1.done()] };
   }
 
+  // frontend/src/lib/patterns.js
+  var PATTERNS = {
+    steady: "Steady",
+    pulse: "Pulse",
+    wave: "Wave",
+    breath: "Breath",
+    ramp: "Ramp",
+    peak: "Peak",
+    heartbeat: "Heartbeat",
+    double_pulse: "Double pulse",
+    steps: "Steps",
+    echo: "Echo",
+    surge: "Surge",
+    surf: "Surf",
+    bounce: "Bounce",
+    massage: "Massage",
+    tease: "Tease",
+    chachacha: "Cha-cha-cha",
+    tempo: "Tempo"
+  };
+  var PATTERNS_DUAL = {
+    dual_pulse: "Dual pulse",
+    dual_wave: "Dual wave",
+    ping_pong: "Ping-pong",
+    chase: "Chase",
+    counter_wave: "Counter wave",
+    breath_offset: "Breath offset",
+    heartbeat_split: "Heartbeat split",
+    double_pulse_split: "Double pulse split",
+    echo_bounce: "Echo bounce",
+    ramp_swap: "Ramp swap",
+    steps_cross: "Steps cross",
+    tease_pulse: "Tease + pulse",
+    rumble_pulse: "Rumble + pulse",
+    surge_layer: "Surge layer"
+  };
+  var PATTERN_RANDOM = "random";
+  var frac = (x) => (x % 1 + 1) % 1;
+  var wave = (pos) => (1 - Math.cos(2 * Math.PI * pos)) / 2;
+  var step4 = (pos) => (Math.min(Math.floor(pos * 4), 3) + 1) / 4;
+  var ECHO = [1, 0, 0.65, 0, 0.35, 0];
+  var BOUNCE = [1, 0.8, 0.6, 0.45, 0.3, 0.15];
+  function patternLevel(key, phase) {
+    const pos = frac(phase);
+    switch (key) {
+      case "steady":
+        return 1;
+      case "pulse":
+        return pos < 0.5 ? 1 : 0;
+      case "wave":
+      case "tide":
+        return wave(pos);
+      case "breath":
+        return Math.pow(wave(pos), 1.5);
+      case "ramp":
+        return pos;
+      case "peak":
+        return 1 - Math.abs(2 * pos - 1);
+      case "heartbeat":
+        return pos < 0.13 ? 1 : pos >= 0.25 && pos < 0.4 ? 0.7 : 0;
+      case "double_pulse":
+        return pos < 0.2 || pos >= 0.35 && pos < 0.55 ? 1 : 0;
+      case "steps":
+      case "step":
+        return step4(pos);
+      case "echo":
+        return ECHO[Math.min(Math.floor(pos * 6), 5)];
+      case "surge":
+      case "crest":
+        return Math.sqrt(wave(pos));
+      case "surf":
+        return wave(pos) * (0.65 + 0.35 * Math.pow(Math.sin(6 * Math.PI * pos), 2));
+      case "bounce":
+        return Math.abs(Math.sin(2 * Math.PI * pos)) * (1 - 0.4 * pos);
+      case "massage":
+        return 0.3 + 0.7 * wave(pos);
+      case "tease":
+        return pos < 0.8 ? pos * 1.25 : 0;
+      case "chachacha":
+        return pos < 0.14 || pos >= 0.25 && pos < 0.39 || pos >= 0.5 && pos < 0.64 ? 1 : 0;
+      case "tempo":
+        return frac(pos * 3) < 0.5 ? 1 : 0;
+      default:
+        return 0;
+    }
+  }
+  function patternDual(key, phase, motor) {
+    const pos = frac(phase);
+    const inner = motor === 0;
+    switch (key) {
+      case "dual_steady":
+        return 1;
+      case "dual_pulse":
+        return pos < 0.5 ? 1 : 0;
+      case "dual_wave":
+        return wave(pos);
+      case "ping_pong":
+        return (inner ? pos < 0.5 || pos > 0.96 : pos > 0.46) ? 1 : 0;
+      case "chase":
+        return wave(frac(pos - 0.25 * motor));
+      case "counter_wave":
+        return inner ? wave(pos) : 1 - wave(pos);
+      case "breath_offset":
+        return Math.pow(wave(frac(pos - 0.5 * motor)), 1.5);
+      case "heartbeat_split":
+        return inner ? pos < 0.13 ? 1 : 0 : pos >= 0.25 && pos < 0.4 ? 0.8 : 0;
+      case "double_pulse_split":
+        return (inner ? pos < 0.2 : pos >= 0.35 && pos < 0.55) ? 1 : 0;
+      case "echo_bounce": {
+        const stage = Math.min(Math.floor(pos * 6), 5);
+        return stage % 2 === 0 === inner ? BOUNCE[stage] : 0;
+      }
+      case "ramp_swap":
+        return inner ? pos : 1 - pos;
+      case "steps_cross":
+        return inner ? step4(pos) : 1.25 - step4(pos);
+      case "tease_pulse":
+        return inner ? 0.4 : frac(pos * 2) < 0.35 ? 1 : 0;
+      case "rumble_pulse":
+        return inner ? wave(pos) : frac(pos * 4) < 0.3 ? 1 : 0;
+      case "surge_layer":
+        return inner ? Math.sqrt(wave(pos)) : 0.6 * wave(pos);
+      default:
+        return patternLevel(key, phase);
+    }
+  }
+  var BURST_MEAN_S = 14;
+  var RandomProgram = class {
+    constructor(motors = 1, intensity = 0.75, rng = Math.random) {
+      this.motors = motors;
+      this.intensity = intensity;
+      this.rng = rng;
+      this._next(true);
+    }
+    _next(burst) {
+      const r = this.rng;
+      this.t = 0;
+      if (!burst) {
+        const duty = Math.min(0.96, Math.max(0.05, this.intensity * this.intensity));
+        this.seg = { rest: true };
+        this.left = Math.min(300, Math.max(0.4, -Math.log(1 - r() * 0.999) * BURST_MEAN_S * (1 - duty) / duty));
+        return;
+      }
+      this.left = 3 + r() * 22;
+      if (r() < 0.3) {
+        const n = 3 + Math.floor(r() * 6);
+        this.seg = { steps: Array.from({ length: n }, () => 0.15 + 0.85 * r()), every: 0.4 + r() * 2.1 };
+        return;
+      }
+      const keys = this.motors > 1 ? Object.keys(PATTERNS_DUAL) : Object.keys(PATTERNS).filter((k) => k !== "steady");
+      this.seg = { key: keys[Math.min(keys.length - 1, Math.floor(r() * keys.length))], level: 0.3 + 0.7 * r(), period: 0.6 + r() * 5.4 };
+    }
+    // One step of dt milliseconds: the two motors' levels (0-1).
+    step(dtMs) {
+      const dt = dtMs / 1e3;
+      this.left -= dt;
+      this.t += dt;
+      if (this.left <= 0) this._next(Boolean(this.seg.rest));
+      const s = this.seg;
+      if (s.rest) return [0, 0];
+      if (s.steps) {
+        const v2 = s.steps[Math.floor(this.t / s.every) % s.steps.length];
+        return [v2, v2];
+      }
+      const ph = this.t / s.period;
+      if (this.motors > 1) return [0, 1].map((m) => patternDual(s.key, ph, m) * s.level);
+      const v = patternLevel(s.key, ph) * s.level;
+      return [v, v];
+    }
+  };
+  var patternPeriod = (speed) => 8 * Math.pow(0.5 / 8, Math.min(100, Math.max(0, speed)) / 100);
+
   // frontend/src/card/styles.js
   var STYLES = `
 :host{--ink:#e8edff;--muted:#8f9ab8;--line:rgba(174,194,246,.16)}
@@ -1317,6 +1505,39 @@ button.rppick{width:100%;text-align:left;background:#18233d;overflow:hidden;text
 .kind{display:flex;border:1px solid #33415f;border-radius:12px;overflow:hidden;flex:0 0 auto}
 .kind button{border:0;border-radius:0;min-height:38px;padding:0 14px;background:#141d33;color:var(--muted)}
 .kind button.on{background:linear-gradient(110deg,#2fbfa9,#67e0c8);color:#062a24}
+ha-card.tg #gp,ha-card.tg .ctltabs{display:none}
+#outfoot{order:90;margin-top:10px}
+#outfoot:empty{display:none}
+ha-card.simple section .rechead,ha-card.simple .vhide,ha-card.simple #rptools{display:none}
+ha-card:not(.simple) .vside,ha-card:not(.simple) .vshow,ha-card.simple .vfold:not(.open){display:none}
+ha-card.simple #ctlbox{padding:10px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.035)}
+ha-card.simple .ctltabs button{flex:1 1 0;padding:0 4px;font-size:13px}
+#urecrow{margin-top:8px}
+.urechead{display:flex;gap:8px;align-items:stretch}
+.urechead button.rec{flex:1;width:auto}
+.urechead .kind button{min-height:56px;padding:0 10px}
+#utimer{text-align:center;margin-top:4px;min-height:0}
+#utimer:empty{display:none}
+#takebox.busy>:not(h3):not(.take){display:none}
+#takebox.busy .take{color:#ffd2da;font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;margin:0}
+.ptgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px;margin-top:8px}
+.ptgrid button.ptbtn{min-height:40px;padding:0 4px;background:#18233d}
+.ptgrid button.ptbtn.on{background:linear-gradient(110deg,#ff5c7a,#ff8aa0);color:#2a0710;border-color:transparent}
+#ptbox .moodrow label{flex:0 0 64px}
+.vwrap{display:flex;gap:8px;align-items:flex-start}
+.vstage{flex:1;min-width:0}
+.vside{flex:0 0 46px;display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.vside button{width:46px;min-height:44px;padding:0;font-size:19px;background:#18233d}
+.vside button.has{border-color:#67e0c8}
+.vside button.on{background:linear-gradient(110deg,#2fbfa9,#67e0c8);border-color:transparent}
+.vside button:disabled{opacity:.4}
+button.vempty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;width:100%;min-height:294px;margin-top:8px;border:2px dashed #33415f;background:#0e1730;font-size:15px}
+button.vempty small{font-weight:600;color:var(--muted);font-size:11.5px;padding:0 12px}
+ha-card.simple video{max-height:78vh}
+ha-card.simple #videobox{padding:8px}
+#aubox.fromvideo #ausrcbox,#aubox.fromvideo #aufilebox,#aubox.fromvideo #augo{display:none!important}
+#aubox.fromvideo{margin-top:8px;padding:10px;border-radius:14px;border:1px solid #293552;background:#0e1730}
+#aubox.fromvideo>label:first-of-type{margin-top:0}
 [hidden],.off{display:none!important}
 `;
 
@@ -1390,6 +1611,8 @@ button.rppick{width:100%;text-align:left;background:#18233d;overflow:hidden;text
         this._setLive(false);
       }
       if (this._stRecording) this._stStop();
+      this._tapStop();
+      this._ptStop();
       if (this._st) {
         this._st.touch = null;
         this._st.pad = null;
@@ -1421,13 +1644,15 @@ button.rppick{width:100%;text-align:left;background:#18233d;overflow:hidden;text
       const slot = rec && this.shadowRoot.querySelector(`[data-part="${rec}"] .outslot`);
       const box = this._el("outbox");
       this._el("outhome").appendChild(box);
-      const cslot = rec && this.shadowRoot.querySelector(`[data-part="${rec}"] .ctlslot`);
+      const simple = Boolean(this._variant.simple);
+      const cslot = rec && !simple && this.shadowRoot.querySelector(`[data-part="${rec}"] .ctlslot`);
       (cslot || this._el("outhome")).insertBefore(this._el("ctlbox"), cslot ? null : box);
+      if (simple) this._el("outfoot").appendChild(box);
       const gslot = this.shadowRoot.querySelector(`[data-part="${rec || "video"}"]:not(.off) .gpslot`);
       if (gslot) gslot.appendChild(this._el("gp"));
       this._el("outhome").classList.remove("off");
       this._el("outhome").style.order = "0";
-      this._el("ctlbox").hidden = !rec;
+      this._el("ctlbox").hidden = !rec && !this._variant.together;
       if (this._rp) this._ctlShow();
       this._el("devbox").hidden = true;
       if (this._outs) this._outRender();
@@ -1496,11 +1721,13 @@ button.rppick{width:100%;text-align:left;background:#18233d;overflow:hidden;text
       this._update();
     }
     _render() {
+      const simple = Boolean(this._variant.simple);
+      const ptBtns = (set) => Object.entries(set).map(([k, t]) => `<button type="button" class="ptbtn" data-pt="${k}">${t}</button>`).join("");
       this.shadowRoot.innerHTML = `
       <style>
 ${STYLES}
       </style>
-      <ha-card>
+      <ha-card class="${simple ? "simple" : ""}${this._variant.together ? "tg" : ""}">
         <div class="cover" id="cover" hidden>
           <h2 id="covername">Studio</h2>
           <div id="coverpin"><label>PIN</label><div class="row"><input id="pin" type="password" inputmode="numeric" autocomplete="off" aria-label="PIN"><button id="pingo" type="button" style="flex:0 0 auto">Open</button></div></div>
@@ -1554,7 +1781,20 @@ ${STYLES}
         </section>
         <section data-part="outputs" id="outhome" class="off">
           <div id="ctlbox">
-            <div class="ctltabs" role="tablist"><button type="button" data-ctl="record">● Record</button><button type="button" data-ctl="replay">▶ Replay</button><button type="button" data-ctl="mood">◎ Mood</button><button type="button" data-ctl="audio">♪ Audio</button><button type="button" data-ctl="together">🤝 Together</button></div>
+            <div class="ctltabs" role="tablist">${(simple ? [["record", "✋ Manual"], ["pattern", "〰 Pattern"], ["mood", "◎ Mood"], ["audio", "♪ Audio"], ["video", "🎬 Video"]] : [["record", "● Record"], ["replay", "▶ Replay"], ["mood", "◎ Mood"], ["audio", "♪ Audio"], ["together", "🤝 Together"]]).map(([k, t]) => `<button type="button" data-ctl="${k}">${t}</button>`).join("")}</div>
+            <div id="urecrow" hidden>
+              <div class="urechead"><button id="urec" class="rec" type="button">● Record</button><div class="kind" role="group" aria-label="Recording type"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div></div>
+              <div class="val" id="utimer"></div>
+            </div>
+            <div id="ptbox" hidden>
+              <div class="ptgrid"><button type="button" class="ptbtn" data-pt="${PATTERN_RANDOM}">🎲 Random</button>${ptBtns(PATTERNS)}</div>
+              <div id="ptdual" hidden><label>Two motors, each with its own part</label><div class="ptgrid">${ptBtns(PATTERNS_DUAL)}</div></div>
+              <div class="moodrow"><label id="ptspeedlab">Speed</label><input id="ptspeed" type="range" min="0" max="100" step="5" value="50"><b id="ptspeedv"></b></div>
+              <div class="moodrow"><label>Strength</label><input id="ptstr" type="range" min="20" max="100" step="5" value="100"><b id="ptstrv"></b></div>
+              <div class="rpinfo" id="ptinfo"></div>
+              <button id="ptstop" type="button" class="stop" style="width:100%;margin-top:6px">■ Stop pattern</button>
+              <label>Or play a saved script</label>
+            </div>
             <div id="moodbox" hidden>
               <div class="moodgrid">${Object.entries(MOODS).map(([k, m]) => `<button type="button" class="moodbtn" data-mood="${k}"><span>${m.icon}</span>${m.label}</button>`).join("")}</div>
               <div class="rpbar" id="moodbar"><i id="moodfill"></i></div>
@@ -1568,7 +1808,7 @@ ${STYLES}
               <div class="rpbar" id="rpbar" title="Tap to jump. Colour shows how intense each part is"><canvas id="rpheat" width="240" height="1"></canvas><i id="rpfill"></i></div>
               <div class="rpinfo" id="rpinfo"></div>
               <div class="rprow"><button id="rpplay" type="button" class="go">▶ Replay</button><select id="rpspeed" aria-label="Replay speed"></select><label class="check"><input id="rploop" type="checkbox"> Loop</label></div>
-              <div class="row" style="margin-top:8px"><button id="tlbtn" type="button">✂ Tools</button><button id="plbtn" type="button">☰ Queue</button></div>
+              <div class="row" id="rptools" style="margin-top:8px"><button id="tlbtn" type="button">✂ Tools</button><button id="plbtn" type="button">☰ Queue</button></div>
               <div class="subbox" id="tlbox" hidden>
                 <div class="row"><button id="tlstart" type="button">Cut before here</button><button id="tlend" type="button">Cut after here</button></div>
                 <div class="row"><select id="tln" aria-label="How many times"></select><button id="tlloop" type="button">Repeat</button></div>
@@ -1584,7 +1824,7 @@ ${STYLES}
               </div>
             </div>
             <div id="aubox" hidden>
-              <label>Sound from</label><select id="ausrc"><option value="mic">Microphone</option><option value="file">A music file on this device</option><option value="video">The video in Video sync</option><option value="tab">Another tab (share its audio)</option></select>
+              <div id="ausrcbox"><label>Sound from</label><select id="ausrc"><option value="mic">Microphone</option><option value="file">A music file on this device</option><option value="video">The video in Video sync</option><option value="tab">Another tab (share its audio)</option></select></div>
               <div id="aufilebox" hidden><input id="aufile" type="file" accept="audio/*,video/*" style="margin-top:6px"><audio id="auel" controls preload="metadata"></audio></div>
               <label>Feel</label><select id="aumode"></select>
               <div class="moodrow"><label title="Low: only the loudest moments and hardest hits. High: quiet parts and soft hits come through too">Sensitivity</label><input id="ausens" type="range" min="0" max="100" step="5" value="50"><b id="ausensv">50%</b></div>
@@ -1632,24 +1872,39 @@ ${STYLES}
           <div class="row" style="margin-top:8px"><button id="play">▶ Play</button><button id="stop" class="stop">■ Stop</button><button id="code">Copy code</button><button id="delete">Delete</button></div>
         </section>
         <section id="videobox" data-part="video">
-          <h3>Video sync</h3>
-          <div class="hint" style="margin-top:0">The video plays from this phone or computer. 📺 Cast streams it to a TV through Home Assistant while you watch; nothing is saved there. Keep this screen on while casting.</div>
-          <label>Video</label><input id="vfile" type="file" accept="video/*">
-          <label>Script</label><select id="vsrc"></select>
-          <div id="vfilebox"><input id="vscriptfile" type="file" accept=".funscript,.json,application/json" multiple style="margin-top:6px"></div>
-          <video id="video" controls playsinline preload="metadata" disableremoteplayback hidden></video>
+          <h3 class="vhide">Video sync</h3>
+          <div class="hint vhide" style="margin-top:0">The video plays from this phone or computer. 📺 Cast streams it to a TV through Home Assistant while you watch; nothing is saved there. Keep this screen on while casting.</div>
+          <div class="vhide"><label>Video</label><input id="vfile" type="file" accept="video/*"></div>
+          <div class="vfold" id="vscriptbox"><label>Script</label><select id="vsrc"></select>
+          <div id="vfilebox"><input id="vscriptfile" type="file" accept=".funscript,.json,application/json" multiple style="margin-top:6px"></div></div>
+          <div class="vwrap">
+            <div class="vside" id="vside">
+              <button id="vsfile" type="button" title="Choose a video" aria-label="Choose a video">🎬</button>
+              <button id="vsplay" type="button" title="Play or pause" aria-label="Play or pause">▶</button>
+              <button id="vsscript" type="button" title="Script to play with the video" aria-label="Script to play with the video">📂</button>
+              <button id="vsaud" type="button" title="Audio from video: the sound of the video drives the devices" aria-label="Audio from video">♪</button>
+              <button id="vscast" type="button" title="Play the video on a TV" aria-label="Cast to a TV">📺</button>
+              <button id="vsoff" type="button" title="Sync offset" aria-label="Sync offset">⏱</button>
+            </div>
+            <div class="vstage">
+              <button class="vempty" id="vempty" type="button" hidden>🎬 Choose a video<small>It plays from this phone or computer. Nothing is uploaded.</small></button>
+              <video id="video" controls playsinline preload="metadata" disableremoteplayback hidden></video>
+            </div>
+          </div>
+          <div style="position:relative"><div class="rppop" id="castpop" style="top:4px" hidden><div id="castlist"></div></div></div>
           <div class="hbar" id="hb1" role="slider" tabindex="0" aria-label="Motor 1 level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill"></div><span class="lab">Motor 1</span><span class="pct">0%</span></div>
           <div class="hbar m2" id="hb2" role="slider" tabindex="0" aria-label="Motor 2 level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><div class="fill"></div><span class="lab">Motor 2</span><span class="pct">0%</span></div>
-          <div class="vrecrow"><button id="vrec" class="vrec" type="button">● Rec</button><label class="check"><input id="vspring" type="checkbox" checked> Drop to 0 on release</label><span class="vrecinfo" id="vrecinfo"></span></div>
+          <div class="vrecrow"><button id="vrec" class="vrec vhide" type="button">● Rec</button><label class="check"><input id="vspring" type="checkbox" checked> Drop to 0 on release</label><span class="vrecinfo vhide" id="vrecinfo"></span></div>
           <div class="stlive"><span class="gpslot"></span></div>
           <div class="row" id="vrecdone" style="margin-top:6px" hidden><button id="vrecuse">Use as take</button><button id="vrecdl">Download .funscript</button><button id="vrecclear" class="stop">Clear</button></div>
           <div class="vstat" id="vstat"></div>
-          <div class="row" style="margin-top:8px"><button id="vgo" class="go">▶ Go</button><button id="vcast" type="button" style="flex:0 0 96px" title="Play the video on a TV or Chromecast through Home Assistant">📺 Cast</button><button id="vstop" class="stop" style="flex:0 0 96px">■ Stop</button></div>
-          <div style="position:relative"><div class="rppop" id="castpop" style="top:4px" hidden><div id="castlist"></div></div></div>
-          <label>Sync offset <span id="voffv"></span></label>
+          <div class="row vhide" style="margin-top:8px"><button id="vgo" class="go">▶ Go</button><button id="vcast" type="button" style="flex:0 0 96px" title="Play the video on a TV or Chromecast through Home Assistant">📺 Cast</button><button id="vstop" class="stop" style="flex:0 0 96px">■ Stop</button></div>
+          <div class="vfold" id="voffbox"><label>Sync offset <span id="voffv"></span></label>
           <input id="voff" type="range" min="-1000" max="1000" step="25" value="150">
-          <div class="hint">Positive values send each moment slightly early to make up for Bluetooth delay. Pause, seek and playback speed all stay in sync.</div>
-          <div class="hint">To make a script for this video: press ● Rec, play the video and drag the slider (position in the Stroke view, intensity in Vibrate). You can pause, scrub back and record a section again; the newer pass replaces it. While a script plays, the slider shows it; hold the slider to take over until you let go.</div>
+          <div class="hint">Positive values send each moment slightly early to make up for Bluetooth delay. Pause, seek and playback speed all stay in sync.</div></div>
+          <div id="vaubox"></div>
+          <div class="hint vhide">To make a script for this video: press ● Rec, play the video and drag the slider (position in the Stroke view, intensity in Vibrate). You can pause, scrub back and record a section again; the newer pass replaces it. While a script plays, the slider shows it; hold the slider to take over until you let go.</div>
+          <div class="hint vshow">● Record follows the video: play it and drag the slider, or let a script (📂) or the sound of the video (♪) do the playing. Pause and it waits; go back and the new pass replaces what came after.</div>
         </section>
         <section data-part="import">
           <h3>Import</h3>
@@ -1660,6 +1915,7 @@ ${STYLES}
           <div class="hint">Pick two files to give a two-motor device one track per motor (first file = motor 1).</div>
           <textarea id="codeout" hidden readonly></textarea>
         </section>
+        <div id="outfoot"></div>
         <div class="toast" id="toast"></div>
       </ha-card>`;
       const $ = (id) => this.shadowRoot.getElementById(id);
@@ -1700,6 +1956,7 @@ ${STYLES}
       this._bindTogether();
       this._bindSafety();
       this._bindVideo();
+      this._bindPlay();
       this._bindGamepad();
       this._update();
     }
@@ -2231,6 +2488,7 @@ ${STYLES}
       this._gpLog(`${live.length} gamepad(s): ${live.map((p) => gpRaw(p)).join(" || ") || "none"} · chosen #${this._gpPad() ? this._gpPad().index : "-"} · secure=${window.isSecureContext} · ${navigator.userAgent}`);
     }
     _gpTarget() {
+      if (this._simple) return this._ctl === "video" ? this._vurl ? "video" : null : gpTargetFor(this._parts.filter((p) => p !== "video"), false);
       return gpTargetFor(this._parts, Boolean(this._vurl));
     }
     // The stroke recorder has its own controls (and its own learned map).
@@ -2317,7 +2575,7 @@ ${STYLES}
     _gpApply(target, fn) {
       const motors = this._gpMotors();
       if (target === "video") {
-        if (!this._vrec) {
+        if (!this._vrec && !(this._tap && this._tap.video)) {
           this._gpHint("Controller: press record first to record against the video");
           return;
         }
@@ -2350,6 +2608,10 @@ ${STYLES}
     _gpRec() {
       const $ = this._el;
       const target = this._gpTarget();
+      if (this._simple) {
+        this._urecToggle();
+        return;
+      }
       if ((target === "stroke" || target === "record") && this._ctl === "mood") {
         if (this._rp.playing) this._rpStop();
         else if (this._mood) this._moodNext(true);
@@ -2704,7 +2966,7 @@ ${STYLES}
     // Video slider value: what it records, or what the script is doing now
     // (position for a stroke script in the stroke view, else intensity).
     _videoValue() {
-      if (this._vrec || this._hbActive) return this._hvals[0];
+      if (this._vHeld) return this._hvals[0];
       const video = this._el("video");
       const ms = video.currentTime * 1e3 + Number(this._el("voff").value || 0);
       if (!this._vraw) return 0;
@@ -2713,6 +2975,10 @@ ${STYLES}
     }
     get _strokeKindRec() {
       return this._recKind === "stroke";
+    }
+    // The slider has the devices: recording with it, or holding it over a script.
+    get _vHeld() {
+      return Boolean(this._vrec || this._hbActive || this._tap && this._tap.video && !this._vraw);
     }
     // Drive the follow-along devices from the video (outputs on this card).
     _videoOut() {
@@ -2726,7 +2992,7 @@ ${STYLES}
       this._vVel = (this._vVel || 0) * 0.6 + vel * 0.4;
       const video = this._el("video");
       const ms = video.currentTime * 1e3 + Number(this._el("voff").value || 0);
-      const script = !(this._vrec || this._hbActive) && this._vraw && isStroke(this._vraw);
+      const script = !this._vHeld && this._vraw && isStroke(this._vraw);
       if (this._strokeKindRec) {
         const values = this._outs.map((o, i) => {
           const p = parseTarget(this._outTargetValue(i));
@@ -2746,7 +3012,7 @@ ${STYLES}
           this._stShow();
         }
       } else {
-        const held = this._vrec || this._hbActive;
+        const held = this._vHeld;
         if (held) {
           const h = this._hvals[0];
           for (const i of [0, 1]) if (!this._padActive || !this._padActive[i]) this._setPad(i, h);
@@ -2778,7 +3044,7 @@ ${STYLES}
       this._videoStatus();
     }
     _videoRun() {
-      if (this._vsyncTimer || !(this._vscript || this._vrec)) return;
+      if (this._vsyncTimer || !(this._vscript || this._vrec || this._tap)) return;
       if (this._rp) this._rpStop();
       if (this._live) {
         this._el("live").checked = false;
@@ -2808,7 +3074,7 @@ ${STYLES}
     _setHBar(index, value) {
       this._hvals[index] = Math.round(Math.min(100, Math.max(0, value)));
       this._showHBar(index, this._hvals[index]);
-      if (this._vrec || this._hbActive) this._videoSend(false);
+      if (this._vHeld) this._videoSend(false);
     }
     _bindHBar(bar, index) {
       let active = false;
@@ -2818,8 +3084,9 @@ ${STYLES}
       };
       bar.addEventListener("pointerdown", (event) => {
         const playing = Boolean(this._vsyncTimer && this._vscript);
-        if (!this._vrec && !playing) {
-          this._toast("Press ● Rec first to record with the slider (or play a script to take it over)");
+        const tapping = Boolean(this._tap && this._tap.video);
+        if (!this._vrec && !playing && !tapping) {
+          this._toast(`Press ● ${this._simple ? "Record" : "Rec"} first to record with the slider (or play a script to take it over)`);
           return;
         }
         event.preventDefault();
@@ -2838,6 +3105,7 @@ ${STYLES}
         bar.classList.remove("active");
         if (this._hbActive) {
           this._hbActive = false;
+          if (this._tap && this._tap.video && !this._vraw && this._el("vspring").checked) this._setHBar(index, 0);
           this._videoSend(true);
           return;
         }
@@ -2978,7 +3246,7 @@ ${STYLES}
         this._toast("Choose a video first");
         return;
       }
-      if (!this._vscript && !this._vrec) {
+      if (!this._vscript && !this._vrec && !this._simple) {
         this._toast("Choose a script first, or press ● Rec to make one");
         return;
       }
@@ -3013,6 +3281,7 @@ ${STYLES}
       $("vstat").textContent = parts.join(" · ");
       $("vgo").disabled = !(this._vurl && (this._vscript || this._vrec));
       this._vrecInfo();
+      this._vsideShow();
     }
     get _noDevice() {
       return this._deviceId === NO_DEVICE;
@@ -3101,6 +3370,7 @@ ${STYLES}
         const kind = isStroke(this._take) ? "stroke script" : `${this._take.channels ? 2 : 1} motor${this._take.channels ? "s" : ""}`;
         $("takeinfo").textContent = `${fmt(duration(this._take))} · ${kind} · ${this._take.actions.length} points · not saved`;
       }
+      this._urecShow();
       $("takemodebox").hidden = true;
       const saved = this._studio && this._hass.states[this._studio.saved];
       const opts = saved && saved.attributes.options || [];
@@ -3502,7 +3772,8 @@ ${STYLES}
         ctl = localStorage.getItem(`oggstudio_ctl:${this.localName}`);
       } catch (_) {
       }
-      this._ctl = ["replay", "mood", "audio", "together"].includes(ctl) ? ctl : "record";
+      const kept = this._simple ? ["pattern", "mood", "audio", "video"] : ["replay", "mood", "audio", "together"];
+      this._ctl = this._togetherOnly ? "together" : kept.includes(ctl) ? ctl : "record";
       for (const b of this.shadowRoot.querySelectorAll(".ctltabs button")) b.addEventListener("click", () => this._setCtl(b.dataset.ctl));
       $("rpspeed").replaceChildren(...SPEEDS.map((x) => new Option(x, x)));
       $("rpspeed").value = "1x";
@@ -3564,7 +3835,9 @@ ${STYLES}
     }
     _setCtl(mode) {
       if (mode === this._ctl) return;
-      if (this._ctl === "record") {
+      const from = this._ctl;
+      if (this._simple && this._urecOn && [from, mode].some((m) => m === "record" || m === "video")) this._urecStop();
+      if (from === "record") {
         if (this._recording) this._stopRecording();
         if (this._stRecording) this._stStop();
         if (this._live) {
@@ -3579,6 +3852,12 @@ ${STYLES}
         this._plOff();
         this._rpStop();
         this._auStop();
+        this._ptStop();
+        if (from === "video") {
+          const video = this._el("video");
+          if (!video.paused) video.pause();
+          this._vaSet(false);
+        }
       }
       if (mode !== "mood") this._mood = null;
       this._ctl = mode;
@@ -3590,15 +3869,30 @@ ${STYLES}
     }
     _ctlShow() {
       const $ = this._el;
-      const replay = this._ctl === "replay";
-      for (const b of this.shadowRoot.querySelectorAll(".ctltabs button")) b.classList.toggle("on", b.dataset.ctl === this._ctl);
-      $("rpbox").hidden = !replay;
-      $("moodbox").hidden = this._ctl !== "mood";
-      $("aubox").hidden = this._ctl !== "audio";
-      $("tgbox").hidden = this._ctl !== "together";
+      const ctl = this._ctl;
+      const simple = this._simple;
+      for (const b of this.shadowRoot.querySelectorAll(".ctltabs button")) b.classList.toggle("on", b.dataset.ctl === ctl);
+      $("rpbox").hidden = !(ctl === "replay" || simple && ctl === "pattern");
+      $("ptbox").hidden = ctl !== "pattern";
+      $("moodbox").hidden = ctl !== "mood";
+      $("aubox").hidden = !(ctl === "audio" || ctl === "video" && this._vaudio);
+      $("tgbox").hidden = ctl !== "together";
+      $("urecrow").hidden = !simple;
+      if (simple) {
+        const hands = ["record", "pattern", "mood", "audio"].includes(ctl);
+        for (const sec of this.shadowRoot.querySelectorAll('[data-part="record"],[data-part="stroke"]')) sec.classList.toggle("off", !hands || !this._parts.includes(sec.dataset.part));
+        $("videobox").classList.toggle("off", ctl !== "video");
+        const gslot = ctl === "video" ? $("videobox").querySelector(".gpslot") : this.shadowRoot.querySelector('[data-part="record"]:not(.off) .gpslot,[data-part="stroke"]:not(.off) .gpslot');
+        if (gslot) gslot.appendChild($("gp"));
+        $("gp").hidden = !gslot;
+      }
       this._outRender();
-      for (const id of ["rec", "timer", "strec", "liverow", "stliverow"]) $(id).hidden = this._ctl !== "record";
+      for (const id of ["rec", "timer", "strec", "liverow", "stliverow"]) $(id).hidden = ctl !== "record" || simple && id !== "liverow" && id !== "stliverow";
       this._rpShow();
+      if (simple) {
+        this._vsideShow();
+        this._urecShow();
+      }
     }
     _rpPicker(open) {
       const $ = this._el;
@@ -3872,6 +4166,7 @@ ${STYLES}
         return;
       }
       if (rp.t >= rp.len) rp.t = 0;
+      this._ptStop();
       const video = this._el("video");
       if (video && !video.paused) video.pause();
       if (rp.lib && isStroke(rp.raw) && RUN_MODES[this._outs[0].m]) this._setMode(rp.lib, this._outs[0].m);
@@ -4267,7 +4562,7 @@ ${STYLES}
     _playScript(script, name, lib) {
       if (!script) return;
       this._plOff();
-      this._setCtl("replay");
+      this._setCtl(this._simple ? "pattern" : "replay");
       this._rpLoad(script, name, lib);
       if (SPEEDS.includes(this._el("speed").value)) this._el("rpspeed").value = this._el("speed").value;
       this._el("rploop").checked = this._el("loop").checked;
@@ -4445,6 +4740,13 @@ ${STYLES}
         this._rpStop();
       }
       this._auStop();
+      this._ptStop();
+      if (this._tap) {
+        clearInterval(this._tapTimer);
+        this._tap = null;
+      }
+      clearInterval(this._urecTimer);
+      this._urecTimer = null;
       this._tgEnd();
       clearInterval(this._lockTimer);
       this._lockTimer = null;
@@ -4502,6 +4804,8 @@ ${STYLES}
       this._holdUntil = performance.now() + PANIC_HOLD_MS;
       if (this._recording) this._stopRecording();
       if (this._stRecording) this._stStop();
+      this._tapStop();
+      this._ptStop();
       if (this._live) {
         $("live").checked = false;
         this._setLive(false);
@@ -5364,6 +5668,15 @@ ${STYLES}
       $("aum2").style.width = `${r.levels[1]}%`;
       if (!r.beat && now - au.outAt < 100) return;
       au.outAt = now;
+      if (this._simple) {
+        if (this._strokeKind) {
+          const st = this._st;
+          if (st.drag === null && this._stSpeed() === null) {
+            st.pos = r.levels[0];
+            this._stShow();
+          }
+        } else for (const i of [0, 1]) if (!this._padActive[i]) this._setPad(i, r.levels[i]);
+      }
       this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._mapLevel(i, r.levels[i])), 0.6);
       if (now - (au.shownAt || 0) > 1e3) {
         au.shownAt = now;
@@ -5382,6 +5695,9 @@ ${STYLES}
       }
       if (au.stream) for (const t of au.stream.getTracks()) t.stop();
       if (au.src === "file" && this._el) this._el("auel").pause();
+      if (this._simple && this._el && !this._strokeKind) {
+        for (const i of [0, 1]) if (!this._padActive[i]) this._setPad(i, 0);
+      }
       this._outStop();
       this._auShow();
     }
@@ -5656,8 +5972,368 @@ ${STYLES}
     }
   };
 
+  // frontend/src/card/play.js
+  var PATTERN_KEY = "oggstudio_pattern";
+  var PATTERN_HINT = "Ogg's patterns, played from here: they show on the pads, stay inside your limits and can be recorded.";
+  var PlayPart = class {
+    get _simple() {
+      return Boolean(this._variant.simple);
+    }
+    get _togetherOnly() {
+      return Boolean(this._variant.together);
+    }
+    _bindPlay() {
+      const $ = this._el;
+      $("urec").addEventListener("click", () => this._urecToggle());
+      for (const b of this.shadowRoot.querySelectorAll(".ptbtn")) b.addEventListener("click", () => this._ptStart(b.dataset.pt));
+      let kept = {};
+      try {
+        kept = JSON.parse(localStorage.getItem(PATTERN_KEY) || "{}") || {};
+      } catch (_) {
+      }
+      if (Number.isFinite(kept.speed)) $("ptspeed").value = String(kept.speed);
+      if (Number.isFinite(kept.str)) $("ptstr").value = String(kept.str);
+      const keep = () => {
+        try {
+          localStorage.setItem(PATTERN_KEY, JSON.stringify({ speed: Number($("ptspeed").value), str: Number($("ptstr").value) }));
+        } catch (_) {
+        }
+        this._ptShow();
+      };
+      $("ptspeed").addEventListener("input", keep);
+      $("ptstr").addEventListener("input", keep);
+      $("ptstop").addEventListener("click", () => this._ptStop());
+      const video = $("video");
+      $("vsfile").addEventListener("click", () => $("vfile").click());
+      $("vempty").addEventListener("click", () => $("vfile").click());
+      $("vsscript").addEventListener("click", () => {
+        $("vscriptbox").classList.toggle("open");
+        this._vsideShow();
+      });
+      $("vsplay").addEventListener("click", () => {
+        if (video.paused) this._videoGo();
+        else video.pause();
+      });
+      $("vscast").addEventListener("click", () => $("vcast").click());
+      $("vsaud").addEventListener("click", () => this._vaSet(!this._vaudio));
+      $("vsoff").addEventListener("click", () => {
+        $("voffbox").classList.toggle("open");
+        this._vsideShow();
+      });
+      for (const type of ["play", "pause", "ended", "emptied", "loadedmetadata"]) video.addEventListener(type, () => this._vsideShow());
+      if (this._simple) {
+        const opt = [...$("ausrc").options].find((o) => o.value === "video");
+        if (opt) {
+          opt.hidden = true;
+          opt.disabled = true;
+        }
+        if ($("ausrc").value === "video") $("ausrc").value = "mic";
+        this._auShow();
+      }
+      this._ptShow();
+      this._vsideShow();
+      this._urecShow();
+    }
+    // ---------------------------------------------------------- one Record button
+    get _urecOn() {
+      return Boolean(this._recording || this._stRecording || this._tap);
+    }
+    // Manual records the pads or the stroke bar as they are worked. Every
+    // other mode records what it plays: what the pads or the bar show.
+    _urecToggle() {
+      if (this._urecOn) {
+        this._urecStop();
+        return;
+      }
+      if (this._ctl !== "record") this._tapStart();
+      else if (this._strokeKind) this._stStart();
+      else this._startRecording();
+      this._urecShow();
+    }
+    _urecStop() {
+      if (this._recording) this._stopRecording();
+      if (this._stRecording) this._stStop();
+      if (this._tap) this._tapStop();
+      this._update();
+    }
+    _urecTime() {
+      const now = performance.now();
+      if (this._recording) return now - this._t0;
+      if (this._stRecording) return now - this._st0;
+      const tap = this._tap;
+      if (!tap) return 0;
+      return tap.video ? this._el("video").currentTime * 1e3 : now - tap.t0;
+    }
+    _urecShow() {
+      if (!this._el || !this._simple) return;
+      const $ = this._el;
+      const on = this._urecOn;
+      $("urec").textContent = on ? "■ Stop recording" : "● Record";
+      $("urec").classList.toggle("on", on);
+      $("utimer").textContent = on ? fmt(this._urecTime()) : "";
+      $("takebox").hidden = !this._take && !on;
+      $("takebox").classList.toggle("busy", on);
+      if (on) {
+        const tap = this._tap;
+        const what = tap && tap.video ? this._el("video").paused ? "play the video to record against it" : "following the video" : "recording";
+        $("takeinfo").textContent = `● ${fmt(this._urecTime())} · ${what}`;
+      }
+      if (on && !this._urecTimer) {
+        this._urecTimer = setInterval(() => {
+          if (this._urecOn) {
+            this._urecShow();
+            return;
+          }
+          clearInterval(this._urecTimer);
+          this._urecTimer = null;
+          this._update();
+        }, 250);
+      }
+      if (!on && this._urecTimer && !this.isConnected) {
+        clearInterval(this._urecTimer);
+        this._urecTimer = null;
+      }
+    }
+    // Record what plays. In Video mode with a video loaded, against the
+    // video's clock: pause and it waits, go back and the new pass replaces
+    // what came after.
+    _tapStart() {
+      if (this._tap) return;
+      const video = this._ctl === "video" && Boolean(this._vurl);
+      this._tap = { video, stroke: this._strokeKind, t0: performance.now(), tracks: [[], []], last: [null, null], seen: [null, null], lastT: -1, end: 0 };
+      if (video) {
+        this._hvals[0] = 0;
+        this._showHBar(0, 0);
+        if (!this._el("video").paused) this._videoRun();
+        this._toast(this._vscript || this._au ? "Recording what plays with the video." : "Recording: play the video and drag the slider.");
+      } else this._toast("Recording what plays.");
+      clearInterval(this._tapTimer);
+      this._tapTimer = setInterval(() => this._tapSample(), SAMPLE_MS);
+      this._tapSample();
+    }
+    _tapSample() {
+      const tap = this._tap;
+      if (!tap || !this._el) return;
+      let t;
+      if (tap.video) {
+        const video = this._el("video");
+        if (video.paused || video.seeking) return;
+        t = Math.round(video.currentTime * 1e3);
+        if (t < tap.lastT) {
+          tap.tracks = tap.tracks.map((acts) => acts.filter((p) => p.at < t));
+          tap.last = [null, null];
+          tap.seen = [null, null];
+        }
+        tap.lastT = t;
+      } else t = Math.round(performance.now() - tap.t0);
+      const vals = tap.stroke ? [Math.round(this._st.pos)] : this._levels().map((v) => Math.round(v * 100));
+      vals.forEach((pos, i) => {
+        const acts = tap.tracks[i];
+        if (pos !== tap.last[i]) {
+          const held = tap.seen[i];
+          const prev = acts[acts.length - 1];
+          if (prev && held !== null && held > prev.at && held < t) acts.push({ at: held, pos: prev.pos });
+          acts.push({ at: t, pos });
+          tap.last[i] = pos;
+        }
+        tap.seen[i] = t;
+      });
+      tap.end = t;
+    }
+    _tapStop() {
+      const tap = this._tap;
+      if (!tap) return;
+      this._tap = null;
+      clearInterval(this._tapTimer);
+      this._tapTimer = null;
+      const [first, second] = tap.tracks;
+      for (const acts of tap.tracks) {
+        const prev = acts[acts.length - 1];
+        if (!prev) continue;
+        if (tap.end > prev.at) acts.push({ at: tap.end, pos: prev.pos });
+        if (!tap.stroke) acts.push({ at: tap.end + 1, pos: 0 });
+      }
+      const something = tap.stroke ? first.some((p) => p.pos !== first[0].pos) : tap.tracks.some((acts) => acts.some((p) => p.pos > 0));
+      if (first.length < 2 || tap.end - first[0].at < 200 || !something) this._toast("Nothing recorded.");
+      else {
+        const take = { version: "1.0", inverted: false, range: 100, actions: first, metadata: { creator: "OggStudio", type: tap.stroke ? "stroke" : "vibration" } };
+        if (!tap.stroke && second.some((p) => p.pos > 0)) take.channels = { V1: { actions: second } };
+        if (tap.video && this._vname) take.metadata.title = this._vname;
+        this._take = take;
+        this._toast(tap.video ? `Recorded ${fmt(duration(take))} against the video. To play it back with the video, choose "Current take" under 📂.` : `Recorded ${fmt(duration(take))}. Save it below.`);
+      }
+      if (tap.video && !this._vscript && this._vsyncTimer) this._videoHalt();
+      this._update();
+    }
+    // ---------------------------------------------------------- patterns
+    _ptStart(key) {
+      if (this._pt && this._pt.key === key) {
+        this._ptStop();
+        return;
+      }
+      this._ptStop();
+      this._plOff();
+      this._rpStop();
+      this._auStop();
+      const video = this._el("video");
+      if (video && !video.paused) video.pause();
+      const now = performance.now();
+      this._pt = {
+        key,
+        phase: 0,
+        last: now,
+        outAt: 0,
+        prev: null,
+        prog: key === PATTERN_RANDOM ? new RandomProgram(this._twoPads && !this._strokeKind ? 2 : 1) : null
+      };
+      this._ptTimer = setInterval(() => this._ptTick(), 50);
+      this._ptTick();
+      this._ptShow();
+    }
+    _ptStop() {
+      if (!this._pt) return;
+      this._pt = null;
+      clearInterval(this._ptTimer);
+      this._ptTimer = null;
+      if (this._el) {
+        if (!this._strokeKind) {
+          for (const i of [0, 1]) if (!this._padActive[i]) this._setPad(i, 0);
+        }
+        this._outStop();
+        this._ptShow();
+      }
+    }
+    _ptTick() {
+      const pt = this._pt;
+      if (!pt || !this._el) return;
+      const $ = this._el;
+      const now = performance.now();
+      const dt = Math.min(250, now - pt.last);
+      pt.last = now;
+      const speed = Number($("ptspeed").value);
+      const strength = Number($("ptstr").value) / 100;
+      let levels;
+      if (pt.prog) {
+        pt.prog.intensity = 0.4 + 0.58 * speed / 100;
+        levels = pt.prog.step(dt);
+      } else {
+        pt.phase += dt / 1e3 / patternPeriod(speed);
+        levels = pt.key in PATTERNS_DUAL ? [0, 1].map((m) => patternDual(pt.key, pt.phase, m)) : [0, 1].map(() => patternLevel(pt.key, pt.phase));
+      }
+      const send = now - pt.outAt >= 100;
+      if (send) pt.outAt = now;
+      if (this._strokeKind) {
+        const st = this._st;
+        if (st.drag === null && this._stSpeed() === null) {
+          st.pos = st.lower + levels[0] * strength * (st.upper - st.lower);
+          this._stShow();
+        }
+        if (send) {
+          const vel = pt.prev ? (st.pos - pt.prev.pos) / Math.max(1, now - pt.prev.at) * 1e3 : 0;
+          pt.prev = { pos: st.pos, at: now };
+          this._strokeOut(st.pos, vel);
+        }
+      } else {
+        for (const i of [0, 1]) if (!this._padActive[i]) this._setPad(i, levels[i] * 100 * strength);
+        if (send) this._padOut();
+      }
+      if (now - (pt.shownAt || 0) >= 1e3) {
+        pt.shownAt = now;
+        this._ptShow();
+      }
+    }
+    // The stroke bar's position to every device, each its own way.
+    _strokeOut(pos, vel) {
+      this._outApply(this._outs.map((o, i) => {
+        const p = parseTarget(this._outTargetValue(i));
+        if (!p) return null;
+        if (p.motor === "l") return { goal: pos, dur: 120 };
+        if (o.m === FOLLOW_AI) return this._aiStroke(i, pos, vel);
+        if (o.m === FOLLOW_STROKER) return Math.round(pos);
+        return Math.min(100, Math.max(0, liveIntensity(o.m, pos, vel)));
+      }), 0.6);
+    }
+    _ptShow() {
+      if (!this._el) return;
+      const $ = this._el;
+      const pt = this._pt;
+      for (const b of this.shadowRoot.querySelectorAll(".ptbtn")) b.classList.toggle("on", Boolean(pt && pt.key === b.dataset.pt));
+      $("ptdual").hidden = !this._twoPads || this._strokeKind;
+      const random = Boolean(pt && pt.prog);
+      $("ptspeedlab").textContent = random ? "How busy" : "Speed";
+      $("ptspeedv").textContent = random ? `${$("ptspeed").value}%` : `${patternPeriod(Number($("ptspeed").value)).toFixed(1)} s`;
+      $("ptstrv").textContent = `${$("ptstr").value}%`;
+      const name = pt && (PATTERNS[pt.key] || PATTERNS_DUAL[pt.key] || "Random");
+      let text = PATTERN_HINT;
+      if (pt) {
+        const bits = [name];
+        if (random) bits.push(pt.prog.seg.rest ? "resting" : pt.prog.seg.key ? (PATTERNS[pt.prog.seg.key] || PATTERNS_DUAL[pt.prog.seg.key]).toLowerCase() : "steps");
+        if (this._outs && !this._outs.some((o, i) => parseTarget(this._outTargetValue(i)))) bits.push("no device: showing only");
+        bits.push(this._strokeKind ? "move the bar to take over" : "touch a pad to take over");
+        text = bits.join(" · ");
+      }
+      if ($("ptinfo").textContent !== text) $("ptinfo").textContent = text;
+      $("ptstop").disabled = !pt;
+      const tab = this.shadowRoot.querySelector('.ctltabs [data-ctl="pattern"]');
+      if (tab) tab.classList.toggle("live", Boolean(pt));
+    }
+    // ---------------------------------------------------------- video: side controls
+    _vsideShow() {
+      if (!this._el) return;
+      const $ = this._el;
+      const video = $("video");
+      const has = Boolean(this._vurl);
+      $("vempty").hidden = !this._simple || has;
+      $("vsplay").textContent = has && !video.paused ? "⏸" : "▶";
+      $("vsplay").disabled = !has;
+      $("vsaud").disabled = !has;
+      $("vsaud").classList.toggle("on", Boolean(this._vaudio));
+      $("vscast").classList.toggle("on", Boolean(this._cast));
+      $("vscast").disabled = !has;
+      $("vsscript").classList.toggle("on", $("vscriptbox").classList.contains("open"));
+      $("vsscript").classList.toggle("has", Boolean(this._vscript));
+      $("vsoff").classList.toggle("on", $("voffbox").classList.contains("open"));
+      $("vsfile").classList.toggle("has", has);
+    }
+    // The video's own sound drives the devices: the audio settings sit under
+    // the video while it is on.
+    async _vaSet(on) {
+      if (!this._el) return;
+      const $ = this._el;
+      if (on) {
+        if (this._vaudio) return;
+        if (!this._vurl) {
+          this._toast("Choose a video first");
+          return;
+        }
+        this._vaPrev = $("ausrc").value;
+        $("ausrc").value = "video";
+        this._vaudio = true;
+        $("aubox").classList.add("fromvideo");
+        $("vaubox").appendChild($("aubox"));
+        this._ctlShow();
+        await this._auStart();
+        if (!this._au) {
+          this._vaSet(false);
+          return;
+        }
+        if (this._tap && !$("video").paused) this._videoRun();
+      } else {
+        if (!this._vaudio) return;
+        this._vaudio = false;
+        this._auStop();
+        $("aubox").classList.remove("fromvideo");
+        $("ctlbox").insertBefore($("aubox"), $("tgbox"));
+        $("ausrc").value = this._vaPrev && this._vaPrev !== "video" ? this._vaPrev : "mic";
+        this._ctlShow();
+        this._auShow();
+      }
+      this._vsideShow();
+    }
+  };
+
   // frontend/src/index.js
-  for (const part of [StrokePart, GamepadPart, VideoPart, CastPart, ReplayPart, OutputsPart, SafetyPart, ToolsPart, AudioPart, TogetherPart]) {
+  for (const part of [StrokePart, GamepadPart, VideoPart, CastPart, ReplayPart, OutputsPart, SafetyPart, ToolsPart, AudioPart, TogetherPart, PlayPart]) {
     for (const [key, desc] of Object.entries(Object.getOwnPropertyDescriptors(part.prototype))) {
       if (key !== "constructor") Object.defineProperty(OggStudioCard.prototype, key, desc);
     }

@@ -250,7 +250,7 @@ export class OutputsPart {
   _playScript(script, name, lib) {
     if (!script) return;
     this._plOff();
-    this._setCtl('replay');
+    this._setCtl(this._simple ? 'pattern' : 'replay');
     this._rpLoad(script, name, lib);
     if (SPEEDS.includes(this._el('speed').value)) this._el('rpspeed').value = this._el('speed').value;
     this._el('rploop').checked = this._el('loop').checked;
@@ -402,6 +402,9 @@ export class OutputsPart {
     if (this._vurl) { URL.revokeObjectURL(this._vurl); this._vurl = null; }
     if (this._rp && this._rp.playing) { this._plOff(); this._rpStop(); }
     this._auStop();
+    this._ptStop();
+    if (this._tap) { clearInterval(this._tapTimer); this._tap = null; }
+    clearInterval(this._urecTimer); this._urecTimer = null;
     this._tgEnd();
     clearInterval(this._lockTimer); this._lockTimer = null;
     this._outStop();

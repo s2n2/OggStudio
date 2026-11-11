@@ -5,7 +5,7 @@
   "description": "Builds the OggStudio card from frontend/src into one file for Home Assistant.",
   "scripts": {
     "build": "esbuild frontend/src/index.js --bundle --format=iife --target=es2020 --charset=utf8 --banner:js=\"/* OggStudio card, built from frontend/src (npm run build). Do not edit here. */\" --outfile=custom_components/oggstudio/frontend/oggstudio-card.js",
-    "test": "node tests/card_logic_test.mjs && node tests/tools_test.mjs && python tests/convert_test.py"
+    "test": "node tests/card_logic_test.mjs && node tests/tools_test.mjs && node tests/patterns_test.mjs && python tests/convert_test.py"
   },
   "devDependencies": {
     "esbuild": "0.25.0"

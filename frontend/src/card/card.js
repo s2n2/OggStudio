@@ -3,6 +3,7 @@ import { runModeOptions } from '../lib/convert.js';
 import { NO_DEVICE, PARTS, TAG, VARIANTS, VERSION, esc } from '../lib/core.js';
 import { gpState } from '../lib/gamepad.js';
 import { MOODS } from '../lib/moods.js';
+import { PATTERNS, PATTERNS_DUAL, PATTERN_RANDOM } from '../lib/patterns.js';
 import { STROKE_PCT_MIN } from '../lib/stroke.js';
 import { STYLES } from './styles.js';
 
@@ -67,6 +68,8 @@ export class OggStudioCard extends HTMLElement {
     if (this._recording) this._stopRecording();
     if (this._live) { this._el('live').checked = false; this._setLive(false); }
     if (this._stRecording) this._stStop();
+    this._tapStop();
+    this._ptStop();
     if (this._st) { this._st.touch = null; this._st.pad = null; this._st.drag = null; this._st.latch = null; }
     this._el('stlive').checked = false;
     this._stHalt();
@@ -91,14 +94,17 @@ export class OggStudioCard extends HTMLElement {
     const slot = rec && this.shadowRoot.querySelector(`[data-part="${rec}"] .outslot`);
     const box = this._el('outbox');
     this._el('outhome').appendChild(box);      // the devices box always sits at the top
-    const cslot = rec && this.shadowRoot.querySelector(`[data-part="${rec}"] .ctlslot`);
+    // The Play card keeps the modes on top and the devices at the foot.
+    const simple = Boolean(this._variant.simple);
+    const cslot = rec && !simple && this.shadowRoot.querySelector(`[data-part="${rec}"] .ctlslot`);
     (cslot || this._el('outhome')).insertBefore(this._el('ctlbox'), cslot ? null : box);
+    if (simple) this._el('outfoot').appendChild(box);
     // The controller tick box sits with the recorder's live toggles (or under the video's Rec).
     const gslot = this.shadowRoot.querySelector(`[data-part="${rec || 'video'}"]:not(.off) .gpslot`);
     if (gslot) gslot.appendChild(this._el('gp'));
     this._el('outhome').classList.remove('off');
     this._el('outhome').style.order = '0';
-    this._el('ctlbox').hidden = !rec;
+    this._el('ctlbox').hidden = !rec && !this._variant.together;
     if (this._rp) this._ctlShow();
     this._el('devbox').hidden = true;      // one device choice for everything: the devices box
     if (this._outs) this._outRender();
@@ -157,11 +163,13 @@ export class OggStudioCard extends HTMLElement {
   }
 
   _render() {
+    const simple = Boolean(this._variant.simple);
+    const ptBtns = (set) => Object.entries(set).map(([k, t]) => `<button type="button" class="ptbtn" data-pt="${k}">${t}</button>`).join('');
     this.shadowRoot.innerHTML = `
       <style>
 ${STYLES}
       </style>
-      <ha-card>
+      <ha-card class="${simple ? 'simple' : ''}${this._variant.together ? 'tg' : ''}">
         <div class="cover" id="cover" hidden>
           <h2 id="covername">Studio</h2>
           <div id="coverpin"><label>PIN</label><div class="row"><input id="pin" type="password" inputmode="numeric" autocomplete="off" aria-label="PIN"><button id="pingo" type="button" style="flex:0 0 auto">Open</button></div></div>
@@ -215,7 +223,23 @@ ${STYLES}
         </section>
         <section data-part="outputs" id="outhome" class="off">
           <div id="ctlbox">
-            <div class="ctltabs" role="tablist"><button type="button" data-ctl="record">● Record</button><button type="button" data-ctl="replay">▶ Replay</button><button type="button" data-ctl="mood">◎ Mood</button><button type="button" data-ctl="audio">♪ Audio</button><button type="button" data-ctl="together">🤝 Together</button></div>
+            <div class="ctltabs" role="tablist">${(simple
+              ? [['record', '✋ Manual'], ['pattern', '〰 Pattern'], ['mood', '◎ Mood'], ['audio', '♪ Audio'], ['video', '🎬 Video']]
+              : [['record', '● Record'], ['replay', '▶ Replay'], ['mood', '◎ Mood'], ['audio', '♪ Audio'], ['together', '🤝 Together']]
+            ).map(([k, t]) => `<button type="button" data-ctl="${k}">${t}</button>`).join('')}</div>
+            <div id="urecrow" hidden>
+              <div class="urechead"><button id="urec" class="rec" type="button">● Record</button><div class="kind" role="group" aria-label="Recording type"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div></div>
+              <div class="val" id="utimer"></div>
+            </div>
+            <div id="ptbox" hidden>
+              <div class="ptgrid"><button type="button" class="ptbtn" data-pt="${PATTERN_RANDOM}">🎲 Random</button>${ptBtns(PATTERNS)}</div>
+              <div id="ptdual" hidden><label>Two motors, each with its own part</label><div class="ptgrid">${ptBtns(PATTERNS_DUAL)}</div></div>
+              <div class="moodrow"><label id="ptspeedlab">Speed</label><input id="ptspeed" type="range" min="0" max="100" step="5" value="50"><b id="ptspeedv"></b></div>
+              <div class="moodrow"><label>Strength</label><input id="ptstr" type="range" min="20" max="100" step="5" value="100"><b id="ptstrv"></b></div>
+              <div class="rpinfo" id="ptinfo"></div>
+              <button id="ptstop" type="button" class="stop" style="width:100%;margin-top:6px">■ Stop pattern</button>
+              <label>Or play a saved script</label>
+            </div>
             <div id="moodbox" hidden>
               <div class="moodgrid">${Object.entries(MOODS).map(([k, m]) => `<button type="button" class="moodbtn" data-mood="${k}"><span>${m.icon}</span>${m.label}</button>`).join('')}</div>
               <div class="rpbar" id="moodbar"><i id="moodfill"></i></div>
@@ -229,7 +253,7 @@ ${STYLES}
               <div class="rpbar" id="rpbar" title="Tap to jump. Colour shows how intense each part is"><canvas id="rpheat" width="240" height="1"></canvas><i id="rpfill"></i></div>
               <div class="rpinfo" id="rpinfo"></div>
               <div class="rprow"><button id="rpplay" type="button" class="go">▶ Replay</button><select id="rpspeed" aria-label="Replay speed"></select><label class="check"><input id="rploop" type="checkbox"> Loop</label></div>
-              <div class="row" style="margin-top:8px"><button id="tlbtn" type="button">✂ Tools</button><button id="plbtn" type="button">☰ Queue</button></div>
+              <div class="row" id="rptools" style="margin-top:8px"><button id="tlbtn" type="button">✂ Tools</button><button id="plbtn" type="button">☰ Queue</button></div>
               <div class="subbox" id="tlbox" hidden>
                 <div class="row"><button id="tlstart" type="button">Cut before here</button><button id="tlend" type="button">Cut after here</button></div>
                 <div class="row"><select id="tln" aria-label="How many times"></select><button id="tlloop" type="button">Repeat</button></div>
@@ -245,7 +269,7 @@ ${STYLES}
               </div>
             </div>
             <div id="aubox" hidden>
-              <label>Sound from</label><select id="ausrc"><option value="mic">Microphone</option><option value="file">A music file on this device</option><option value="video">The video in Video sync</option><option value="tab">Another tab (share its audio)</option></select>
+              <div id="ausrcbox"><label>Sound from</label><select id="ausrc"><option value="mic">Microphone</option><option value="file">A music file on this device</option><option value="video">The video in Video sync</option><option value="tab">Another tab (share its audio)</option></select></div>
               <div id="aufilebox" hidden><input id="aufile" type="file" accept="audio/*,video/*" style="margin-top:6px"><audio id="auel" controls preload="metadata"></audio></div>
               <label>Feel</label><select id="aumode"></select>
               <div class="moodrow"><label title="Low: only the loudest moments and hardest hits. High: quiet parts and soft hits come through too">Sensitivity</label><input id="ausens" type="range" min="0" max="100" step="5" value="50"><b id="ausensv">50%</b></div>
@@ -293,24 +317,39 @@ ${STYLES}
           <div class="row" style="margin-top:8px"><button id="play">▶ Play</button><button id="stop" class="stop">■ Stop</button><button id="code">Copy code</button><button id="delete">Delete</button></div>
         </section>
         <section id="videobox" data-part="video">
-          <h3>Video sync</h3>
-          <div class="hint" style="margin-top:0">The video plays from this phone or computer. 📺 Cast streams it to a TV through Home Assistant while you watch; nothing is saved there. Keep this screen on while casting.</div>
-          <label>Video</label><input id="vfile" type="file" accept="video/*">
-          <label>Script</label><select id="vsrc"></select>
-          <div id="vfilebox"><input id="vscriptfile" type="file" accept=".funscript,.json,application/json" multiple style="margin-top:6px"></div>
-          <video id="video" controls playsinline preload="metadata" disableremoteplayback hidden></video>
+          <h3 class="vhide">Video sync</h3>
+          <div class="hint vhide" style="margin-top:0">The video plays from this phone or computer. 📺 Cast streams it to a TV through Home Assistant while you watch; nothing is saved there. Keep this screen on while casting.</div>
+          <div class="vhide"><label>Video</label><input id="vfile" type="file" accept="video/*"></div>
+          <div class="vfold" id="vscriptbox"><label>Script</label><select id="vsrc"></select>
+          <div id="vfilebox"><input id="vscriptfile" type="file" accept=".funscript,.json,application/json" multiple style="margin-top:6px"></div></div>
+          <div class="vwrap">
+            <div class="vside" id="vside">
+              <button id="vsfile" type="button" title="Choose a video" aria-label="Choose a video">🎬</button>
+              <button id="vsplay" type="button" title="Play or pause" aria-label="Play or pause">▶</button>
+              <button id="vsscript" type="button" title="Script to play with the video" aria-label="Script to play with the video">📂</button>
+              <button id="vsaud" type="button" title="Audio from video: the sound of the video drives the devices" aria-label="Audio from video">♪</button>
+              <button id="vscast" type="button" title="Play the video on a TV" aria-label="Cast to a TV">📺</button>
+              <button id="vsoff" type="button" title="Sync offset" aria-label="Sync offset">⏱</button>
+            </div>
+            <div class="vstage">
+              <button class="vempty" id="vempty" type="button" hidden>🎬 Choose a video<small>It plays from this phone or computer. Nothing is uploaded.</small></button>
+              <video id="video" controls playsinline preload="metadata" disableremoteplayback hidden></video>
+            </div>
+          </div>
+          <div style="position:relative"><div class="rppop" id="castpop" style="top:4px" hidden><div id="castlist"></div></div></div>
           <div class="hbar" id="hb1" role="slider" tabindex="0" aria-label="Motor 1 level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill"></div><span class="lab">Motor 1</span><span class="pct">0%</span></div>
           <div class="hbar m2" id="hb2" role="slider" tabindex="0" aria-label="Motor 2 level" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><div class="fill"></div><span class="lab">Motor 2</span><span class="pct">0%</span></div>
-          <div class="vrecrow"><button id="vrec" class="vrec" type="button">● Rec</button><label class="check"><input id="vspring" type="checkbox" checked> Drop to 0 on release</label><span class="vrecinfo" id="vrecinfo"></span></div>
+          <div class="vrecrow"><button id="vrec" class="vrec vhide" type="button">● Rec</button><label class="check"><input id="vspring" type="checkbox" checked> Drop to 0 on release</label><span class="vrecinfo vhide" id="vrecinfo"></span></div>
           <div class="stlive"><span class="gpslot"></span></div>
           <div class="row" id="vrecdone" style="margin-top:6px" hidden><button id="vrecuse">Use as take</button><button id="vrecdl">Download .funscript</button><button id="vrecclear" class="stop">Clear</button></div>
           <div class="vstat" id="vstat"></div>
-          <div class="row" style="margin-top:8px"><button id="vgo" class="go">▶ Go</button><button id="vcast" type="button" style="flex:0 0 96px" title="Play the video on a TV or Chromecast through Home Assistant">📺 Cast</button><button id="vstop" class="stop" style="flex:0 0 96px">■ Stop</button></div>
-          <div style="position:relative"><div class="rppop" id="castpop" style="top:4px" hidden><div id="castlist"></div></div></div>
-          <label>Sync offset <span id="voffv"></span></label>
+          <div class="row vhide" style="margin-top:8px"><button id="vgo" class="go">▶ Go</button><button id="vcast" type="button" style="flex:0 0 96px" title="Play the video on a TV or Chromecast through Home Assistant">📺 Cast</button><button id="vstop" class="stop" style="flex:0 0 96px">■ Stop</button></div>
+          <div class="vfold" id="voffbox"><label>Sync offset <span id="voffv"></span></label>
           <input id="voff" type="range" min="-1000" max="1000" step="25" value="150">
-          <div class="hint">Positive values send each moment slightly early to make up for Bluetooth delay. Pause, seek and playback speed all stay in sync.</div>
-          <div class="hint">To make a script for this video: press ● Rec, play the video and drag the slider (position in the Stroke view, intensity in Vibrate). You can pause, scrub back and record a section again; the newer pass replaces it. While a script plays, the slider shows it; hold the slider to take over until you let go.</div>
+          <div class="hint">Positive values send each moment slightly early to make up for Bluetooth delay. Pause, seek and playback speed all stay in sync.</div></div>
+          <div id="vaubox"></div>
+          <div class="hint vhide">To make a script for this video: press ● Rec, play the video and drag the slider (position in the Stroke view, intensity in Vibrate). You can pause, scrub back and record a section again; the newer pass replaces it. While a script plays, the slider shows it; hold the slider to take over until you let go.</div>
+          <div class="hint vshow">● Record follows the video: play it and drag the slider, or let a script (📂) or the sound of the video (♪) do the playing. Pause and it waits; go back and the new pass replaces what came after.</div>
         </section>
         <section data-part="import">
           <h3>Import</h3>
@@ -321,6 +360,7 @@ ${STYLES}
           <div class="hint">Pick two files to give a two-motor device one track per motor (first file = motor 1).</div>
           <textarea id="codeout" hidden readonly></textarea>
         </section>
+        <div id="outfoot"></div>
         <div class="toast" id="toast"></div>
       </ha-card>`;
     const $ = (id) => this.shadowRoot.getElementById(id);
@@ -358,6 +398,7 @@ ${STYLES}
     this._bindTogether();
     this._bindSafety();
     this._bindVideo();
+    this._bindPlay();
     this._bindGamepad();
     this._update();
   }

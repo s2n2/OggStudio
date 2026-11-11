@@ -17,7 +17,8 @@ export class ReplayPart {
     this._rp = { raw: null, conv: null, name: '', lib: null, playing: false, t: 0, len: 0, last: 0, outAt: 0 };
     let ctl = null;
     try { ctl = localStorage.getItem(`oggstudio_ctl:${this.localName}`); } catch (_) { /* private mode */ }
-    this._ctl = ['replay', 'mood', 'audio', 'together'].includes(ctl) ? ctl : 'record';
+    const kept = this._simple ? ['pattern', 'mood', 'audio', 'video'] : ['replay', 'mood', 'audio', 'together'];
+    this._ctl = this._togetherOnly ? 'together' : kept.includes(ctl) ? ctl : 'record';
     for (const b of this.shadowRoot.querySelectorAll('.ctltabs button')) b.addEventListener('click', () => this._setCtl(b.dataset.ctl));
     $('rpspeed').replaceChildren(...SPEEDS.map((x) => new Option(x, x)));
     $('rpspeed').value = '1x';
@@ -50,7 +51,10 @@ export class ReplayPart {
 
   _setCtl(mode) {
     if (mode === this._ctl) return;
-    if (this._ctl === 'record') {
+    const from = this._ctl;
+    // One recording does not run across by-hand, the video's clock and the rest.
+    if (this._simple && this._urecOn && [from, mode].some((m) => m === 'record' || m === 'video')) this._urecStop();
+    if (from === 'record') {
       if (this._recording) this._stopRecording();
       if (this._stRecording) this._stStop();
       if (this._live) { this._el('live').checked = false; this._setLive(false); }
@@ -59,6 +63,8 @@ export class ReplayPart {
       this._plOff();
       this._rpStop();
       this._auStop();
+      this._ptStop();
+      if (from === 'video') { const video = this._el('video'); if (!video.paused) video.pause(); this._vaSet(false); }
     }
     if (mode !== 'mood') this._mood = null;
     this._ctl = mode;
@@ -68,15 +74,28 @@ export class ReplayPart {
 
   _ctlShow() {
     const $ = this._el;
-    const replay = this._ctl === 'replay';
-    for (const b of this.shadowRoot.querySelectorAll('.ctltabs button')) b.classList.toggle('on', b.dataset.ctl === this._ctl);
-    $('rpbox').hidden = !replay;
-    $('moodbox').hidden = this._ctl !== 'mood';
-    $('aubox').hidden = this._ctl !== 'audio';
-    $('tgbox').hidden = this._ctl !== 'together';
+    const ctl = this._ctl;
+    const simple = this._simple;
+    for (const b of this.shadowRoot.querySelectorAll('.ctltabs button')) b.classList.toggle('on', b.dataset.ctl === ctl);
+    $('rpbox').hidden = !(ctl === 'replay' || (simple && ctl === 'pattern'));
+    $('ptbox').hidden = ctl !== 'pattern';
+    $('moodbox').hidden = ctl !== 'mood';
+    $('aubox').hidden = !(ctl === 'audio' || (ctl === 'video' && this._vaudio));
+    $('tgbox').hidden = ctl !== 'together';
+    $('urecrow').hidden = !simple;
+    if (simple) {
+      // One thing at a time: the pads or stroke bar, or the video.
+      const hands = ['record', 'pattern', 'mood', 'audio'].includes(ctl);
+      for (const sec of this.shadowRoot.querySelectorAll('[data-part="record"],[data-part="stroke"]')) sec.classList.toggle('off', !hands || !this._parts.includes(sec.dataset.part));
+      $('videobox').classList.toggle('off', ctl !== 'video');
+      const gslot = ctl === 'video' ? $('videobox').querySelector('.gpslot') : this.shadowRoot.querySelector('[data-part="record"]:not(.off) .gpslot,[data-part="stroke"]:not(.off) .gpslot');
+      if (gslot) gslot.appendChild($('gp'));
+      $('gp').hidden = !gslot;
+    }
     this._outRender();
-    for (const id of ['rec', 'timer', 'strec', 'liverow', 'stliverow']) $(id).hidden = this._ctl !== 'record';
+    for (const id of ['rec', 'timer', 'strec', 'liverow', 'stliverow']) $(id).hidden = ctl !== 'record' || (simple && id !== 'liverow' && id !== 'stliverow');
     this._rpShow();
+    if (simple) { this._vsideShow(); this._urecShow(); }
   }
 
   _rpPicker(open) {
@@ -305,6 +324,7 @@ export class ReplayPart {
     const rp = this._rp;
     if (!rp.raw) { this._rpPicker(true); return; }
     if (rp.t >= rp.len) rp.t = 0;
+    this._ptStop();
     const video = this._el('video');
     if (video && !video.paused) video.pause();     // one thing drives the devices at a time
     if (rp.lib && isStroke(rp.raw) && RUN_MODES[this._outs[0].m]) this._setMode(rp.lib, this._outs[0].m);

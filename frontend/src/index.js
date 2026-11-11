@@ -15,9 +15,10 @@ import { SafetyPart } from './card/safety.js';
 import { ToolsPart } from './card/tools.js';
 import { AudioPart } from './card/audio.js';
 import { TogetherPart } from './card/together.js';
+import { PlayPart } from './card/play.js';
 
 // Each part's methods join the card (later parts win on a shared name).
-for (const part of [StrokePart, GamepadPart, VideoPart, CastPart, ReplayPart, OutputsPart, SafetyPart, ToolsPart, AudioPart, TogetherPart]) {
+for (const part of [StrokePart, GamepadPart, VideoPart, CastPart, ReplayPart, OutputsPart, SafetyPart, ToolsPart, AudioPart, TogetherPart, PlayPart]) {
   for (const [key, desc] of Object.entries(Object.getOwnPropertyDescriptors(part.prototype))) {
     if (key !== 'constructor') Object.defineProperty(OggStudioCard.prototype, key, desc);
   }

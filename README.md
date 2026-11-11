@@ -30,7 +30,7 @@ depend on the dashboard or network.
 
 ## Cards
 
-Five cards come with OggStudio. Pick one that fits the dashboard, or use several:
+Seven cards come with OggStudio. Pick one that fits the dashboard, or use several:
 
 | Card | Type | Shows |
 |---|---|---|
@@ -39,6 +39,8 @@ Five cards come with OggStudio. Pick one that fits the dashboard, or use several
 | OggStudio Player | `custom:oggstudio-player-card` | Saved patterns with speed and loop, plus import |
 | OggStudio Video | `custom:oggstudio-video-card` | Video sync and recording a funscript for a video |
 | OggStudio Stroke | `custom:oggstudio-stroke-card` | Stroke recorder with limits and three speeds (for a Handy) |
+| OggStudio Play | `custom:oggstudio-play-card` | One simple card: manual, Ogg patterns, mood, audio or video, with one Record button for all of them |
+| OggStudio Together | `custom:oggstudio-together-card` | Start or join a Together session from two places |
 
 Every card takes an optional `title`. The full card also takes `sections`, a list
 from `record`, `stroke`, `take`, `library`, `video` and `import`, to build your own mix

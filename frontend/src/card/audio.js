@@ -103,6 +103,11 @@ export class AudioPart {
     $('aum2').style.width = `${r.levels[1]}%`;
     if (!r.beat && now - au.outAt < 100) return;     // a beat goes out at once
     au.outAt = now;
+    if (this._simple) {
+      // The pads (or the stroke bar) show it, so Record can follow it.
+      if (this._strokeKind) { const st = this._st; if (st.drag === null && this._stSpeed() === null) { st.pos = r.levels[0]; this._stShow(); } }
+      else for (const i of [0, 1]) if (!this._padActive[i]) this._setPad(i, r.levels[i]);
+    }
     this._outApply([0, 1].map((i) => (i && !this._twoPads ? null : this._mapLevel(i, r.levels[i]))), 0.6);
     if (now - (au.shownAt || 0) > 1000) { au.shownAt = now; this._auShow(); }
   }
@@ -116,6 +121,7 @@ export class AudioPart {
     try { au.node.disconnect(au.an); } catch (_) { /* already gone */ }
     if (au.stream) for (const t of au.stream.getTracks()) t.stop();
     if (au.src === 'file' && this._el) this._el('auel').pause();
+    if (this._simple && this._el && !this._strokeKind) for (const i of [0, 1]) if (!this._padActive[i]) this._setPad(i, 0);
     this._outStop();
     this._auShow();
   }

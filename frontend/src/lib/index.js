@@ -9,3 +9,4 @@ export * from './gamepad.js';
 export * from './limits.js';
 export * from './tools.js';
 export * from './audio.js';
+export * from './patterns.js';

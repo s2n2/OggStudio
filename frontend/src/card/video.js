@@ -107,7 +107,7 @@ export class VideoPart {
   // Video slider value: what it records, or what the script is doing now
   // (position for a stroke script in the stroke view, else intensity).
   _videoValue() {
-    if (this._vrec || this._hbActive) return this._hvals[0];
+    if (this._vHeld) return this._hvals[0];
     const video = this._el('video');
     const ms = video.currentTime * 1000 + Number(this._el('voff').value || 0);
     if (!this._vraw) return 0;
@@ -116,6 +116,9 @@ export class VideoPart {
   }
 
   get _strokeKindRec() { return this._recKind === 'stroke'; }
+
+  // The slider has the devices: recording with it, or holding it over a script.
+  get _vHeld() { return Boolean(this._vrec || this._hbActive || (this._tap && this._tap.video && !this._vraw)); }
 
   // Drive the follow-along devices from the video (outputs on this card).
   _videoOut() {
@@ -128,7 +131,7 @@ export class VideoPart {
     this._vVel = (this._vVel || 0) * 0.6 + vel * 0.4;
     const video = this._el('video');
     const ms = video.currentTime * 1000 + Number(this._el('voff').value || 0);
-    const script = !(this._vrec || this._hbActive) && this._vraw && isStroke(this._vraw);
+    const script = !this._vHeld && this._vraw && isStroke(this._vraw);
     if (this._strokeKindRec) {
       const values = this._outs.map((o, i) => {
         const p = parseTarget(this._outTargetValue(i));
@@ -146,7 +149,7 @@ export class VideoPart {
       const st = this._st;
       if (st && st.drag === null && this._stSpeed() === null) { st.pos = value; this._stShow(); }
     } else {
-      const held = this._vrec || this._hbActive;
+      const held = this._vHeld;
       if (held) {
         // The slider, mapped per device like the pads.
         const h = this._hvals[0];
@@ -178,7 +181,7 @@ export class VideoPart {
   }
 
   _videoRun() {
-    if (this._vsyncTimer || !(this._vscript || this._vrec)) return;
+    if (this._vsyncTimer || !(this._vscript || this._vrec || this._tap)) return;
     if (this._rp) this._rpStop();
     if (this._live) { this._el('live').checked = false; this._setLive(false); }
     this._vlast = null;
@@ -208,7 +211,7 @@ export class VideoPart {
   _setHBar(index, value) {
     this._hvals[index] = Math.round(Math.min(100, Math.max(0, value)));
     this._showHBar(index, this._hvals[index]);
-    if (this._vrec || this._hbActive) this._videoSend(false);
+    if (this._vHeld) this._videoSend(false);
   }
 
   _bindHBar(bar, index) {
@@ -220,7 +223,8 @@ export class VideoPart {
     bar.addEventListener('pointerdown', (event) => {
       // Record with it, or take over a script that is playing (until let go).
       const playing = Boolean(this._vsyncTimer && this._vscript);
-      if (!this._vrec && !playing) { this._toast('Press ● Rec first to record with the slider (or play a script to take it over)'); return; }
+      const tapping = Boolean(this._tap && this._tap.video);
+      if (!this._vrec && !playing && !tapping) { this._toast(`Press ● ${this._simple ? 'Record' : 'Rec'} first to record with the slider (or play a script to take it over)`); return; }
       event.preventDefault();
       active = true;
       if (!this._vrec) this._hbActive = true;
@@ -233,7 +237,12 @@ export class VideoPart {
       if (!active) return;
       active = false;
       bar.classList.remove('active');
-      if (this._hbActive) { this._hbActive = false; this._videoSend(true); return; }   // back to the script
+      if (this._hbActive) {
+        this._hbActive = false;
+        if (this._tap && this._tap.video && !this._vraw && this._el('vspring').checked) this._setHBar(index, 0);
+        this._videoSend(true);       // back to the script
+        return;
+      }
       if (this._el('vspring').checked) this._setHBar(index, 0);
     };
     for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) bar.addEventListener(type, release);
@@ -355,7 +364,7 @@ export class VideoPart {
     const $ = this._el;
     const video = $('video');
     if (!this._vurl) { this._toast('Choose a video first'); return; }
-    if (!this._vscript && !this._vrec) { this._toast('Choose a script first, or press ● Rec to make one'); return; }
+    if (!this._vscript && !this._vrec && !this._simple) { this._toast('Choose a script first, or press ● Rec to make one'); return; }
     try {
       if (video.ended) video.currentTime = 0;
       await video.play();          // the play event starts the sync
@@ -386,6 +395,7 @@ export class VideoPart {
     $('vstat').textContent = parts.join(' · ');
     $('vgo').disabled = !(this._vurl && (this._vscript || this._vrec));
     this._vrecInfo();
+    this._vsideShow();
   }
 
   get _noDevice() { return this._deviceId === NO_DEVICE; }
@@ -465,6 +475,7 @@ export class VideoPart {
       const kind = isStroke(this._take) ? 'stroke script' : `${this._take.channels ? 2 : 1} motor${this._take.channels ? 's' : ''}`;
       $('takeinfo').textContent = `${fmt(duration(this._take))} · ${kind} · ${this._take.actions.length} points · not saved`;
     }
+    this._urecShow();
     $('takemodebox').hidden = true;     // each device has its own follow type now
     const saved = this._studio && this._hass.states[this._studio.saved];
     const opts = (saved && saved.attributes.options) || [];

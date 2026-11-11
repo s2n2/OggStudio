@@ -1,7 +1,7 @@
 // Part of the OggStudio card. Built into custom_components/oggstudio/frontend/oggstudio-card.js (npm run build).
 
 export const TAG = 'oggstudio-card';
-export const VERSION = '0.14.2';
+export const VERSION = '0.15.0';
 export const DEVICE_KEY = 'oggstudio_device';
 export const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
 export const SAMPLE_MS = 100;
@@ -27,6 +27,10 @@ export const VARIANTS = {
     description: 'Sync a video on this device with a script, and record a funscript for it.' },
   'oggstudio-stroke-card': { name: 'OggStudio Stroke', sub: 'Record stroke scripts (for a Handy) between two limits', parts: ['stroke', 'take'], size: 8,
     description: 'Stroke recorder: set an upper and lower limit, hold a speed to stroke between them, record a stroke funscript.' },
+  'oggstudio-play-card': { name: 'OggStudio Play', sub: 'Manual, pattern, mood, audio or video: record any of them', parts: ['record', 'video', 'take'], simple: true, size: 8,
+    description: 'One simple card: play by hand, a pattern, a mood, to sound or to a video, with one Record button for all of them.' },
+  'oggstudio-together-card': { name: 'OggStudio Together', sub: 'Play together from two places', parts: [], together: true, size: 4,
+    description: 'Start or join a Together session: each of you drives the devices of the other, inside the limits each has set.' },
 };
 // Pointer capture can fail (a pointer already gone); never let it stop a press.
 export const capture = (el, e) => { try { el.setPointerCapture(e.pointerId); } catch (_) { /* no capture */ } };

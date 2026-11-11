@@ -140,7 +140,11 @@ export class GamepadPart {
     this._gpLog(`${live.length} gamepad(s): ${live.map((p) => gpRaw(p)).join(' || ') || 'none'} · chosen #${this._gpPad() ? this._gpPad().index : '-'} · secure=${window.isSecureContext} · ${navigator.userAgent}`);
   }
 
-  _gpTarget() { return gpTargetFor(this._parts, Boolean(this._vurl)); }
+  _gpTarget() {
+    // The Play card: whatever its mode shows.
+    if (this._simple) return this._ctl === 'video' ? (this._vurl ? 'video' : null) : gpTargetFor(this._parts.filter((p) => p !== 'video'), false);
+    return gpTargetFor(this._parts, Boolean(this._vurl));
+  }
 
   // The stroke recorder has its own controls (and its own learned map).
   get _gpProfName() { return this._gpLearning ? this._gpLearning.prof : (this._gpTarget() === 'stroke' ? 'stroke' : 'level'); }
@@ -209,7 +213,7 @@ export class GamepadPart {
   _gpApply(target, fn) {
     const motors = this._gpMotors();
     if (target === 'video') {
-      if (!this._vrec) { this._gpHint('Controller: press record first to record against the video'); return; }
+      if (!this._vrec && !(this._tap && this._tap.video)) { this._gpHint('Controller: press record first to record against the video'); return; }
       // The video tick (every 100 ms) samples and sends the bars.
       for (const i of motors) { this._hvals[i] = Math.round(Math.min(100, Math.max(0, fn(this._hvals[i], i)))); this._showHBar(i, this._hvals[i]); }
     } else {
@@ -239,6 +243,7 @@ export class GamepadPart {
   _gpRec() {
     const $ = this._el;
     const target = this._gpTarget();
+    if (this._simple) { this._urecToggle(); return; }
     if ((target === 'stroke' || target === 'record') && this._ctl === 'mood') {
       if (this._rp.playing) this._rpStop(); else if (this._mood) this._moodNext(true);
     } else if ((target === 'stroke' || target === 'record') && this._ctl === 'replay') {
