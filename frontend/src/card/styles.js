@@ -201,22 +201,29 @@ ha-card.simple #videobox{padding:8px}
 #aubox.fromvideo #ausrcbox,#aubox.fromvideo #aufilebox,#aubox.fromvideo #augo{display:none!important}
 #aubox.fromvideo{margin-top:8px;padding:10px;border-radius:14px;border:1px solid #293552;background:#0e1730}
 #aubox.fromvideo>label:first-of-type{margin-top:0}
-.vst{position:absolute;inset:0;pointer-events:none;z-index:2}
-.vstrail{position:absolute;left:max(8px,env(safe-area-inset-left));top:8%;bottom:26%;width:46px;pointer-events:auto;touch-action:none;cursor:ns-resize}
-.vstrail::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:2px;margin-left:-1px;background:rgba(255,255,255,.3);box-shadow:0 0 2px rgba(0,0,0,.6)}
-.vstrail .band{position:absolute;left:50%;width:14px;margin-left:-7px;border-radius:7px;background:rgba(255,176,87,.35);border:2px solid rgba(255,176,87,.9);box-sizing:border-box}
-.vstrail.active .band{background:rgba(255,176,87,.55)}
-.vstrail .h{position:absolute;left:50%;width:30px;height:14px;margin-left:-15px;border-radius:5px;background:#ffb057;color:#2a1600;font-size:9px;font-weight:800;line-height:14px;text-align:center;box-shadow:0 0 0 2px rgba(0,0,0,.35)}
-.vstrail .hu{top:-8px}
-.vstrail .hl{bottom:-8px}
-.vstrail .dot{position:absolute;left:50%;width:16px;height:16px;margin:0 0 -8px -8px;border-radius:50%;background:#67e0c8;box-shadow:0 0 0 2px rgba(0,0,0,.45);pointer-events:none}
-.vstspd{position:absolute;left:max(8px,env(safe-area-inset-left));right:12px;bottom:60px;display:flex;align-items:center;gap:8px;pointer-events:auto}
-.vstspd button{min-height:26px;padding:0 8px;font-size:11px;background:rgba(24,35,61,.75)}
-.vstspd button.on{background:linear-gradient(110deg,#2fbfa9,#67e0c8);color:#062a24;border-color:transparent}
-.vstline{position:relative;flex:1;height:30px;touch-action:none;cursor:ew-resize}
-.vstline::before{content:'';position:absolute;left:0;right:0;top:50%;height:2px;margin-top:-1px;background:rgba(255,255,255,.3);box-shadow:0 0 2px rgba(0,0,0,.6)}
-.vstline .dot{position:absolute;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#ffb057;box-shadow:0 0 0 2px rgba(0,0,0,.45)}
-.vstline.dim .dot{background:rgba(255,255,255,.55)}
-.vstspd b{min-width:42px;font-size:11px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.8);text-align:right}
+ha-card.simple .vrecrow{display:none}
+.vst{position:absolute;inset:0;pointer-events:none;z-index:2;opacity:.85;transition:opacity .6s}
+.vst.idle{opacity:.28}
+.vstrail{position:absolute;left:max(4px,env(safe-area-inset-left));top:10%;bottom:28%;width:34px;pointer-events:auto;touch-action:none;cursor:ns-resize}
+.vstrail::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.35);box-shadow:0 0 2px rgba(0,0,0,.7)}
+.vstrail .band{position:absolute;left:50%;width:6px;margin-left:-3px;border-radius:3px;background:rgba(255,176,87,.45);box-shadow:0 0 2px rgba(0,0,0,.6)}
+.vst.vib .vstrail .band{background:rgba(180,156,255,.5)}
+.vstrail .h{position:absolute;left:50%;width:14px;height:4px;margin-left:-7px;border-radius:2px;background:#ffb057;color:transparent;font-size:0;box-shadow:0 0 2px rgba(0,0,0,.7)}
+.vst.vib .vstrail .h{background:#b49cff}
+.vstrail .hu{top:-2px}
+.vstrail .hl{bottom:-2px}
+.vstrail.active .h{width:26px;height:14px;margin-left:-13px;border-radius:4px;color:#1a1030;font-size:9px;font-weight:800;line-height:14px;text-align:center}
+.vstrail.active .hu{top:-7px}
+.vstrail.active .hl{bottom:-7px}
+.vstrail .dot{position:absolute;left:50%;width:10px;height:10px;margin:0 0 -5px -5px;border-radius:50%;background:#67e0c8;box-shadow:0 0 0 1px rgba(0,0,0,.5);pointer-events:none}
+.vstspd{position:absolute;left:40px;right:40%;bottom:58px;display:flex;align-items:center;gap:6px;pointer-events:auto}
+.vstspd button{min-height:20px;padding:0 6px;font-size:10px;border-radius:8px;background:rgba(14,23,48,.5);border-color:rgba(255,255,255,.2)}
+.vstspd button.on{background:rgba(47,191,169,.7);color:#062a24;border-color:transparent}
+.vstline{position:relative;flex:1;height:24px;touch-action:none;cursor:ew-resize}
+.vstline::before{content:'';position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(255,255,255,.35);box-shadow:0 0 2px rgba(0,0,0,.7)}
+.vstline .dot{position:absolute;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:#ffb057;box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+.vstline.active .dot{width:14px;height:14px;margin:-7px 0 0 -7px}
+.vstline.dim .dot{background:rgba(255,255,255,.5)}
+.vstspd b{min-width:34px;font-size:9.5px;font-weight:700;color:rgba(255,255,255,.85);text-shadow:0 1px 3px rgba(0,0,0,.9)}
 [hidden],.off{display:none!important}
 `;

@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.15.6";
+  var VERSION = "0.15.7";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -1550,23 +1550,30 @@ ha-card.simple #videobox{padding:8px}
 #aubox.fromvideo #ausrcbox,#aubox.fromvideo #aufilebox,#aubox.fromvideo #augo{display:none!important}
 #aubox.fromvideo{margin-top:8px;padding:10px;border-radius:14px;border:1px solid #293552;background:#0e1730}
 #aubox.fromvideo>label:first-of-type{margin-top:0}
-.vst{position:absolute;inset:0;pointer-events:none;z-index:2}
-.vstrail{position:absolute;left:max(8px,env(safe-area-inset-left));top:8%;bottom:26%;width:46px;pointer-events:auto;touch-action:none;cursor:ns-resize}
-.vstrail::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:2px;margin-left:-1px;background:rgba(255,255,255,.3);box-shadow:0 0 2px rgba(0,0,0,.6)}
-.vstrail .band{position:absolute;left:50%;width:14px;margin-left:-7px;border-radius:7px;background:rgba(255,176,87,.35);border:2px solid rgba(255,176,87,.9);box-sizing:border-box}
-.vstrail.active .band{background:rgba(255,176,87,.55)}
-.vstrail .h{position:absolute;left:50%;width:30px;height:14px;margin-left:-15px;border-radius:5px;background:#ffb057;color:#2a1600;font-size:9px;font-weight:800;line-height:14px;text-align:center;box-shadow:0 0 0 2px rgba(0,0,0,.35)}
-.vstrail .hu{top:-8px}
-.vstrail .hl{bottom:-8px}
-.vstrail .dot{position:absolute;left:50%;width:16px;height:16px;margin:0 0 -8px -8px;border-radius:50%;background:#67e0c8;box-shadow:0 0 0 2px rgba(0,0,0,.45);pointer-events:none}
-.vstspd{position:absolute;left:max(8px,env(safe-area-inset-left));right:12px;bottom:60px;display:flex;align-items:center;gap:8px;pointer-events:auto}
-.vstspd button{min-height:26px;padding:0 8px;font-size:11px;background:rgba(24,35,61,.75)}
-.vstspd button.on{background:linear-gradient(110deg,#2fbfa9,#67e0c8);color:#062a24;border-color:transparent}
-.vstline{position:relative;flex:1;height:30px;touch-action:none;cursor:ew-resize}
-.vstline::before{content:'';position:absolute;left:0;right:0;top:50%;height:2px;margin-top:-1px;background:rgba(255,255,255,.3);box-shadow:0 0 2px rgba(0,0,0,.6)}
-.vstline .dot{position:absolute;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#ffb057;box-shadow:0 0 0 2px rgba(0,0,0,.45)}
-.vstline.dim .dot{background:rgba(255,255,255,.55)}
-.vstspd b{min-width:42px;font-size:11px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.8);text-align:right}
+ha-card.simple .vrecrow{display:none}
+.vst{position:absolute;inset:0;pointer-events:none;z-index:2;opacity:.85;transition:opacity .6s}
+.vst.idle{opacity:.28}
+.vstrail{position:absolute;left:max(4px,env(safe-area-inset-left));top:10%;bottom:28%;width:34px;pointer-events:auto;touch-action:none;cursor:ns-resize}
+.vstrail::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.35);box-shadow:0 0 2px rgba(0,0,0,.7)}
+.vstrail .band{position:absolute;left:50%;width:6px;margin-left:-3px;border-radius:3px;background:rgba(255,176,87,.45);box-shadow:0 0 2px rgba(0,0,0,.6)}
+.vst.vib .vstrail .band{background:rgba(180,156,255,.5)}
+.vstrail .h{position:absolute;left:50%;width:14px;height:4px;margin-left:-7px;border-radius:2px;background:#ffb057;color:transparent;font-size:0;box-shadow:0 0 2px rgba(0,0,0,.7)}
+.vst.vib .vstrail .h{background:#b49cff}
+.vstrail .hu{top:-2px}
+.vstrail .hl{bottom:-2px}
+.vstrail.active .h{width:26px;height:14px;margin-left:-13px;border-radius:4px;color:#1a1030;font-size:9px;font-weight:800;line-height:14px;text-align:center}
+.vstrail.active .hu{top:-7px}
+.vstrail.active .hl{bottom:-7px}
+.vstrail .dot{position:absolute;left:50%;width:10px;height:10px;margin:0 0 -5px -5px;border-radius:50%;background:#67e0c8;box-shadow:0 0 0 1px rgba(0,0,0,.5);pointer-events:none}
+.vstspd{position:absolute;left:40px;right:40%;bottom:58px;display:flex;align-items:center;gap:6px;pointer-events:auto}
+.vstspd button{min-height:20px;padding:0 6px;font-size:10px;border-radius:8px;background:rgba(14,23,48,.5);border-color:rgba(255,255,255,.2)}
+.vstspd button.on{background:rgba(47,191,169,.7);color:#062a24;border-color:transparent}
+.vstline{position:relative;flex:1;height:24px;touch-action:none;cursor:ew-resize}
+.vstline::before{content:'';position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(255,255,255,.35);box-shadow:0 0 2px rgba(0,0,0,.7)}
+.vstline .dot{position:absolute;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:#ffb057;box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+.vstline.active .dot{width:14px;height:14px;margin:-7px 0 0 -7px}
+.vstline.dim .dot{background:rgba(255,255,255,.5)}
+.vstspd b{min-width:34px;font-size:9.5px;font-weight:700;color:rgba(255,255,255,.85);text-shadow:0 1px 3px rgba(0,0,0,.9)}
 [hidden],.off{display:none!important}
 `;
 
@@ -3054,7 +3061,8 @@ ${STYLES}
           this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._mapLive(i, h, this._vVel)), 0.6);
           return;
         }
-        const vals = this._mapScript(this._vraw || { actions: [] }, ms, this._vconvs || (this._vconvs = {}));
+        let vals = this._mapScript(this._vraw || { actions: [] }, ms, this._vconvs || (this._vconvs = {}));
+        if (this._simple && this._vraw) vals = vals.map((v) => this._vvScale(v));
         for (const i of [0, 1]) if (!this._padActive || !this._padActive[i]) this._setPad(i, vals[i]);
         const out = [0, 1].map((i) => {
           if (i && !this._twoPads) return null;
@@ -6302,6 +6310,7 @@ ${STYLES}
   // frontend/src/card/play.js
   var PATTERN_KEY = "oggstudio_pattern";
   var VSTROKE_KEY = "oggstudio_video_stroke";
+  var VVIBE_KEY = "oggstudio_video_vibe";
   var PATTERN_HINT = "Ogg's patterns, played from here: they show on the pads, stay inside your limits and can be recorded.";
   var PlayPart = class {
     get _simple() {
@@ -6721,13 +6730,16 @@ ${STYLES}
         this._autoKindBusy = false;
       }
     }
-    // A stroker on the video: a range bar (drag the ends for the limits, the
-    // middle to move it) and a speed line. While the video plays it strokes
-    // between the limits at that speed or, with ♪ Beat and sound on, one way
-    // per beat, each turn landing on a beat. A script, when there is one,
+    // On the video (both kinds): a range bar on the left (drag the ends for
+    // the limits, the middle to move it) and a speed line along the bottom.
+    // While the video plays the level moves between the limits at that speed
+    // or, with ♪ Beat and sound on, one way per beat, each turn on a beat.
+    // A stroker goes to that position; a vibrator takes it as its intensity,
+    // so the limits are its least and most. Speed 0 holds it still inside the
+    // range (drag the range to set it by hand). A script, when there is one,
     // does the moving instead, inside the same limits.
     get _vsOn() {
-      return Boolean(this._simple && this._strokeKind && this._ctl === "video" && this._vurl);
+      return Boolean(this._simple && this._ctl === "video" && this._vurl);
     }
     _vsLoad() {
       if (this._vsCfg) return this._vsCfg;
@@ -6745,6 +6757,38 @@ ${STYLES}
       } catch (_) {
       }
     }
+    // The range and level being moved: the stroker's own limits, or a
+    // vibrator's least and most intensity (kept apart).
+    get _vsRange() {
+      if (this._strokeKind) return this._st;
+      if (!this._vvLim) {
+        let kept = {};
+        try {
+          kept = JSON.parse(localStorage.getItem(VVIBE_KEY) || "{}") || {};
+        } catch (_) {
+        }
+        const ok = Number.isFinite(kept.lower) && Number.isFinite(kept.upper) && kept.upper - kept.lower >= 5;
+        this._vvLim = { lower: ok ? kept.lower : 0, upper: ok ? kept.upper : 100, pos: ok ? kept.lower : 0, dir: 1, last: null };
+      }
+      return this._vvLim;
+    }
+    _vsKeep() {
+      const r = this._vsRange;
+      if (this._strokeKind) {
+        this._gpSave(STROKE_LIMIT_KEY, { lower: r.lower, upper: r.upper, last: r.last });
+        if (this._stShow) this._stShow();
+      } else {
+        try {
+          localStorage.setItem(VVIBE_KEY, JSON.stringify({ lower: r.lower, upper: r.upper }));
+        } catch (_) {
+        }
+      }
+    }
+    // A vibrator's script level inside its least and most.
+    _vvScale(v) {
+      const r = this._vsRange;
+      return Math.round(r.lower + Math.min(100, Math.max(0, v)) / 100 * (r.upper - r.lower));
+    }
     get _vsBeatOn() {
       return Boolean(this._vsLoad().beat && this._au);
     }
@@ -6757,25 +6801,26 @@ ${STYLES}
       if (!on && this._vsTimer) {
         clearInterval(this._vsTimer);
         this._vsTimer = null;
+        this._vsWasLive = false;
       }
       this._vlimShow();
     }
     _vsOnBeat(gap) {
-      const st = this._st;
-      if (!st) return;
+      const r = this._vsRange;
+      if (!r) return;
       this._vsBeat = { at: performance.now(), gap: gap || this._vsBeat && this._vsBeat.gap || 0 };
-      st.dir = st.pos - st.lower < st.upper - st.pos ? 1 : -1;
+      r.dir = r.pos - r.lower < r.upper - r.pos ? 1 : -1;
     }
-    // Units per ms now (0 = still).
+    // Moving now? Units per ms (0 = held still), or null = stopped.
     _vsVel() {
-      const st = this._st;
+      const r = this._vsRange;
       const video = this._el("video");
       if (this._vsBeatOn) {
         const b = this._vsBeat;
-        if (!b || !b.gap || performance.now() - b.at > Math.max(1500, b.gap * 2.5)) return 0;
-        return Math.min(strokeVel(100), (st.upper - st.lower) / b.gap);
+        if (!b || !b.gap || performance.now() - b.at > Math.max(1500, b.gap * 2.5)) return null;
+        return Math.min(strokeVel(100), (r.upper - r.lower) / b.gap);
       }
-      if (video.paused) return 0;
+      if (video.paused) return null;
       const pct = this._vsLoad().speed;
       return pct > 0 ? strokeVel(Math.max(STROKE_PCT_MIN, pct)) : 0;
     }
@@ -6784,37 +6829,56 @@ ${STYLES}
         this._vsSync();
         return;
       }
-      const st = this._st;
+      const r = this._vsRange;
       const now = performance.now();
       const dt = now - (this._vsAt || now);
       this._vsAt = now;
-      if (this._vraw || !st) {
+      if (this._vraw || !r) {
         this._vlimShow();
         return;
       }
       const vel = this._vsVel();
-      if (vel > 0) {
-        const r = strokeStep(st.pos, st.dir || 1, st.lower, st.upper, vel, dt);
-        st.pos = r.pos;
-        st.dir = r.dir;
-        this._strokeOut(st.pos, vel * 1e3 * st.dir);
+      if (vel === null) {
+        if (this._vsWasLive && !this._strokeKind) {
+          this._outStop();
+          for (const i of [0, 1]) this._setPad(i, 0);
+        }
+        this._vsWasLive = false;
+        this._vlimShow();
+        return;
       }
+      if (vel > 0) {
+        const m = strokeStep(r.pos, r.dir || 1, r.lower, r.upper, vel, dt);
+        r.pos = m.pos;
+        r.dir = m.dir;
+      } else r.pos = Math.min(r.upper, Math.max(r.lower, r.pos));
+      this._vsWasLive = true;
+      if (this._strokeKind) {
+        if (vel > 0 || this._vsLastPos !== r.pos) this._strokeOut(r.pos, vel * 1e3 * r.dir);
+      } else {
+        const v = Math.round(r.pos);
+        for (const i of [0, 1]) this._setPad(i, v);
+        this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._mapLevel(i, v)), 0.6);
+      }
+      this._vsLastPos = r.pos;
       this._vlimShow();
     }
     _vlimShow() {
       if (!this._el) return;
       const $ = this._el;
-      const st = this._st;
-      const on = Boolean(this._vsOn && st);
+      const r = this._vsOn ? this._vsRange : null;
+      const on = Boolean(r);
       $("vst").hidden = !on;
-      $("hb1").hidden = on;
+      if (this._simple) $("hb1").hidden = this._ctl === "video";
       if (!on) return;
+      $("vst").classList.toggle("vib", !this._strokeKind);
       const band = $("vstrail").querySelector(".band");
-      band.style.bottom = st.lower + "%";
-      band.style.height = st.upper - st.lower + "%";
-      band.querySelector(".hu").textContent = String(st.upper);
-      band.querySelector(".hl").textContent = String(st.lower);
-      $("vstrail").querySelector(".dot").style.bottom = Math.round(st.pos) + "%";
+      band.style.bottom = r.lower + "%";
+      band.style.height = r.upper - r.lower + "%";
+      band.querySelector(".hu").textContent = String(r.upper);
+      band.querySelector(".hl").textContent = String(r.lower);
+      $("vstrail").querySelector(".dot").style.bottom = Math.round(r.pos) + "%";
+      $("vstrail").setAttribute("aria-label", this._strokeKind ? `Stroke range ${r.lower} to ${r.upper}: drag the ends to set the limits, the middle to move it` : `Intensity from ${r.lower}% to ${r.upper}%: drag the ends to set the least and most, the middle to move it`);
       const cfg = this._vsLoad();
       const script = Boolean(this._vraw);
       const beat = this._vsBeatOn && !script;
@@ -6822,18 +6886,28 @@ ${STYLES}
       $("vstbeat").classList.toggle("on", beat);
       $("vstline").classList.toggle("dim", beat || script);
       let pct = cfg.speed;
-      let text = `${cfg.speed}%`;
+      let text = cfg.speed ? `${cfg.speed}%` : "still";
       if (script) text = "script";
       else if (beat) {
         const b = this._vsBeat;
         if (b && b.gap) {
-          pct = Math.round(Math.min(100, (st.upper - st.lower) / b.gap / strokeVel(100) * 100));
+          pct = Math.round(Math.min(100, (r.upper - r.lower) / b.gap / strokeVel(100) * 100));
           text = `♪ ${Math.round(6e4 / b.gap)}`;
         } else text = "♪ …";
       }
       $("vstline").querySelector(".dot").style.left = pct + "%";
       $("vstline").setAttribute("aria-valuenow", String(pct));
       if ($("vstspdv").textContent !== text) $("vstspdv").textContent = text;
+    }
+    // Out of the way: faint while the video plays and nothing is touched.
+    _vsWake() {
+      const vst = this._el && this._el("vst");
+      if (!vst) return;
+      vst.classList.remove("idle");
+      clearTimeout(this._vsIdleT);
+      this._vsIdleT = setTimeout(() => {
+        if (!vst.querySelector(".active")) vst.classList.add("idle");
+      }, 2500);
     }
     _bindVlim() {
       const $ = this._el;
@@ -6844,7 +6918,7 @@ ${STYLES}
         return Math.min(100, Math.max(0, (r.bottom - e.clientY) / r.height * 100));
       };
       const move = (e) => {
-        const st = this._st;
+        const st = this._vsRange;
         const p = at(e);
         if (drag.mode === "upper") {
           st.upper = Math.round(Math.max(st.lower + 5, p));
@@ -6861,8 +6935,9 @@ ${STYLES}
         this._vlimShow();
       };
       rail.addEventListener("pointerdown", (e) => {
-        const st = this._st;
+        const st = this._vsRange;
         if (!st) return;
+        this._vsWake();
         e.preventDefault();
         const r = rail.getBoundingClientRect();
         const p = at(e);
@@ -6884,9 +6959,8 @@ ${STYLES}
         if (!drag) return;
         drag = null;
         rail.classList.remove("active");
-        const st = this._st;
-        this._gpSave(STROKE_LIMIT_KEY, { lower: st.lower, upper: st.upper, last: st.last });
-        if (this._stShow) this._stShow();
+        this._vsKeep();
+        this._vsWake();
       };
       for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) rail.addEventListener(type, done);
       const line = $("vstline");
@@ -6901,6 +6975,8 @@ ${STYLES}
       line.addEventListener("pointerdown", (e) => {
         e.preventDefault();
         sliding = true;
+        line.classList.add("active");
+        this._vsWake();
         try {
           line.setPointerCapture(e.pointerId);
         } catch (_) {
@@ -6913,7 +6989,9 @@ ${STYLES}
       for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) line.addEventListener(type, () => {
         if (sliding) {
           sliding = false;
+          line.classList.remove("active");
           this._vsSave();
+          this._vsWake();
         }
       });
       $("vstbeat").addEventListener("click", () => {
@@ -6921,7 +6999,16 @@ ${STYLES}
         cfg.beat = !cfg.beat;
         this._vsSave();
         this._vlimShow();
+        this._vsWake();
       });
+      const video = $("video");
+      video.addEventListener("play", () => this._vsWake());
+      video.addEventListener("pause", () => {
+        clearTimeout(this._vsIdleT);
+        $("vst").classList.remove("idle");
+      });
+      $("vst").addEventListener("pointerdown", () => this._vsWake());
+      this.shadowRoot.querySelector(".vstage").addEventListener("pointerdown", () => this._vsWake());
     }
     // The video's own sound drives the devices: the audio settings sit under
     // the video while it is on.

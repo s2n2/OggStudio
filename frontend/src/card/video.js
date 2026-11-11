@@ -134,7 +134,7 @@ export class VideoPart {
     const video = this._el('video');
     const ms = video.currentTime * 1000 + Number(this._el('voff').value || 0);
     const script = !this._vHeld && this._vraw && isStroke(this._vraw);
-    if (this._vsOn && !this._vraw) return;    // the stroke range and speed drive it
+    if (this._vsOn && !this._vraw) return;    // the range and speed drive it
     if (this._strokeKindRec) {
       const values = this._outs.map((o, i) => {
         const p = parseTarget(this._outTargetValue(i));
@@ -160,7 +160,8 @@ export class VideoPart {
         this._outApply([0, 1].map((i) => (i && !this._twoPads ? null : this._mapLive(i, h, this._vVel))), 0.6);
         return;
       }
-      const vals = this._mapScript(this._vraw || { actions: [] }, ms, this._vconvs || (this._vconvs = {}));
+      let vals = this._mapScript(this._vraw || { actions: [] }, ms, this._vconvs || (this._vconvs = {}));
+      if (this._simple && this._vraw) vals = vals.map((v) => this._vvScale(v));
       for (const i of [0, 1]) if (!this._padActive || !this._padActive[i]) this._setPad(i, vals[i]);
       const out = [0, 1].map((i) => {
         if (i && !this._twoPads) return null;

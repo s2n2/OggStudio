@@ -8,6 +8,7 @@ import { STROKE_LIMIT_KEY, STROKE_PCT_MIN, strokeStep, strokeVel } from '../lib/
 
 const PATTERN_KEY = 'oggstudio_pattern';
 const VSTROKE_KEY = 'oggstudio_video_stroke';
+const VVIBE_KEY = 'oggstudio_video_vibe';
 const PATTERN_HINT = 'Ogg\'s patterns, played from here: they show on the pads, stay inside your limits and can be recorded.';
 
 // Methods mixed into OggStudioCard: the Play card's own parts. One Record
@@ -383,12 +384,15 @@ export class PlayPart {
     try { this._setRecKind(kind); } finally { this._autoKindBusy = false; }
   }
 
-  // A stroker on the video: a range bar (drag the ends for the limits, the
-  // middle to move it) and a speed line. While the video plays it strokes
-  // between the limits at that speed or, with ♪ Beat and sound on, one way
-  // per beat, each turn landing on a beat. A script, when there is one,
+  // On the video (both kinds): a range bar on the left (drag the ends for
+  // the limits, the middle to move it) and a speed line along the bottom.
+  // While the video plays the level moves between the limits at that speed
+  // or, with ♪ Beat and sound on, one way per beat, each turn on a beat.
+  // A stroker goes to that position; a vibrator takes it as its intensity,
+  // so the limits are its least and most. Speed 0 holds it still inside the
+  // range (drag the range to set it by hand). A script, when there is one,
   // does the moving instead, inside the same limits.
-  get _vsOn() { return Boolean(this._simple && this._strokeKind && this._ctl === 'video' && this._vurl); }
+  get _vsOn() { return Boolean(this._simple && this._ctl === 'video' && this._vurl); }
 
   _vsLoad() {
     if (this._vsCfg) return this._vsCfg;
@@ -400,67 +404,105 @@ export class PlayPart {
 
   _vsSave() { try { localStorage.setItem(VSTROKE_KEY, JSON.stringify(this._vsCfg)); } catch (_) { /* private mode */ } }
 
+  // The range and level being moved: the stroker's own limits, or a
+  // vibrator's least and most intensity (kept apart).
+  get _vsRange() {
+    if (this._strokeKind) return this._st;
+    if (!this._vvLim) {
+      let kept = {};
+      try { kept = JSON.parse(localStorage.getItem(VVIBE_KEY) || '{}') || {}; } catch (_) { /* private mode */ }
+      const ok = Number.isFinite(kept.lower) && Number.isFinite(kept.upper) && kept.upper - kept.lower >= 5;
+      this._vvLim = { lower: ok ? kept.lower : 0, upper: ok ? kept.upper : 100, pos: ok ? kept.lower : 0, dir: 1, last: null };
+    }
+    return this._vvLim;
+  }
+
+  _vsKeep() {
+    const r = this._vsRange;
+    if (this._strokeKind) { this._gpSave(STROKE_LIMIT_KEY, { lower: r.lower, upper: r.upper, last: r.last }); if (this._stShow) this._stShow(); }
+    else { try { localStorage.setItem(VVIBE_KEY, JSON.stringify({ lower: r.lower, upper: r.upper })); } catch (_) { /* private mode */ } }
+  }
+
+  // A vibrator's script level inside its least and most.
+  _vvScale(v) { const r = this._vsRange; return Math.round(r.lower + (Math.min(100, Math.max(0, v)) / 100) * (r.upper - r.lower)); }
+
   get _vsBeatOn() { return Boolean(this._vsLoad().beat && this._au); }
 
   _vsSync() {
     const on = this._vsOn;
     if (on && !this._vsTimer) { this._vsAt = performance.now(); this._vsTimer = setInterval(() => this._vsTick(), 50); }
-    if (!on && this._vsTimer) { clearInterval(this._vsTimer); this._vsTimer = null; }
+    if (!on && this._vsTimer) { clearInterval(this._vsTimer); this._vsTimer = null; this._vsWasLive = false; }
     this._vlimShow();
   }
 
   _vsOnBeat(gap) {
-    const st = this._st;
-    if (!st) return;
+    const r = this._vsRange;
+    if (!r) return;
     this._vsBeat = { at: performance.now(), gap: gap || (this._vsBeat && this._vsBeat.gap) || 0 };
     // Turn on the beat: head away from the nearer end.
-    st.dir = st.pos - st.lower < st.upper - st.pos ? 1 : -1;
+    r.dir = r.pos - r.lower < r.upper - r.pos ? 1 : -1;
   }
 
-  // Units per ms now (0 = still).
+  // Moving now? Units per ms (0 = held still), or null = stopped.
   _vsVel() {
-    const st = this._st;
+    const r = this._vsRange;
     const video = this._el('video');
     if (this._vsBeatOn) {
       const b = this._vsBeat;
-      if (!b || !b.gap || performance.now() - b.at > Math.max(1500, b.gap * 2.5)) return 0;   // no beat lately
-      return Math.min(strokeVel(100), (st.upper - st.lower) / b.gap);
+      if (!b || !b.gap || performance.now() - b.at > Math.max(1500, b.gap * 2.5)) return null;   // no beat lately
+      return Math.min(strokeVel(100), (r.upper - r.lower) / b.gap);
     }
-    if (video.paused) return 0;
+    if (video.paused) return null;
     const pct = this._vsLoad().speed;
     return pct > 0 ? strokeVel(Math.max(STROKE_PCT_MIN, pct)) : 0;
   }
 
   _vsTick() {
     if (!this._el || !this._vsOn) { this._vsSync(); return; }
-    const st = this._st;
+    const r = this._vsRange;
     const now = performance.now();
     const dt = now - (this._vsAt || now);
     this._vsAt = now;
-    if (this._vraw || !st) { this._vlimShow(); return; }      // the script moves it
+    if (this._vraw || !r) { this._vlimShow(); return; }      // the script moves it
     const vel = this._vsVel();
-    if (vel > 0) {
-      const r = strokeStep(st.pos, st.dir || 1, st.lower, st.upper, vel, dt);
-      st.pos = r.pos; st.dir = r.dir;
-      this._strokeOut(st.pos, vel * 1000 * st.dir);
+    if (vel === null) {
+      // Stopped: a stroker stays where it is, a vibrator goes quiet.
+      if (this._vsWasLive && !this._strokeKind) { this._outStop(); for (const i of [0, 1]) this._setPad(i, 0); }
+      this._vsWasLive = false;
+      this._vlimShow();
+      return;
     }
+    if (vel > 0) { const m = strokeStep(r.pos, r.dir || 1, r.lower, r.upper, vel, dt); r.pos = m.pos; r.dir = m.dir; }
+    else r.pos = Math.min(r.upper, Math.max(r.lower, r.pos));
+    this._vsWasLive = true;
+    if (this._strokeKind) { if (vel > 0 || this._vsLastPos !== r.pos) this._strokeOut(r.pos, vel * 1000 * r.dir); }
+    else {
+      const v = Math.round(r.pos);
+      for (const i of [0, 1]) this._setPad(i, v);
+      this._outApply([0, 1].map((i) => (i && !this._twoPads ? null : this._mapLevel(i, v))), 0.6);
+    }
+    this._vsLastPos = r.pos;
     this._vlimShow();
   }
 
   _vlimShow() {
     if (!this._el) return;
     const $ = this._el;
-    const st = this._st;
-    const on = Boolean(this._vsOn && st);
+    const r = this._vsOn ? this._vsRange : null;
+    const on = Boolean(r);
     $('vst').hidden = !on;
-    $('hb1').hidden = on;
+    if (this._simple) $('hb1').hidden = this._ctl === 'video';
     if (!on) return;
+    $('vst').classList.toggle('vib', !this._strokeKind);
     const band = $('vstrail').querySelector('.band');
-    band.style.bottom = st.lower + '%';
-    band.style.height = (st.upper - st.lower) + '%';
-    band.querySelector('.hu').textContent = String(st.upper);
-    band.querySelector('.hl').textContent = String(st.lower);
-    $('vstrail').querySelector('.dot').style.bottom = Math.round(st.pos) + '%';
+    band.style.bottom = r.lower + '%';
+    band.style.height = (r.upper - r.lower) + '%';
+    band.querySelector('.hu').textContent = String(r.upper);
+    band.querySelector('.hl').textContent = String(r.lower);
+    $('vstrail').querySelector('.dot').style.bottom = Math.round(r.pos) + '%';
+    $('vstrail').setAttribute('aria-label', this._strokeKind
+      ? `Stroke range ${r.lower} to ${r.upper}: drag the ends to set the limits, the middle to move it`
+      : `Intensity from ${r.lower}% to ${r.upper}%: drag the ends to set the least and most, the middle to move it`);
     const cfg = this._vsLoad();
     const script = Boolean(this._vraw);
     const beat = this._vsBeatOn && !script;
@@ -468,15 +510,24 @@ export class PlayPart {
     $('vstbeat').classList.toggle('on', beat);
     $('vstline').classList.toggle('dim', beat || script);
     let pct = cfg.speed;
-    let text = `${cfg.speed}%`;
+    let text = cfg.speed ? `${cfg.speed}%` : 'still';
     if (script) text = 'script';
     else if (beat) {
       const b = this._vsBeat;
-      if (b && b.gap) { pct = Math.round(Math.min(100, ((st.upper - st.lower) / b.gap) / strokeVel(100) * 100)); text = `♪ ${Math.round(60000 / b.gap)}`; } else text = '♪ …';
+      if (b && b.gap) { pct = Math.round(Math.min(100, ((r.upper - r.lower) / b.gap) / strokeVel(100) * 100)); text = `♪ ${Math.round(60000 / b.gap)}`; } else text = '♪ …';
     }
     $('vstline').querySelector('.dot').style.left = pct + '%';
     $('vstline').setAttribute('aria-valuenow', String(pct));
     if ($('vstspdv').textContent !== text) $('vstspdv').textContent = text;
+  }
+
+  // Out of the way: faint while the video plays and nothing is touched.
+  _vsWake() {
+    const vst = this._el && this._el('vst');
+    if (!vst) return;
+    vst.classList.remove('idle');
+    clearTimeout(this._vsIdleT);
+    this._vsIdleT = setTimeout(() => { if (!vst.querySelector('.active')) vst.classList.add('idle'); }, 2500);
   }
 
   _bindVlim() {
@@ -485,7 +536,7 @@ export class PlayPart {
     let drag = null;
     const at = (e) => { const r = rail.getBoundingClientRect(); return Math.min(100, Math.max(0, ((r.bottom - e.clientY) / r.height) * 100)); };
     const move = (e) => {
-      const st = this._st;
+      const st = this._vsRange;
       const p = at(e);
       if (drag.mode === 'upper') { st.upper = Math.round(Math.max(st.lower + 5, p)); st.last = 'upper'; }
       else if (drag.mode === 'lower') { st.lower = Math.round(Math.min(st.upper - 5, p)); st.last = 'lower'; }
@@ -497,8 +548,9 @@ export class PlayPart {
       this._vlimShow();
     };
     rail.addEventListener('pointerdown', (e) => {
-      const st = this._st;
+      const st = this._vsRange;
       if (!st) return;
+      this._vsWake();
       e.preventDefault();
       const r = rail.getBoundingClientRect();
       const p = at(e);
@@ -515,9 +567,8 @@ export class PlayPart {
       if (!drag) return;
       drag = null;
       rail.classList.remove('active');
-      const st = this._st;
-      this._gpSave(STROKE_LIMIT_KEY, { lower: st.lower, upper: st.upper, last: st.last });
-      if (this._stShow) this._stShow();
+      this._vsKeep();
+      this._vsWake();
     };
     for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) rail.addEventListener(type, done);
 
@@ -531,10 +582,16 @@ export class PlayPart {
       cfg.beat = false;
       this._vlimShow();
     };
-    line.addEventListener('pointerdown', (e) => { e.preventDefault(); sliding = true; try { line.setPointerCapture(e.pointerId); } catch (_) { /* fine */ } setSpeed(e); });
+    line.addEventListener('pointerdown', (e) => { e.preventDefault(); sliding = true; line.classList.add('active'); this._vsWake(); try { line.setPointerCapture(e.pointerId); } catch (_) { /* fine */ } setSpeed(e); });
     line.addEventListener('pointermove', (e) => { if (sliding) setSpeed(e); });
-    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) line.addEventListener(type, () => { if (sliding) { sliding = false; this._vsSave(); } });
-    $('vstbeat').addEventListener('click', () => { const cfg = this._vsLoad(); cfg.beat = !cfg.beat; this._vsSave(); this._vlimShow(); });
+    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) line.addEventListener(type, () => { if (sliding) { sliding = false; line.classList.remove('active'); this._vsSave(); this._vsWake(); } });
+    $('vstbeat').addEventListener('click', () => { const cfg = this._vsLoad(); cfg.beat = !cfg.beat; this._vsSave(); this._vlimShow(); this._vsWake(); });
+    // Faint while the video plays; back on a touch or a pause.
+    const video = $('video');
+    video.addEventListener('play', () => this._vsWake());
+    video.addEventListener('pause', () => { clearTimeout(this._vsIdleT); $('vst').classList.remove('idle'); });
+    $('vst').addEventListener('pointerdown', () => this._vsWake());
+    this.shadowRoot.querySelector('.vstage').addEventListener('pointerdown', () => this._vsWake());
   }
 
   // The video's own sound drives the devices: the audio settings sit under
