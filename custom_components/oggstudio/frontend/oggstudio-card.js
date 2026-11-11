@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.15.8";
+  var VERSION = "0.15.9";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -1552,27 +1552,27 @@ ha-card.simple #videobox{padding:8px}
 #aubox.fromvideo>label:first-of-type{margin-top:0}
 .vst{position:absolute;inset:0;pointer-events:none;z-index:2;opacity:.85;transition:opacity .6s}
 .vst.idle{opacity:.28}
-.vstrail{position:absolute;left:max(4px,env(safe-area-inset-left));top:10%;bottom:28%;width:34px;pointer-events:auto;touch-action:none;cursor:ns-resize}
-.vstrail::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.35);box-shadow:0 0 2px rgba(0,0,0,.7)}
-.vstrail .band{position:absolute;left:50%;width:6px;margin-left:-3px;border-radius:3px;background:rgba(255,176,87,.45);box-shadow:0 0 2px rgba(0,0,0,.6)}
-.vst.vib .vstrail .band{background:rgba(180,156,255,.5)}
-.vstrail .h{position:absolute;left:50%;width:14px;height:4px;margin-left:-7px;border-radius:2px;background:#ffb057;color:transparent;font-size:0;box-shadow:0 0 2px rgba(0,0,0,.7)}
-.vst.vib .vstrail .h{background:#b49cff}
+.vstrail{position:absolute;left:max(2px,env(safe-area-inset-left));top:calc(10% - 22px);bottom:calc(28% - 22px);width:40px;pointer-events:auto;touch-action:none;cursor:ns-resize}
+.vstrail .trk{position:absolute;left:0;right:0;top:22px;bottom:22px;pointer-events:none}
+.vstrail .trk::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.3);box-shadow:0 0 2px rgba(0,0,0,.6)}
+.vstrail .band{position:absolute;left:50%;width:6px;margin-left:-3px;border-radius:3px;background:rgba(255,255,255,.28);box-shadow:0 0 2px rgba(0,0,0,.5)}
+.vstrail .h{position:absolute;left:50%;width:14px;height:4px;margin-left:-7px;border-radius:2px;background:rgba(255,255,255,.7);color:transparent;font-size:0;box-shadow:0 0 2px rgba(0,0,0,.6)}
 .vstrail .hu{top:-2px}
 .vstrail .hl{bottom:-2px}
-.vstrail.active .h{width:26px;height:14px;margin-left:-13px;border-radius:4px;color:#1a1030;font-size:9px;font-weight:800;line-height:14px;text-align:center}
+.vstrail.active .band{background:rgba(255,255,255,.4)}
+.vstrail.active .h{width:26px;height:14px;margin-left:-13px;border-radius:4px;background:rgba(255,255,255,.85);color:#111;font-size:9px;font-weight:800;line-height:14px;text-align:center}
 .vstrail.active .hu{top:-7px}
 .vstrail.active .hl{bottom:-7px}
-.vstrail .dot{position:absolute;left:50%;width:10px;height:10px;margin:0 0 -5px -5px;border-radius:50%;background:#67e0c8;box-shadow:0 0 0 1px rgba(0,0,0,.5);pointer-events:none}
+.vstrail .dot{position:absolute;left:50%;width:10px;height:10px;margin:0 0 -5px -5px;border-radius:50%;background:rgba(255,255,255,.75);box-shadow:0 0 0 1px rgba(0,0,0,.45)}
 .vstspd{position:absolute;left:40px;right:40%;bottom:58px;display:flex;align-items:center;gap:6px;pointer-events:auto}
-.vstspd button{min-height:20px;padding:0 6px;font-size:10px;border-radius:8px;background:rgba(14,23,48,.5);border-color:rgba(255,255,255,.2)}
-.vstspd button.on{background:rgba(47,191,169,.7);color:#062a24;border-color:transparent}
+.vstspd button{min-height:20px;padding:0 6px;font-size:10px;border-radius:8px;color:rgba(255,255,255,.85);background:rgba(0,0,0,.3);border-color:rgba(255,255,255,.25)}
+.vstspd button.on{background:rgba(255,255,255,.35);color:#fff;border-color:rgba(255,255,255,.5)}
 .vstline{position:relative;flex:1;height:24px;touch-action:none;cursor:ew-resize}
-.vstline::before{content:'';position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(255,255,255,.35);box-shadow:0 0 2px rgba(0,0,0,.7)}
-.vstline .dot{position:absolute;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:#ffb057;box-shadow:0 0 0 1px rgba(0,0,0,.5)}
+.vstline::before{content:'';position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(255,255,255,.3);box-shadow:0 0 2px rgba(0,0,0,.6)}
+.vstline .dot{position:absolute;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:rgba(255,255,255,.75);box-shadow:0 0 0 1px rgba(0,0,0,.45)}
 .vstline.active .dot{width:14px;height:14px;margin:-7px 0 0 -7px}
-.vstline.dim .dot{background:rgba(255,255,255,.5)}
-.vstspd b{min-width:34px;font-size:9.5px;font-weight:700;color:rgba(255,255,255,.85);text-shadow:0 1px 3px rgba(0,0,0,.9)}
+.vstline.dim .dot{background:rgba(255,255,255,.4)}
+.vstspd b{min-width:34px;font-size:9.5px;font-weight:700;color:rgba(255,255,255,.8);text-shadow:0 1px 3px rgba(0,0,0,.9)}
 [hidden],.off{display:none!important}
 `;
 
@@ -1925,7 +1925,7 @@ ${STYLES}
               <button class="vempty" id="vempty" type="button" hidden>🎬 Choose a video<small>It plays from this phone or computer. Nothing is uploaded.</small></button>
               <video id="video" controls playsinline preload="metadata" disableremoteplayback hidden></video>
               <div class="vst" id="vst" hidden>
-                <div class="vstrail" id="vstrail" role="group" aria-label="Stroke range: drag the ends to set the limits, the middle to move it"><div class="band"><span class="h hu"></span><span class="h hl"></span></div><div class="dot"></div></div>
+                <div class="vstrail" id="vstrail" role="group" aria-label="Stroke range: drag the ends to set the limits, the middle to move it"><div class="trk"><div class="band"><span class="h hu"></span><span class="h hl"></span></div><div class="dot"></div></div></div>
                 <div class="vstspd"><button type="button" id="vstbeat" title="Speed follows the beat of the sound">♪ Beat</button><div class="vstline" id="vstline" role="slider" aria-label="Stroke speed" aria-valuemin="0" aria-valuemax="100"><div class="dot"></div></div><b id="vstspdv"></b></div>
               </div>
             </div>
@@ -6917,8 +6917,9 @@ ${STYLES}
       const $ = this._el;
       const rail = $("vstrail");
       let drag = null;
+      const trk = rail.querySelector(".trk");
       const at = (e) => {
-        const r = rail.getBoundingClientRect();
+        const r = trk.getBoundingClientRect();
         return Math.min(100, Math.max(0, (r.bottom - e.clientY) / r.height * 100));
       };
       const move = (e) => {
@@ -6943,12 +6944,14 @@ ${STYLES}
         if (!st) return;
         this._vsWake();
         e.preventDefault();
-        const r = rail.getBoundingClientRect();
+        const r = trk.getBoundingClientRect();
         const p = at(e);
-        const near = 14 / r.height * 100;
-        if (Math.abs(p - st.upper) <= near && p >= (st.lower + st.upper) / 2) drag = { mode: "upper" };
-        else if (Math.abs(p - st.lower) <= near) drag = { mode: "lower" };
-        else drag = { mode: "move", off: p >= st.lower && p <= st.upper ? p - st.lower : (st.upper - st.lower) / 2 };
+        const span = st.upper - st.lower;
+        const zone = Math.max(28 / r.height * 100, span / 3);
+        const mid = (st.lower + st.upper) / 2;
+        if (p >= st.upper - zone && p >= mid) drag = { mode: "upper" };
+        else if (p <= st.lower + zone) drag = { mode: "lower" };
+        else drag = { mode: "move", off: p - st.lower };
         rail.classList.add("active");
         try {
           rail.setPointerCapture(e.pointerId);

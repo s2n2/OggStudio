@@ -335,7 +335,7 @@ ${STYLES}
               <button class="vempty" id="vempty" type="button" hidden>🎬 Choose a video<small>It plays from this phone or computer. Nothing is uploaded.</small></button>
               <video id="video" controls playsinline preload="metadata" disableremoteplayback hidden></video>
               <div class="vst" id="vst" hidden>
-                <div class="vstrail" id="vstrail" role="group" aria-label="Stroke range: drag the ends to set the limits, the middle to move it"><div class="band"><span class="h hu"></span><span class="h hl"></span></div><div class="dot"></div></div>
+                <div class="vstrail" id="vstrail" role="group" aria-label="Stroke range: drag the ends to set the limits, the middle to move it"><div class="trk"><div class="band"><span class="h hu"></span><span class="h hl"></span></div><div class="dot"></div></div></div>
                 <div class="vstspd"><button type="button" id="vstbeat" title="Speed follows the beat of the sound">♪ Beat</button><div class="vstline" id="vstline" role="slider" aria-label="Stroke speed" aria-valuemin="0" aria-valuemax="100"><div class="dot"></div></div><b id="vstspdv"></b></div>
               </div>
             </div>

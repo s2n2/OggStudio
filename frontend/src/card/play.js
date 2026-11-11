@@ -542,7 +542,9 @@ export class PlayPart {
     const $ = this._el;
     const rail = $('vstrail');
     let drag = null;
-    const at = (e) => { const r = rail.getBoundingClientRect(); return Math.min(100, Math.max(0, ((r.bottom - e.clientY) / r.height) * 100)); };
+    // The rail reaches past both ends of its line, so the ends are easy to catch.
+    const trk = rail.querySelector('.trk');
+    const at = (e) => { const r = trk.getBoundingClientRect(); return Math.min(100, Math.max(0, ((r.bottom - e.clientY) / r.height) * 100)); };
     const move = (e) => {
       const st = this._vsRange;
       const p = at(e);
@@ -560,12 +562,16 @@ export class PlayPart {
       if (!st) return;
       this._vsWake();
       e.preventDefault();
-      const r = rail.getBoundingClientRect();
+      const r = trk.getBoundingClientRect();
       const p = at(e);
-      const near = 14 / r.height * 100;          // the ends: a finger's width
-      if (Math.abs(p - st.upper) <= near && p >= (st.lower + st.upper) / 2) drag = { mode: 'upper' };
-      else if (Math.abs(p - st.lower) <= near) drag = { mode: 'lower' };
-      else drag = { mode: 'move', off: p >= st.lower && p <= st.upper ? p - st.lower : (st.upper - st.lower) / 2 };
+      // The top third of the band (or above it) is the top end, the bottom
+      // third (or below) the bottom end, the middle moves the whole range.
+      const span = st.upper - st.lower;
+      const zone = Math.max(28 / r.height * 100, span / 3);
+      const mid = (st.lower + st.upper) / 2;
+      if (p >= st.upper - zone && p >= mid) drag = { mode: 'upper' };
+      else if (p <= st.lower + zone) drag = { mode: 'lower' };
+      else drag = { mode: 'move', off: p - st.lower };
       rail.classList.add('active');
       try { rail.setPointerCapture(e.pointerId); } catch (_) { /* fine */ }
       move(e);
