@@ -132,6 +132,7 @@ export class VideoPart {
     const video = this._el('video');
     const ms = video.currentTime * 1000 + Number(this._el('voff').value || 0);
     const script = !this._vHeld && this._vraw && isStroke(this._vraw);
+    if (this._vsOn && !this._vraw) return;    // the stroke range and speed drive it
     if (this._strokeKindRec) {
       const values = this._outs.map((o, i) => {
         const p = parseTarget(this._outTargetValue(i));
@@ -147,7 +148,7 @@ export class VideoPart {
       this._outApply(values, 0.6);
       // The stroke bar shows it too (unless you are moving it).
       const st = this._st;
-      if (st && st.drag === null && this._stSpeed() === null) { st.pos = value; this._stShow(); }
+      if (st && st.drag === null && this._stSpeed() === null) { st.pos = this._simple ? this._lim(value) : value; this._stShow(); }
     } else {
       const held = this._vHeld;
       if (held) {

@@ -62,6 +62,8 @@ export class AudioFeel {
     this.smooth = [0, 0];
     this.beats = 0;
     this.side = false;                   // up and down: which end the last beat went to
+    this.gaps = [];                      // recent times between beats
+    this.gap = 0;                        // the beat's period now (ms), 0 = not known yet
   }
 
   _range(from, to, n) { return [Math.max(1, Math.floor(from / this.hz)), Math.min(n - 1, Math.ceil(to / this.hz))]; }
@@ -115,6 +117,14 @@ export class AudioFeel {
     while (hist.length > FLUX_FRAMES) hist.shift();
     this.fluxPeak = Math.max(flux, this.fluxPeak * Math.pow(0.5, dt / 4000));
     if (beat) {
+      // The tempo: the middle of the recent gaps between beats.
+      const g = now - this.beatAt;
+      if (g >= 250 && g <= 2000) {
+        this.gaps.push(g);
+        while (this.gaps.length > 8) this.gaps.shift();
+        const sorted = [...this.gaps].sort((x, y) => x - y);
+        this.gap = sorted[Math.floor(sorted.length / 2)];
+      }
       this.beatAt = now;
       this.beats += 1;
       this.side = !this.side;
@@ -130,13 +140,13 @@ export class AudioFeel {
       // stroker strokes to the music, a vibrator goes high and low.
       this.smooth = this.side ? [1, 0] : [0, 1];
       if (!this.beats) this.smooth = [0, 0];
-      return { levels: this.smooth.map((v) => v * 100), beat };
+      return { levels: this.smooth.map((v) => v * 100), beat, gap: this.gap };
     }
     let first;
     if (mode === 'beat') first = this.pulse;            // nothing between the beats
     else first = ease(this.smooth[0], live ? curve(mode === 'bass' ? nBass : nAll) : 0);
     const second = ease(this.smooth[1], live ? curve(nMid) : 0);
     this.smooth = [first, second];
-    return { levels: this.smooth.map((v) => Math.round(Math.min(1, v) * 100)), beat };
+    return { levels: this.smooth.map((v) => Math.round(Math.min(1, v) * 100)), beat, gap: this.gap };
   }
 }

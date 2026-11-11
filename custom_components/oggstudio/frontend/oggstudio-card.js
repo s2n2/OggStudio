@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.15.3";
+  var VERSION = "0.15.4";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -1529,17 +1529,13 @@ ha-card.simple .ctltabs button{flex:1 1 0;min-width:0;padding:2px 2px;font-size:
 .vstage{position:relative}
 .vstage.full{display:flex;align-items:center;justify-content:center;background:#000;width:100%;height:100%}
 .vstage.full video{width:100%;height:100%;max-height:none!important;margin:0;object-fit:contain;border-radius:0}
-.hbar.ovl{position:absolute;right:max(6px,env(safe-area-inset-right));top:12%;bottom:20%;width:56px;height:auto;margin:0;z-index:2;background:transparent;border:0;border-radius:0;overflow:visible;opacity:.75;transition:opacity .2s}
+.hbar.ovl{position:absolute;left:max(6px,env(safe-area-inset-left));top:12%;bottom:20%;width:56px;height:auto;margin:0;z-index:2;background:transparent;border:0;border-radius:0;overflow:visible;opacity:.75;transition:opacity .2s}
 .hbar.ovl.active{opacity:1}
 .hbar.ovl .fill,.hbar.ovl .lab,.hbar.ovl .pct{display:none}
 .hbar.ovl::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:2px;margin-left:-1px;background:rgba(255,255,255,.35);box-shadow:0 0 2px rgba(0,0,0,.6)}
 .hbar.ovl::after{content:'';position:absolute;left:50%;bottom:calc(var(--v,0) * 1%);width:18px;height:18px;margin:0 0 -9px -9px;border-radius:50%;background:#67e0c8;box-shadow:0 0 0 2px rgba(0,0,0,.45)}
 .hbar.ovl.active::after{background:#fff}
 video.castrv{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
-.vlim{position:absolute;right:calc(max(6px,env(safe-area-inset-right)) + 56px);top:12%;bottom:20%;width:44px;z-index:2;touch-action:none;cursor:ns-resize;opacity:.8}
-.vlim::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:2px;margin-left:-1px;background:rgba(255,176,87,.3)}
-.vlim .band{position:absolute;left:50%;width:4px;margin-left:-2px;background:rgba(255,176,87,.75)}
-.vlim .h{position:absolute;left:50%;width:30px;height:16px;margin:0 0 -8px -15px;border-radius:5px;background:#ffb057;color:#2a1600;font-size:9.5px;font-weight:800;line-height:16px;text-align:center;box-shadow:0 0 0 2px rgba(0,0,0,.4)}
 .hbar.vert .fill{top:auto;right:0;bottom:0;width:auto!important;height:0;background:linear-gradient(0deg,rgba(47,191,169,.55),rgba(103,224,200,.85))}
 .hbar.vert .lab{left:50%;top:10px;transform:translateX(-50%);writing-mode:vertical-rl;font-size:10.5px}
 .hbar.vert .pct{right:auto;left:50%;top:auto;bottom:8px;transform:translateX(-50%);font-size:13px}
@@ -1555,6 +1551,23 @@ ha-card.simple #videobox{padding:8px}
 #aubox.fromvideo #ausrcbox,#aubox.fromvideo #aufilebox,#aubox.fromvideo #augo{display:none!important}
 #aubox.fromvideo{margin-top:8px;padding:10px;border-radius:14px;border:1px solid #293552;background:#0e1730}
 #aubox.fromvideo>label:first-of-type{margin-top:0}
+.vst{position:absolute;inset:0;pointer-events:none;z-index:2}
+.vstrail{position:absolute;left:max(8px,env(safe-area-inset-left));top:8%;bottom:26%;width:46px;pointer-events:auto;touch-action:none;cursor:ns-resize}
+.vstrail::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:2px;margin-left:-1px;background:rgba(255,255,255,.3);box-shadow:0 0 2px rgba(0,0,0,.6)}
+.vstrail .band{position:absolute;left:50%;width:14px;margin-left:-7px;border-radius:7px;background:rgba(255,176,87,.35);border:2px solid rgba(255,176,87,.9);box-sizing:border-box}
+.vstrail.active .band{background:rgba(255,176,87,.55)}
+.vstrail .h{position:absolute;left:50%;width:30px;height:14px;margin-left:-15px;border-radius:5px;background:#ffb057;color:#2a1600;font-size:9px;font-weight:800;line-height:14px;text-align:center;box-shadow:0 0 0 2px rgba(0,0,0,.35)}
+.vstrail .hu{top:-8px}
+.vstrail .hl{bottom:-8px}
+.vstrail .dot{position:absolute;left:50%;width:16px;height:16px;margin:0 0 -8px -8px;border-radius:50%;background:#67e0c8;box-shadow:0 0 0 2px rgba(0,0,0,.45);pointer-events:none}
+.vstspd{position:absolute;left:max(8px,env(safe-area-inset-left));right:12px;bottom:60px;display:flex;align-items:center;gap:8px;pointer-events:auto}
+.vstspd button{min-height:26px;padding:0 8px;font-size:11px;background:rgba(24,35,61,.75)}
+.vstspd button.on{background:linear-gradient(110deg,#2fbfa9,#67e0c8);color:#062a24;border-color:transparent}
+.vstline{position:relative;flex:1;height:30px;touch-action:none;cursor:ew-resize}
+.vstline::before{content:'';position:absolute;left:0;right:0;top:50%;height:2px;margin-top:-1px;background:rgba(255,255,255,.3);box-shadow:0 0 2px rgba(0,0,0,.6)}
+.vstline .dot{position:absolute;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#ffb057;box-shadow:0 0 0 2px rgba(0,0,0,.45)}
+.vstline.dim .dot{background:rgba(255,255,255,.55)}
+.vstspd b{min-width:42px;font-size:11px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.8);text-align:right}
 [hidden],.off{display:none!important}
 `;
 
@@ -1906,7 +1919,10 @@ ${STYLES}
             <div class="vstage">
               <button class="vempty" id="vempty" type="button" hidden>🎬 Choose a video<small>It plays from this phone or computer. Nothing is uploaded.</small></button>
               <video id="video" controls playsinline preload="metadata" disableremoteplayback hidden></video>
-              <div class="vlim" id="vlim" hidden aria-label="Stroke limits"><div class="band"></div><div class="h" id="vlimup"></div><div class="h" id="vlimlo"></div></div>
+              <div class="vst" id="vst" hidden>
+                <div class="vstrail" id="vstrail" role="group" aria-label="Stroke range: drag the ends to set the limits, the middle to move it"><div class="band"><span class="h hu"></span><span class="h hl"></span></div><div class="dot"></div></div>
+                <div class="vstspd"><button type="button" id="vstbeat" title="Speed follows the beat of the sound">♪ Beat</button><div class="vstline" id="vstline" role="slider" aria-label="Stroke speed" aria-valuemin="0" aria-valuemax="100"><div class="dot"></div></div><b id="vstspdv"></b></div>
+              </div>
             </div>
           </div>
           <div style="position:relative"><div class="rppop" id="castpop" style="top:4px" hidden><div id="castlist"></div></div></div>
@@ -3010,6 +3026,7 @@ ${STYLES}
       const video = this._el("video");
       const ms = video.currentTime * 1e3 + Number(this._el("voff").value || 0);
       const script = !this._vHeld && this._vraw && isStroke(this._vraw);
+      if (this._vsOn && !this._vraw) return;
       if (this._strokeKindRec) {
         const values = this._outs.map((o, i) => {
           const p = parseTarget(this._outTargetValue(i));
@@ -3025,7 +3042,7 @@ ${STYLES}
         this._outApply(values, 0.6);
         const st = this._st;
         if (st && st.drag === null && this._stSpeed() === null) {
-          st.pos = value;
+          st.pos = this._simple ? this._lim(value) : value;
           this._stShow();
         }
       } else {
@@ -4992,6 +5009,8 @@ ${STYLES}
       this._auStop();
       this._ptStop();
       this._hbKeep(true);
+      clearInterval(this._vsTimer);
+      this._vsTimer = null;
       if (this._tap) {
         clearInterval(this._tapTimer);
         this._tap = null;
@@ -5733,6 +5752,8 @@ ${STYLES}
       this.smooth = [0, 0];
       this.beats = 0;
       this.side = false;
+      this.gaps = [];
+      this.gap = 0;
     }
     _range(from, to, n) {
       return [Math.max(1, Math.floor(from / this.hz)), Math.min(n - 1, Math.ceil(to / this.hz))];
@@ -5779,6 +5800,13 @@ ${STYLES}
       while (hist.length > FLUX_FRAMES) hist.shift();
       this.fluxPeak = Math.max(flux, this.fluxPeak * Math.pow(0.5, dt / 4e3));
       if (beat) {
+        const g = now - this.beatAt;
+        if (g >= 250 && g <= 2e3) {
+          this.gaps.push(g);
+          while (this.gaps.length > 8) this.gaps.shift();
+          const sorted = [...this.gaps].sort((x, y) => x - y);
+          this.gap = sorted[Math.floor(sorted.length / 2)];
+        }
         this.beatAt = now;
         this.beats += 1;
         this.side = !this.side;
@@ -5789,14 +5817,14 @@ ${STYLES}
       if (mode === "updown") {
         this.smooth = this.side ? [1, 0] : [0, 1];
         if (!this.beats) this.smooth = [0, 0];
-        return { levels: this.smooth.map((v) => v * 100), beat };
+        return { levels: this.smooth.map((v) => v * 100), beat, gap: this.gap };
       }
       let first;
       if (mode === "beat") first = this.pulse;
       else first = ease(this.smooth[0], live ? curve(mode === "bass" ? nBass : nAll) : 0);
       const second = ease(this.smooth[1], live ? curve(nMid) : 0);
       this.smooth = [first, second];
-      return { levels: this.smooth.map((v) => Math.round(Math.min(1, v) * 100)), beat };
+      return { levels: this.smooth.map((v) => Math.round(Math.min(1, v) * 100)), beat, gap: this.gap };
     }
   };
 
@@ -5927,6 +5955,14 @@ ${STYLES}
       $("aum2").style.width = `${r.levels[1]}%`;
       if (!r.beat && now - au.outAt < 100) return;
       au.outAt = now;
+      if (this._vsOn && !this._vraw) {
+        if (r.beat) this._vsOnBeat(r.gap);
+        if (now - (au.shownAt || 0) > 1e3) {
+          au.shownAt = now;
+          this._auShow();
+        }
+        return;
+      }
       if (this._simple) {
         if (this._strokeKind) {
           const st = this._st;
@@ -6236,6 +6272,7 @@ ${STYLES}
 
   // frontend/src/card/play.js
   var PATTERN_KEY = "oggstudio_pattern";
+  var VSTROKE_KEY = "oggstudio_video_stroke";
   var PATTERN_HINT = "Ogg's patterns, played from here: they show on the pads, stay inside your limits and can be recorded.";
   var PlayPart = class {
     get _simple() {
@@ -6569,7 +6606,7 @@ ${STYLES}
       $("vsscript").classList.toggle("has", Boolean(this._vscript));
       $("vsoff").classList.toggle("on", $("voffbox").classList.contains("open"));
       $("vsfile").classList.toggle("has", has);
-      this._vlimShow();
+      this._vsSync();
     }
     // Full screen: the video and the slider over it (on its right, under the
     // thumb). The browser's own full screen shows the video alone, so this
@@ -6653,63 +6690,207 @@ ${STYLES}
         this._autoKindBusy = false;
       }
     }
-    // The limits on the full screen line: shown for a stroker when sound or a
-    // script is doing the moving.
+    // A stroker on the video: a range bar (drag the ends for the limits, the
+    // middle to move it) and a speed line. While the video plays it strokes
+    // between the limits at that speed or, with ♪ Beat and sound on, one way
+    // per beat, each turn landing on a beat. A script, when there is one,
+    // does the moving instead, inside the same limits.
+    get _vsOn() {
+      return Boolean(this._simple && this._strokeKind && this._ctl === "video" && this._vurl);
+    }
+    _vsLoad() {
+      if (this._vsCfg) return this._vsCfg;
+      let kept = {};
+      try {
+        kept = JSON.parse(localStorage.getItem(VSTROKE_KEY) || "{}") || {};
+      } catch (_) {
+      }
+      this._vsCfg = { speed: Number.isFinite(kept.speed) ? kept.speed : 40, beat: kept.beat !== false };
+      return this._vsCfg;
+    }
+    _vsSave() {
+      try {
+        localStorage.setItem(VSTROKE_KEY, JSON.stringify(this._vsCfg));
+      } catch (_) {
+      }
+    }
+    get _vsBeatOn() {
+      return Boolean(this._vsLoad().beat && this._au);
+    }
+    _vsSync() {
+      const on = this._vsOn;
+      if (on && !this._vsTimer) {
+        this._vsAt = performance.now();
+        this._vsTimer = setInterval(() => this._vsTick(), 50);
+      }
+      if (!on && this._vsTimer) {
+        clearInterval(this._vsTimer);
+        this._vsTimer = null;
+      }
+      this._vlimShow();
+    }
+    _vsOnBeat(gap) {
+      const st = this._st;
+      if (!st) return;
+      this._vsBeat = { at: performance.now(), gap: gap || this._vsBeat && this._vsBeat.gap || 0 };
+      st.dir = st.pos - st.lower < st.upper - st.pos ? 1 : -1;
+    }
+    // Units per ms now (0 = still).
+    _vsVel() {
+      const st = this._st;
+      const video = this._el("video");
+      if (this._vsBeatOn) {
+        const b = this._vsBeat;
+        if (!b || !b.gap || performance.now() - b.at > Math.max(1500, b.gap * 2.5)) return 0;
+        return Math.min(strokeVel(100), (st.upper - st.lower) / b.gap);
+      }
+      if (video.paused) return 0;
+      const pct = this._vsLoad().speed;
+      return pct > 0 ? strokeVel(Math.max(STROKE_PCT_MIN, pct)) : 0;
+    }
+    _vsTick() {
+      if (!this._el || !this._vsOn) {
+        this._vsSync();
+        return;
+      }
+      const st = this._st;
+      const now = performance.now();
+      const dt = now - (this._vsAt || now);
+      this._vsAt = now;
+      if (this._vraw || !st) {
+        this._vlimShow();
+        return;
+      }
+      const vel = this._vsVel();
+      if (vel > 0) {
+        const r = strokeStep(st.pos, st.dir || 1, st.lower, st.upper, vel, dt);
+        st.pos = r.pos;
+        st.dir = r.dir;
+        this._strokeOut(st.pos, vel * 1e3 * st.dir);
+      }
+      this._vlimShow();
+    }
     _vlimShow() {
       if (!this._el) return;
       const $ = this._el;
       const st = this._st;
-      const full = $("hb1").classList.contains("ovl");
-      const show = Boolean(full && st && this._strokeKind && (this._au || this._vraw));
-      $("vlim").hidden = !show;
-      if (!show) return;
-      $("vlimup").style.bottom = st.upper + "%";
-      $("vlimlo").style.bottom = st.lower + "%";
-      const band = $("vlim").querySelector(".band");
+      const on = Boolean(this._vsOn && st);
+      $("vst").hidden = !on;
+      $("hb1").hidden = on;
+      if (!on) return;
+      const band = $("vstrail").querySelector(".band");
       band.style.bottom = st.lower + "%";
       band.style.height = st.upper - st.lower + "%";
-      $("vlimup").textContent = String(st.upper);
-      $("vlimlo").textContent = String(st.lower);
+      band.querySelector(".hu").textContent = String(st.upper);
+      band.querySelector(".hl").textContent = String(st.lower);
+      $("vstrail").querySelector(".dot").style.bottom = Math.round(st.pos) + "%";
+      const cfg = this._vsLoad();
+      const script = Boolean(this._vraw);
+      const beat = this._vsBeatOn && !script;
+      $("vstbeat").hidden = !this._au || script;
+      $("vstbeat").classList.toggle("on", beat);
+      $("vstline").classList.toggle("dim", beat || script);
+      let pct = cfg.speed;
+      let text = `${cfg.speed}%`;
+      if (script) text = "script";
+      else if (beat) {
+        const b = this._vsBeat;
+        if (b && b.gap) {
+          pct = Math.round(Math.min(100, (st.upper - st.lower) / b.gap / strokeVel(100) * 100));
+          text = `♪ ${Math.round(6e4 / b.gap)}`;
+        } else text = "♪ …";
+      }
+      $("vstline").querySelector(".dot").style.left = pct + "%";
+      $("vstline").setAttribute("aria-valuenow", String(pct));
+      if ($("vstspdv").textContent !== text) $("vstspdv").textContent = text;
     }
     _bindVlim() {
       const $ = this._el;
-      const box = $("vlim");
-      let which = null;
+      const rail = $("vstrail");
+      let drag = null;
       const at = (e) => {
-        const r = box.getBoundingClientRect();
-        return Math.round(Math.min(100, Math.max(0, (r.bottom - e.clientY) / r.height * 100)));
+        const r = rail.getBoundingClientRect();
+        return Math.min(100, Math.max(0, (r.bottom - e.clientY) / r.height * 100));
       };
       const move = (e) => {
         const st = this._st;
         const p = at(e);
-        if (which === "upper") st.upper = Math.max(st.lower + 5, p);
-        else st.lower = Math.min(st.upper - 5, p);
-        st.last = which;
+        if (drag.mode === "upper") {
+          st.upper = Math.round(Math.max(st.lower + 5, p));
+          st.last = "upper";
+        } else if (drag.mode === "lower") {
+          st.lower = Math.round(Math.min(st.upper - 5, p));
+          st.last = "lower";
+        } else {
+          const span = st.upper - st.lower;
+          const lo = Math.round(Math.min(100 - span, Math.max(0, p - drag.off)));
+          st.lower = lo;
+          st.upper = lo + span;
+        }
         this._vlimShow();
       };
-      box.addEventListener("pointerdown", (e) => {
+      rail.addEventListener("pointerdown", (e) => {
         const st = this._st;
         if (!st) return;
         e.preventDefault();
+        const r = rail.getBoundingClientRect();
         const p = at(e);
-        which = Math.abs(p - st.upper) <= Math.abs(p - st.lower) ? "upper" : "lower";
+        const near = 14 / r.height * 100;
+        if (Math.abs(p - st.upper) <= near && p >= (st.lower + st.upper) / 2) drag = { mode: "upper" };
+        else if (Math.abs(p - st.lower) <= near) drag = { mode: "lower" };
+        else drag = { mode: "move", off: p >= st.lower && p <= st.upper ? p - st.lower : (st.upper - st.lower) / 2 };
+        rail.classList.add("active");
         try {
-          box.setPointerCapture(e.pointerId);
+          rail.setPointerCapture(e.pointerId);
         } catch (_) {
         }
         move(e);
       });
-      box.addEventListener("pointermove", (e) => {
-        if (which) move(e);
+      rail.addEventListener("pointermove", (e) => {
+        if (drag) move(e);
       });
       const done = () => {
-        if (!which) return;
-        which = null;
+        if (!drag) return;
+        drag = null;
+        rail.classList.remove("active");
         const st = this._st;
         this._gpSave(STROKE_LIMIT_KEY, { lower: st.lower, upper: st.upper, last: st.last });
         if (this._stShow) this._stShow();
       };
-      for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) box.addEventListener(type, done);
+      for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) rail.addEventListener(type, done);
+      const line = $("vstline");
+      let sliding = false;
+      const setSpeed = (e) => {
+        const r = line.getBoundingClientRect();
+        const cfg = this._vsLoad();
+        cfg.speed = Math.round(Math.min(100, Math.max(0, (e.clientX - r.left) / r.width * 100)) / 5) * 5;
+        cfg.beat = false;
+        this._vlimShow();
+      };
+      line.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        sliding = true;
+        try {
+          line.setPointerCapture(e.pointerId);
+        } catch (_) {
+        }
+        setSpeed(e);
+      });
+      line.addEventListener("pointermove", (e) => {
+        if (sliding) setSpeed(e);
+      });
+      for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) line.addEventListener(type, () => {
+        if (sliding) {
+          sliding = false;
+          this._vsSave();
+        }
+      });
+      $("vstbeat").addEventListener("click", () => {
+        const cfg = this._vsLoad();
+        cfg.beat = !cfg.beat;
+        this._vsSave();
+        this._vlimShow();
+      });
     }
     // The video's own sound drives the devices: the audio settings sit under
     // the video while it is on.

@@ -103,6 +103,11 @@ export class AudioPart {
     $('aum2').style.width = `${r.levels[1]}%`;
     if (!r.beat && now - au.outAt < 100) return;     // a beat goes out at once
     au.outAt = now;
+    if (this._vsOn && !this._vraw) {
+      if (r.beat) this._vsOnBeat(r.gap);
+      if (now - (au.shownAt || 0) > 1000) { au.shownAt = now; this._auShow(); }
+      return;
+    }
     if (this._simple) {
       // The pads (or the stroke bar) show it, so Record can follow it.
       if (this._strokeKind) { const st = this._st; if (st.drag === null && this._stSpeed() === null) { st.pos = this._lim(r.levels[0]); this._stShow(); } }

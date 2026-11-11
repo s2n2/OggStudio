@@ -113,6 +113,8 @@ rs = run(feel, 200, (i) => frame(i % 10 === 0 ? 235 : 150, 170, 6), 'updown', 0.
   assert.ok(rs.every((r) => [0, 100].includes(r.levels[0])), 'only the two ends');
   assert.ok(Math.abs(flips - feel.beats) <= 1, `flips ${flips} beats ${feel.beats}`);
   assert.ok(rs.filter((r) => r.beat).every((r) => r.levels[0] + r.levels[1] === 100));
+  // The tempo: a kick every 500 ms.
+  assert.ok(Math.abs(rs[rs.length - 1].gap - 500) <= 50, `gap ${rs[rs.length - 1].gap}`);
 }
 
 // Loud sound with no beat (a held chord, a fan, hiss): no stream of pulses,

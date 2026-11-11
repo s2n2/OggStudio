@@ -405,6 +405,7 @@ export class OutputsPart {
     this._auStop();
     this._ptStop();
     this._hbKeep(true);
+    clearInterval(this._vsTimer); this._vsTimer = null;
     if (this._tap) { clearInterval(this._tapTimer); this._tap = null; }
     clearInterval(this._urecTimer); this._urecTimer = null;
     this._tgEnd();
