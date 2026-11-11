@@ -94,11 +94,10 @@ export class OggStudioCard extends HTMLElement {
     const slot = rec && this.shadowRoot.querySelector(`[data-part="${rec}"] .outslot`);
     const box = this._el('outbox');
     this._el('outhome').appendChild(box);      // the devices box always sits at the top
-    // The Play card keeps the modes on top and the devices at the foot.
+    // The Play card: the devices on top, as on the other cards, then the modes.
     const simple = Boolean(this._variant.simple);
     const cslot = rec && !simple && this.shadowRoot.querySelector(`[data-part="${rec}"] .ctlslot`);
-    (cslot || this._el('outhome')).insertBefore(this._el('ctlbox'), cslot ? null : box);
-    if (simple) this._el('outfoot').appendChild(box);
+    (cslot || this._el('outhome')).insertBefore(this._el('ctlbox'), cslot || simple ? null : box);
     // The controller tick box sits with the recorder's live toggles (or under the video's Rec).
     const gslot = this.shadowRoot.querySelector(`[data-part="${rec || 'video'}"]:not(.off) .gpslot`);
     if (gslot) gslot.appendChild(this._el('gp'));
@@ -322,7 +321,6 @@ ${STYLES}
           <div class="vhide"><label>Video</label><input id="vfile" type="file" accept="video/*"></div>
           <div class="vfold" id="vscriptbox"><label>Script</label><select id="vsrc"></select>
           <div id="vfilebox"><input id="vscriptfile" type="file" accept=".funscript,.json,application/json" multiple style="margin-top:6px"></div></div>
-          <div class="vwrap">
             <div class="vside" id="vside">
               <button id="vsfile" type="button" title="Choose a video" aria-label="Choose a video">🎬</button>
               <button id="vsplay" type="button" title="Play or pause" aria-label="Play or pause">▶</button>
@@ -331,6 +329,8 @@ ${STYLES}
               <button id="vscast" type="button" title="Play the video on a TV" aria-label="Cast to a TV">📺</button>
               <button id="vsoff" type="button" title="Sync offset" aria-label="Sync offset">⏱</button>
             </div>
+          <div class="vwrap">
+            <div class="vslide" id="vslide"></div>
             <div class="vstage">
               <button class="vempty" id="vempty" type="button" hidden>🎬 Choose a video<small>It plays from this phone or computer. Nothing is uploaded.</small></button>
               <video id="video" controls playsinline preload="metadata" disableremoteplayback hidden></video>
@@ -349,7 +349,7 @@ ${STYLES}
           <div class="hint">Positive values send each moment slightly early to make up for Bluetooth delay. Pause, seek and playback speed all stay in sync.</div></div>
           <div id="vaubox"></div>
           <div class="hint vhide">To make a script for this video: press ● Rec, play the video and drag the slider (position in the Stroke view, intensity in Vibrate). You can pause, scrub back and record a section again; the newer pass replaces it. While a script plays, the slider shows it; hold the slider to take over until you let go.</div>
-          <div class="hint vshow">● Record follows the video: play it and drag the slider, or let a script (📂) or the sound of the video (♪) do the playing. Pause and it waits; go back and the new pass replaces what came after.</div>
+          <div class="hint vshow">The slider beside the video drives your devices while you watch: slide up for more. ● Record follows the video: play it and use the slider, or let a script (📂) or the sound of the video (♪) do the playing. Pause and it waits; go back and the new pass replaces what came after.</div>
         </section>
         <section data-part="import">
           <h3>Import</h3>
@@ -360,7 +360,6 @@ ${STYLES}
           <div class="hint">Pick two files to give a two-motor device one track per motor (first file = motor 1).</div>
           <textarea id="codeout" hidden readonly></textarea>
         </section>
-        <div id="outfoot"></div>
         <div class="toast" id="toast"></div>
       </ha-card>`;
     const $ = (id) => this.shadowRoot.getElementById(id);

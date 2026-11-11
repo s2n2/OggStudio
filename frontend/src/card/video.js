@@ -203,7 +203,7 @@ export class VideoPart {
   _showHBar(index, value) {
     const bar = this._el('hb' + (index + 1));
     const v = Math.round(Math.min(100, Math.max(0, value)));
-    bar.querySelector('.fill').style.width = v + '%';
+    bar.querySelector('.fill').style[bar.classList.contains('vert') ? 'height' : 'width'] = v + '%';
     bar.querySelector('.pct').textContent = v + '%';
     bar.setAttribute('aria-valuenow', String(v));
   }
@@ -211,36 +211,41 @@ export class VideoPart {
   _setHBar(index, value) {
     this._hvals[index] = Math.round(Math.min(100, Math.max(0, value)));
     this._showHBar(index, this._hvals[index]);
-    if (this._vHeld) this._videoSend(false);
+    if (this._vHeld) { if (this._vsyncTimer) this._videoSend(false); else this._videoOut(); }
   }
 
   _bindHBar(bar, index) {
     let active = false;
     const fromEvent = (event) => {
       const rect = bar.getBoundingClientRect();
-      this._setHBar(index, ((event.clientX - rect.left) / rect.width) * 100);
+      this._setHBar(index, bar.classList.contains('vert') ? ((rect.bottom - event.clientY) / rect.height) * 100 : ((event.clientX - rect.left) / rect.width) * 100);
     };
     bar.addEventListener('pointerdown', (event) => {
       // Record with it, or take over a script that is playing (until let go).
       const playing = Boolean(this._vsyncTimer && this._vscript);
       const tapping = Boolean(this._tap && this._tap.video);
-      if (!this._vrec && !playing && !tapping) { this._toast(`Press ● ${this._simple ? 'Record' : 'Rec'} first to record with the slider (or play a script to take it over)`); return; }
+      // The Play card: the slider beside the video drives the devices any time.
+      if (this._simple && !this._vurl) { this._toast('Choose a video first'); return; }
+      if (!this._simple && !this._vrec && !playing && !tapping) { this._toast('Press ● Rec first to record with the slider (or play a script to take it over)'); return; }
       event.preventDefault();
       active = true;
       if (!this._vrec) this._hbActive = true;
       bar.classList.add('active');
       capture(bar, event);
       fromEvent(event);
+      this._hbKeep();
     });
     bar.addEventListener('pointermove', (event) => { if (active) fromEvent(event); });
     const release = () => {
       if (!active) return;
       active = false;
       bar.classList.remove('active');
+      this._hbKeep(true);
       if (this._hbActive) {
         this._hbActive = false;
-        if (this._tap && this._tap.video && !this._vraw && this._el('vspring').checked) this._setHBar(index, 0);
+        if (((this._tap && this._tap.video) || this._simple) && !this._vraw && this._el('vspring').checked) this._setHBar(index, 0);
         this._videoSend(true);       // back to the script
+        if (!this._vsyncTimer) { if (this._el('vspring').checked) this._outStop(); else this._hbKeep(); }
         return;
       }
       if (this._el('vspring').checked) this._setHBar(index, 0);
@@ -254,6 +259,20 @@ export class VideoPart {
       else if (event.key === 'Home') { this._setHBar(index, 0); event.preventDefault(); }
       else if (event.key === 'End') { this._setHBar(index, 100); event.preventDefault(); }
     });
+  }
+
+  // Held over a paused video, or one with nothing else driving it: keep
+  // the devices fed at the slider's level until let go.
+  _hbKeep(stop) {
+    clearInterval(this._hbTimer); this._hbTimer = null;
+    if (stop || !this._simple) return;
+    const tick = () => {
+      if (this._vsyncTimer) return;          // the video's own clock is sending
+      if (!this._hbActive && !this._vrec && !this._el('vspring').checked && this._hvals[0] > 0) { this._hbActive = true; this._videoOut(); this._hbActive = false; return; }
+      if (this._vHeld) this._videoOut();
+    };
+    tick();
+    this._hbTimer = setInterval(tick, VIDEO_TICK_MS);
   }
 
   _vrecToggle() {

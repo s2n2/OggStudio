@@ -64,7 +64,7 @@ export class ReplayPart {
       this._rpStop();
       this._auStop();
       this._ptStop();
-      if (from === 'video') { const video = this._el('video'); if (!video.paused) video.pause(); this._vaSet(false); }
+      if (from === 'video') { this._hbKeep(true); const video = this._el('video'); if (!video.paused) video.pause(); this._vaSet(false); }
     }
     if (mode !== 'mood') this._mood = null;
     this._ctl = mode;

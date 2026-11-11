@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.15.0";
+  var VERSION = "0.15.1";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -1506,12 +1506,11 @@ button.rppick{width:100%;text-align:left;background:#18233d;overflow:hidden;text
 .kind button{border:0;border-radius:0;min-height:38px;padding:0 14px;background:#141d33;color:var(--muted)}
 .kind button.on{background:linear-gradient(110deg,#2fbfa9,#67e0c8);color:#062a24}
 ha-card.tg #gp,ha-card.tg .ctltabs{display:none}
-#outfoot{order:90;margin-top:10px}
-#outfoot:empty{display:none}
 ha-card.simple section .rechead,ha-card.simple .vhide,ha-card.simple #rptools{display:none}
-ha-card:not(.simple) .vside,ha-card:not(.simple) .vshow,ha-card.simple .vfold:not(.open){display:none}
+ha-card:not(.simple) .vside,ha-card:not(.simple) .vslide,ha-card:not(.simple) .vshow,ha-card.simple .vfold:not(.open){display:none}
 ha-card.simple #ctlbox{padding:10px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.035)}
-ha-card.simple .ctltabs button{flex:1 1 0;padding:0 4px;font-size:13px}
+ha-card.simple .ctltabs{flex-wrap:nowrap;gap:4px}
+ha-card.simple .ctltabs button{flex:1 1 0;min-width:0;padding:2px 2px;font-size:12px;line-height:1.2;white-space:normal}
 #urecrow{margin-top:8px}
 .urechead{display:flex;gap:8px;align-items:stretch}
 .urechead button.rec{flex:1;width:auto}
@@ -1524,10 +1523,15 @@ ha-card.simple .ctltabs button{flex:1 1 0;padding:0 4px;font-size:13px}
 .ptgrid button.ptbtn{min-height:40px;padding:0 4px;background:#18233d}
 .ptgrid button.ptbtn.on{background:linear-gradient(110deg,#ff5c7a,#ff8aa0);color:#2a0710;border-color:transparent}
 #ptbox .moodrow label{flex:0 0 64px}
-.vwrap{display:flex;gap:8px;align-items:flex-start}
+.vwrap{display:flex;gap:8px;align-items:stretch}
 .vstage{flex:1;min-width:0}
-.vside{flex:0 0 46px;display:flex;flex-direction:column;gap:6px;margin-top:8px}
-.vside button{width:46px;min-height:44px;padding:0;font-size:19px;background:#18233d}
+.vslide{flex:0 0 58px;display:flex;flex-direction:column;margin-top:8px}
+.hbar.vert{flex:1;height:auto;min-height:220px;margin-top:0;cursor:ns-resize}
+.hbar.vert .fill{top:auto;right:0;bottom:0;width:auto!important;height:0;background:linear-gradient(0deg,rgba(47,191,169,.55),rgba(103,224,200,.85))}
+.hbar.vert .lab{left:50%;top:10px;transform:translateX(-50%);writing-mode:vertical-rl;font-size:10.5px}
+.hbar.vert .pct{right:auto;left:50%;top:auto;bottom:8px;transform:translateX(-50%);font-size:13px}
+.vside{display:flex;gap:6px;margin-top:8px}
+.vside button{flex:1 1 0;min-height:40px;padding:0;font-size:18px;background:#18233d}
 .vside button.has{border-color:#67e0c8}
 .vside button.on{background:linear-gradient(110deg,#2fbfa9,#67e0c8);border-color:transparent}
 .vside button:disabled{opacity:.4}
@@ -1646,8 +1650,7 @@ ha-card.simple #videobox{padding:8px}
       this._el("outhome").appendChild(box);
       const simple = Boolean(this._variant.simple);
       const cslot = rec && !simple && this.shadowRoot.querySelector(`[data-part="${rec}"] .ctlslot`);
-      (cslot || this._el("outhome")).insertBefore(this._el("ctlbox"), cslot ? null : box);
-      if (simple) this._el("outfoot").appendChild(box);
+      (cslot || this._el("outhome")).insertBefore(this._el("ctlbox"), cslot || simple ? null : box);
       const gslot = this.shadowRoot.querySelector(`[data-part="${rec || "video"}"]:not(.off) .gpslot`);
       if (gslot) gslot.appendChild(this._el("gp"));
       this._el("outhome").classList.remove("off");
@@ -1877,7 +1880,6 @@ ${STYLES}
           <div class="vhide"><label>Video</label><input id="vfile" type="file" accept="video/*"></div>
           <div class="vfold" id="vscriptbox"><label>Script</label><select id="vsrc"></select>
           <div id="vfilebox"><input id="vscriptfile" type="file" accept=".funscript,.json,application/json" multiple style="margin-top:6px"></div></div>
-          <div class="vwrap">
             <div class="vside" id="vside">
               <button id="vsfile" type="button" title="Choose a video" aria-label="Choose a video">🎬</button>
               <button id="vsplay" type="button" title="Play or pause" aria-label="Play or pause">▶</button>
@@ -1886,6 +1888,8 @@ ${STYLES}
               <button id="vscast" type="button" title="Play the video on a TV" aria-label="Cast to a TV">📺</button>
               <button id="vsoff" type="button" title="Sync offset" aria-label="Sync offset">⏱</button>
             </div>
+          <div class="vwrap">
+            <div class="vslide" id="vslide"></div>
             <div class="vstage">
               <button class="vempty" id="vempty" type="button" hidden>🎬 Choose a video<small>It plays from this phone or computer. Nothing is uploaded.</small></button>
               <video id="video" controls playsinline preload="metadata" disableremoteplayback hidden></video>
@@ -1904,7 +1908,7 @@ ${STYLES}
           <div class="hint">Positive values send each moment slightly early to make up for Bluetooth delay. Pause, seek and playback speed all stay in sync.</div></div>
           <div id="vaubox"></div>
           <div class="hint vhide">To make a script for this video: press ● Rec, play the video and drag the slider (position in the Stroke view, intensity in Vibrate). You can pause, scrub back and record a section again; the newer pass replaces it. While a script plays, the slider shows it; hold the slider to take over until you let go.</div>
-          <div class="hint vshow">● Record follows the video: play it and drag the slider, or let a script (📂) or the sound of the video (♪) do the playing. Pause and it waits; go back and the new pass replaces what came after.</div>
+          <div class="hint vshow">The slider beside the video drives your devices while you watch: slide up for more. ● Record follows the video: play it and use the slider, or let a script (📂) or the sound of the video (♪) do the playing. Pause and it waits; go back and the new pass replaces what came after.</div>
         </section>
         <section data-part="import">
           <h3>Import</h3>
@@ -1915,7 +1919,6 @@ ${STYLES}
           <div class="hint">Pick two files to give a two-motor device one track per motor (first file = motor 1).</div>
           <textarea id="codeout" hidden readonly></textarea>
         </section>
-        <div id="outfoot"></div>
         <div class="toast" id="toast"></div>
       </ha-card>`;
       const $ = (id) => this.shadowRoot.getElementById(id);
@@ -3067,26 +3070,33 @@ ${STYLES}
     _showHBar(index, value) {
       const bar = this._el("hb" + (index + 1));
       const v = Math.round(Math.min(100, Math.max(0, value)));
-      bar.querySelector(".fill").style.width = v + "%";
+      bar.querySelector(".fill").style[bar.classList.contains("vert") ? "height" : "width"] = v + "%";
       bar.querySelector(".pct").textContent = v + "%";
       bar.setAttribute("aria-valuenow", String(v));
     }
     _setHBar(index, value) {
       this._hvals[index] = Math.round(Math.min(100, Math.max(0, value)));
       this._showHBar(index, this._hvals[index]);
-      if (this._vHeld) this._videoSend(false);
+      if (this._vHeld) {
+        if (this._vsyncTimer) this._videoSend(false);
+        else this._videoOut();
+      }
     }
     _bindHBar(bar, index) {
       let active = false;
       const fromEvent = (event) => {
         const rect = bar.getBoundingClientRect();
-        this._setHBar(index, (event.clientX - rect.left) / rect.width * 100);
+        this._setHBar(index, bar.classList.contains("vert") ? (rect.bottom - event.clientY) / rect.height * 100 : (event.clientX - rect.left) / rect.width * 100);
       };
       bar.addEventListener("pointerdown", (event) => {
         const playing = Boolean(this._vsyncTimer && this._vscript);
         const tapping = Boolean(this._tap && this._tap.video);
-        if (!this._vrec && !playing && !tapping) {
-          this._toast(`Press ● ${this._simple ? "Record" : "Rec"} first to record with the slider (or play a script to take it over)`);
+        if (this._simple && !this._vurl) {
+          this._toast("Choose a video first");
+          return;
+        }
+        if (!this._simple && !this._vrec && !playing && !tapping) {
+          this._toast("Press ● Rec first to record with the slider (or play a script to take it over)");
           return;
         }
         event.preventDefault();
@@ -3095,6 +3105,7 @@ ${STYLES}
         bar.classList.add("active");
         capture(bar, event);
         fromEvent(event);
+        this._hbKeep();
       });
       bar.addEventListener("pointermove", (event) => {
         if (active) fromEvent(event);
@@ -3103,10 +3114,15 @@ ${STYLES}
         if (!active) return;
         active = false;
         bar.classList.remove("active");
+        this._hbKeep(true);
         if (this._hbActive) {
           this._hbActive = false;
-          if (this._tap && this._tap.video && !this._vraw && this._el("vspring").checked) this._setHBar(index, 0);
+          if ((this._tap && this._tap.video || this._simple) && !this._vraw && this._el("vspring").checked) this._setHBar(index, 0);
           this._videoSend(true);
+          if (!this._vsyncTimer) {
+            if (this._el("vspring").checked) this._outStop();
+            else this._hbKeep();
+          }
           return;
         }
         if (this._el("vspring").checked) this._setHBar(index, 0);
@@ -3127,6 +3143,25 @@ ${STYLES}
           event.preventDefault();
         }
       });
+    }
+    // Held over a paused video, or one with nothing else driving it: keep
+    // the devices fed at the slider's level until let go.
+    _hbKeep(stop) {
+      clearInterval(this._hbTimer);
+      this._hbTimer = null;
+      if (stop || !this._simple) return;
+      const tick = () => {
+        if (this._vsyncTimer) return;
+        if (!this._hbActive && !this._vrec && !this._el("vspring").checked && this._hvals[0] > 0) {
+          this._hbActive = true;
+          this._videoOut();
+          this._hbActive = false;
+          return;
+        }
+        if (this._vHeld) this._videoOut();
+      };
+      tick();
+      this._hbTimer = setInterval(tick, VIDEO_TICK_MS);
     }
     _vrecToggle() {
       const $ = this._el;
@@ -3854,6 +3889,7 @@ ${STYLES}
         this._auStop();
         this._ptStop();
         if (from === "video") {
+          this._hbKeep(true);
           const video = this._el("video");
           if (!video.paused) video.pause();
           this._vaSet(false);
@@ -4741,6 +4777,7 @@ ${STYLES}
       }
       this._auStop();
       this._ptStop();
+      this._hbKeep(true);
       if (this._tap) {
         clearInterval(this._tapTimer);
         this._tap = null;
@@ -4806,6 +4843,7 @@ ${STYLES}
       if (this._stRecording) this._stStop();
       this._tapStop();
       this._ptStop();
+      this._hbKeep(true);
       if (this._live) {
         $("live").checked = false;
         this._setLive(false);
@@ -5984,6 +6022,11 @@ ${STYLES}
     }
     _bindPlay() {
       const $ = this._el;
+      if (this._simple) for (const id of ["hb1", "hb2"]) {
+        $(id).classList.add("vert");
+        $("vslide").appendChild($(id));
+        $(id).setAttribute("aria-orientation", "vertical");
+      }
       $("urec").addEventListener("click", () => this._urecToggle());
       for (const b of this.shadowRoot.querySelectorAll(".ptbtn")) b.addEventListener("click", () => this._ptStart(b.dataset.pt));
       let kept = {};

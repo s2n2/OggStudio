@@ -403,6 +403,7 @@ export class OutputsPart {
     if (this._rp && this._rp.playing) { this._plOff(); this._rpStop(); }
     this._auStop();
     this._ptStop();
+    this._hbKeep(true);
     if (this._tap) { clearInterval(this._tapTimer); this._tap = null; }
     clearInterval(this._urecTimer); this._urecTimer = null;
     this._tgEnd();

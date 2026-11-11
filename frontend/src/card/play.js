@@ -16,6 +16,8 @@ export class PlayPart {
 
   _bindPlay() {
     const $ = this._el;
+    // The device slider stands beside the video, full height.
+    if (this._simple) for (const id of ['hb1', 'hb2']) { $(id).classList.add('vert'); $('vslide').appendChild($(id)); $(id).setAttribute('aria-orientation', 'vertical'); }
     $('urec').addEventListener('click', () => this._urecToggle());
     // Patterns.
     for (const b of this.shadowRoot.querySelectorAll('.ptbtn')) b.addEventListener('click', () => this._ptStart(b.dataset.pt));

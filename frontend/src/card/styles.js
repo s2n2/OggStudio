@@ -157,12 +157,11 @@ button.rppick{width:100%;text-align:left;background:#18233d;overflow:hidden;text
 .kind button{border:0;border-radius:0;min-height:38px;padding:0 14px;background:#141d33;color:var(--muted)}
 .kind button.on{background:linear-gradient(110deg,#2fbfa9,#67e0c8);color:#062a24}
 ha-card.tg #gp,ha-card.tg .ctltabs{display:none}
-#outfoot{order:90;margin-top:10px}
-#outfoot:empty{display:none}
 ha-card.simple section .rechead,ha-card.simple .vhide,ha-card.simple #rptools{display:none}
-ha-card:not(.simple) .vside,ha-card:not(.simple) .vshow,ha-card.simple .vfold:not(.open){display:none}
+ha-card:not(.simple) .vside,ha-card:not(.simple) .vslide,ha-card:not(.simple) .vshow,ha-card.simple .vfold:not(.open){display:none}
 ha-card.simple #ctlbox{padding:10px;border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.035)}
-ha-card.simple .ctltabs button{flex:1 1 0;padding:0 4px;font-size:13px}
+ha-card.simple .ctltabs{flex-wrap:nowrap;gap:4px}
+ha-card.simple .ctltabs button{flex:1 1 0;min-width:0;padding:2px 2px;font-size:12px;line-height:1.2;white-space:normal}
 #urecrow{margin-top:8px}
 .urechead{display:flex;gap:8px;align-items:stretch}
 .urechead button.rec{flex:1;width:auto}
@@ -175,10 +174,15 @@ ha-card.simple .ctltabs button{flex:1 1 0;padding:0 4px;font-size:13px}
 .ptgrid button.ptbtn{min-height:40px;padding:0 4px;background:#18233d}
 .ptgrid button.ptbtn.on{background:linear-gradient(110deg,#ff5c7a,#ff8aa0);color:#2a0710;border-color:transparent}
 #ptbox .moodrow label{flex:0 0 64px}
-.vwrap{display:flex;gap:8px;align-items:flex-start}
+.vwrap{display:flex;gap:8px;align-items:stretch}
 .vstage{flex:1;min-width:0}
-.vside{flex:0 0 46px;display:flex;flex-direction:column;gap:6px;margin-top:8px}
-.vside button{width:46px;min-height:44px;padding:0;font-size:19px;background:#18233d}
+.vslide{flex:0 0 58px;display:flex;flex-direction:column;margin-top:8px}
+.hbar.vert{flex:1;height:auto;min-height:220px;margin-top:0;cursor:ns-resize}
+.hbar.vert .fill{top:auto;right:0;bottom:0;width:auto!important;height:0;background:linear-gradient(0deg,rgba(47,191,169,.55),rgba(103,224,200,.85))}
+.hbar.vert .lab{left:50%;top:10px;transform:translateX(-50%);writing-mode:vertical-rl;font-size:10.5px}
+.hbar.vert .pct{right:auto;left:50%;top:auto;bottom:8px;transform:translateX(-50%);font-size:13px}
+.vside{display:flex;gap:6px;margin-top:8px}
+.vside button{flex:1 1 0;min-height:40px;padding:0;font-size:18px;background:#18233d}
 .vside button.has{border-color:#67e0c8}
 .vside button.on{background:linear-gradient(110deg,#2fbfa9,#67e0c8);border-color:transparent}
 .vside button:disabled{opacity:.4}
