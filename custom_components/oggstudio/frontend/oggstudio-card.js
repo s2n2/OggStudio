@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.14.0";
+  var VERSION = "0.14.1";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -3777,6 +3777,14 @@ ${STYLES}
       if (m === FOLLOW_STROKER || m === "position") return value;
       return Math.min(100, Math.max(0, liveIntensity(m, value, vel)));
     }
+    // A level that is already an intensity (sound, a partner's slider): a
+    // vibrator takes it as it is, whatever its way of following; a stroker
+    // gets AI feel strokes, or goes to that position.
+    _mapLevel(i, value) {
+      const p = parseTarget(this._outTargetValue(i));
+      if (p && p.motor === "l") return this._mapLive(i, value, 0);
+      return Math.min(100, Math.max(0, value));
+    }
     // Pads (vibrate recorder, live): each output follows its pad its own way.
     _padOut() {
       const now = performance.now();
@@ -5207,6 +5215,7 @@ ${STYLES}
       };
       $("ausrc").addEventListener("change", () => {
         this._auStop();
+        this._auErr = "";
         keep();
         this._auShow();
       });
@@ -5243,10 +5252,25 @@ ${STYLES}
           if (src === "mic") stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
           else {
             if (!navigator.mediaDevices.getDisplayMedia) throw new Error("this browser cannot share audio from another tab");
-            stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+            const opts = { video: true, audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, suppressLocalAudioPlayback: false }, systemAudio: "include", selfBrowserSurface: "exclude" };
+            let controller = null;
+            try {
+              if (window.CaptureController) {
+                controller = new window.CaptureController();
+                opts.controller = controller;
+              }
+            } catch (_) {
+              controller = null;
+            }
+            stream = await navigator.mediaDevices.getDisplayMedia(opts);
+            try {
+              if (controller && controller.setFocusBehavior) controller.setFocusBehavior("focus-capturing-application");
+            } catch (_) {
+            }
           }
           const track = stream.getAudioTracks()[0];
-          if (!track) throw new Error('no sound was shared: pick a browser tab and tick "Also share tab audio"');
+          if (!track) throw new Error(src === "mic" ? "no microphone was found" : 'the share had no sound. Start again, pick a browser tab (or the entire screen) and switch on "Also share tab audio" (or "Also share system audio") before pressing Share. A shared window never has sound');
+          if (ctx.state === "suspended") await ctx.resume();
           for (const t of stream.getVideoTracks()) t.enabled = false;
           node = ctx.createMediaStreamSource(stream);
           node.connect(an);
@@ -5271,11 +5295,13 @@ ${STYLES}
         this._au = { src, an, node, stream, feel: new AudioFeel(ctx.sampleRate, an.fftSize), bins: new Uint8Array(an.frequencyBinCount), outAt: 0 };
         clearInterval(this._auTimer);
         this._auTimer = setInterval(() => this._auTick(), 50);
+        this._auErr = "";
         this._toast("");
       } catch (e) {
         if (stream) for (const t of stream.getTracks()) t.stop();
         const denied = e && (e.name === "NotAllowedError" || e.name === "SecurityError");
-        this._toast(denied ? "Audio: permission was not given." : `Audio: ${e.message || e}.`);
+        this._auErr = denied ? "Not started: permission was not given." : `Not started: ${e.message || e}.`;
+        this._toast(this._auErr);
       }
       this._auShow();
     }
@@ -5290,7 +5316,7 @@ ${STYLES}
       $("aum2").style.width = `${r.levels[1]}%`;
       if (now - au.outAt < 100) return;
       au.outAt = now;
-      this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._mapLive(i, r.levels[i], 0)), 0.6);
+      this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._mapLevel(i, r.levels[i])), 0.6);
       if (now - (au.shownAt || 0) > 1e3) {
         au.shownAt = now;
         this._auShow();
@@ -5323,7 +5349,9 @@ ${STYLES}
         $("aum2").style.width = "0";
       }
       const from = { mic: "the microphone", file: "the music file", video: "the video", tab: "the shared audio" };
-      $("auinfo").textContent = au ? `Listening to ${from[au.src]} · ${au.feel.beats} beats` : AUDIO_HINT;
+      const dev = this._outDevice(0);
+      const to = dev ? "" : " · no device is chosen under Devices, so nothing is driven";
+      $("auinfo").textContent = au ? `Listening to ${from[au.src]} · ${au.feel.beats} beats${to}` : this._auErr || AUDIO_HINT;
       const tab = this.shadowRoot.querySelector('.ctltabs [data-ctl="audio"]');
       if (tab) tab.classList.toggle("live", Boolean(au));
     }
@@ -5510,7 +5538,7 @@ ${STYLES}
       if (accept && fresh) {
         tg.driving = true;
         const v = tg.in.v;
-        this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._mapLive(i, v[i] ?? v[0], 0)), 0.6);
+        this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._mapLevel(i, v[i] ?? v[0])), 0.6);
       } else if (tg.driving) {
         tg.driving = false;
         this._outStop();

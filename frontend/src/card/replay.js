@@ -233,6 +233,15 @@ export class ReplayPart {
     return Math.min(100, Math.max(0, liveIntensity(m, value, vel)));
   }
 
+  // A level that is already an intensity (sound, a partner's slider): a
+  // vibrator takes it as it is, whatever its way of following; a stroker
+  // gets AI feel strokes, or goes to that position.
+  _mapLevel(i, value) {
+    const p = parseTarget(this._outTargetValue(i));
+    if (p && p.motor === 'l') return this._mapLive(i, value, 0);
+    return Math.min(100, Math.max(0, value));
+  }
+
   // Pads (vibrate recorder, live): each output follows its pad its own way.
   _padOut() {
     const now = performance.now();
