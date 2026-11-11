@@ -308,7 +308,7 @@ export class PlayPart {
     $('vsplay').disabled = !has;
     $('vsaud').disabled = !has;
     $('vsaud').classList.toggle('on', Boolean(this._vaudio));
-    $('vscast').classList.toggle('on', Boolean(this._cast));
+    $('vscast').classList.toggle('on', Boolean(this._cast || (this._castLink && this._castLink.connected)));
     $('vscast').disabled = !has;
     $('vsscript').classList.toggle('on', $('vscriptbox').classList.contains('open'));
     $('vsscript').classList.toggle('has', Boolean(this._vscript));

@@ -25,6 +25,8 @@ export class VideoPart {
       this._vname = file ? file.name.replace(/\.[^.]+$/, '') : '';
       this._vfileObj = file || null;
       if (this._cast) this._castEnd(true);
+      this._castUnlink();
+      this._castUnprep();
       this._videoHalt();
       if (this._vrec) this._vrecToggle();
       if (this._vrecHas()) this._vrecReset();

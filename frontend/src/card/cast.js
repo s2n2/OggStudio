@@ -49,9 +49,10 @@ export class CastPart {
     const item = (label, tag, fn) => { const b = document.createElement('button'); b.type = 'button'; b.innerHTML = `<span>${esc(label)}</span><small>${esc(tag)}</small>`; b.addEventListener('click', fn); return b; };
     const items = [];
     if (this._cast) items.push(item(`■ Stop casting to ${this._castName(this._cast.entity)}`, '', () => { this._castPicker(false); this._castEnd(true); }));
-    // A TV where this phone is: the browser finds it (Chromecast or AirPlay).
-    if (this._canCastLocal && !(this._cast && this._cast.entity === LOCAL_CAST)) {
-      const b = item('📱 A TV near this phone', this._castPrepText(), () => this._castLocalGo());
+    if (this._castLink) items.push(item('■ Stop casting from this phone', 'Back to the video file here', () => { this._castPicker(false); this._castUnlink('Casting stopped.'); }));
+    // Android's own cast, from this phone (wherever it is).
+    if (this._canCastLocal && !this._cast) {
+      const b = item('📱 Cast from this phone', this._castPrepText(), () => this._castLocalGo());
       b.id = 'castlocal';
       items.push(b);
     }
@@ -74,36 +75,29 @@ export class CastPart {
 
   // Chrome (not in the Home Assistant app) and Safari can cast from here.
   get _canCastLocal() { return typeof HTMLMediaElement !== 'undefined' && 'remote' in HTMLMediaElement.prototype; }
+  get _inHaApp() { return /Home ?Assistant\//i.test(navigator.userAgent || ''); }
 
-  // A TV near this phone: the browser's own picker (Chromecast, AirPlay).
-  // It must be opened straight from the tap, so the relay's link is made
-  // ready when this menu opens. The TV gets the link on the address this
-  // page came from, so it must be able to reach Home Assistant there (your
-  // Nabu Casa or other outside address when away from home).
+  // Cast from this phone: Android's own cast (the icon Chrome puts on a
+  // video). It only casts a video that comes from a link, and ours is a
+  // file on this phone, so the video is switched to play from Home
+  // Assistant's relay (in memory, nothing stored); the TV is given that
+  // link. While cast, the video here stands for the TV: its time and
+  // pause are the TV's, and the devices follow it as usual. The link is
+  // made ready when this menu opens, so the picker opens from the tap.
   _castPrepare() {
     const file = this._vfileObj;
+    if (this._castLink || this._inHaApp) return;
     const old = this._castPrep;
     if (old && old.fileObj === file) return;
     this._castUnprep();
     if (!file) return;
-    const cast = { entity: LOCAL_CAST, phase: 'starting', prep: true, fileObj: file, state: 'Getting the link ready…' };
+    const cast = { entity: LOCAL_CAST, prep: true, fileObj: file, state: 'Getting the link ready…' };
     this._castPrep = cast;
     this._castRelay(file, cast).then((url) => {
       if (this._castPrep !== cast) return;
-      const rv = document.createElement('video');
-      rv.preload = 'metadata';
-      rv.muted = true;
-      rv.playsInline = true;
-      rv.className = 'castrv';
-      rv.src = new URL(url, location.origin).href;
-      this.shadowRoot.querySelector('.vstage').appendChild(rv);
-      cast.rv = rv;
-      cast.state = 'Looking for TVs…';
+      cast.url = new URL(url, location.origin).href;
+      cast.state = 'Android cast: Chromecast and Google TV';
       this._castPrepSay();
-      try {
-        rv.remote.watchAvailability((yes) => { cast.avail = yes; cast.state = yes ? 'Found nearby: tap to choose' : 'No TV found by this browser yet'; this._castPrepSay(); })
-          .catch(() => { cast.state = 'Tap to look for a TV'; this._castPrepSay(); });
-      } catch (_) { cast.state = 'Tap to look for a TV'; this._castPrepSay(); }
     }).catch((e) => {
       if (this._castPrep !== cast) return;
       cast.state = 'Could not get a link: ' + ((e && e.message) || e);
@@ -111,7 +105,11 @@ export class CastPart {
     });
   }
 
-  _castPrepText() { return (this._castPrep && this._castPrep.state) || 'Chromecast or AirPlay, found by this browser'; }
+  _castPrepText() {
+    if (this._inHaApp) return 'Not in the Home Assistant app: tap for how';
+    if (this._castLink) return this._castLink.connected ? 'Casting now' : 'Ready: tap, or the cast icon on the video';
+    return (this._castPrep && this._castPrep.state) || 'Android cast: Chromecast and Google TV';
+  }
 
   _castPrepSay() {
     const el = this._el && this._el('castlocal');
@@ -124,46 +122,86 @@ export class CastPart {
     this._castPrep = null;
     cast.cancelled = true;
     if (cast.unsub) { try { cast.unsub(); } catch (_) { /* connection gone */ } }
-    if (cast.rv) { try { cast.rv.remote.cancelWatchAvailability().catch(() => {}); } catch (_) { /* fine */ } cast.rv.removeAttribute('src'); cast.rv.remove(); }
   }
 
-  // Straight from the tap: the browser asks which TV.
+  // From the tap.
   _castLocalGo() {
-    const cast = this._castPrep;
-    if (!cast || !cast.rv) { this._toast(cast && cast.state ? cast.state : 'Getting the link ready… tap again in a moment.'); return; }
-    const rv = cast.rv;
-    let asked;
-    try { asked = rv.remote.prompt(); } catch (e) { asked = Promise.reject(e); }
-    this._castPrep = null;
-    cast.prep = false;
-    this._el('castpop').hidden = true;
-    if (this._cast) this._castEnd(true);
+    const $ = this._el;
+    if (this._inHaApp) {
+      $('castpop').hidden = true;
+      this._toast("The Home Assistant app cannot cast a video. Open this dashboard in Chrome to cast, or use Android's Screen cast (quick settings) with ⛶ full screen.");
+      return;
+    }
+    const video = $('video');
+    let link = this._castLink;
+    if (!link) {
+      const cast = this._castPrep;
+      if (!cast || !cast.url) { this._toast(cast && cast.state ? cast.state : 'Getting the link ready… tap again in a moment.'); return; }
+      this._castPrep = null;
+      cast.prep = false;
+      link = { cast, url: cast.url, blob: this._vurl };
+      this._castLink = link;
+      this._castLinkVideo(true);
+    }
+    $('castpop').hidden = true;
+    try {
+      video.remote.prompt().catch((e) => {
+        if (e && e.name === 'NotAllowedError') return;             // no TV chosen
+        this._toast('Now tap the cast icon on the video (top corner) to choose the TV.');
+      });
+    } catch (_) { this._toast('Now tap the cast icon on the video (top corner) to choose the TV.'); }
+  }
+
+  // Switch the video between the file here and the relay's link, keeping its place.
+  _castLinkVideo(toLink) {
+    const link = this._castLink;
     const video = this._el('video');
-    cast.startAt = video.currentTime || 0;
-    cast.since = performance.now();
-    cast.file = cast.relay;
-    this._cast = cast;
-    this._castWake(true);
-    this._castWasMuted = video.muted;
-    video.muted = true;                   // the sound comes from the TV
-    this._castQuiet('pause');
-    rv.remote.onconnect = () => {
-      if (this._cast !== cast) return;
-      rv.muted = false;
-      try { if (cast.startAt > 1) rv.currentTime = cast.startAt; } catch (_) { /* not loaded yet */ }
-      rv.play().catch((e) => this._toast('The TV would not start: ' + ((e && e.message) || e)));
+    const at = video.currentTime || 0;
+    const playing = !video.paused;
+    if (toLink) {
+      video.removeAttribute('disableremoteplayback');
+      video.disableRemotePlayback = false;
+      video.src = link.url;
+      if (!link.bound) {
+        link.bound = true;
+        video.remote.onconnect = () => {
+          if (this._castLink !== link) return;
+          link.connected = true;
+          this._castWake(true);
+          this._toast('Casting. The devices follow the TV.');
+          this._castShow();
+        };
+        video.remote.ondisconnect = () => {
+          if (this._castLink !== link || !link.connected) return;
+          link.connected = false;
+          this._castUnlink('Casting stopped.');
+        };
+      }
+    } else {
+      video.src = link.blob;
+      video.setAttribute('disableremoteplayback', '');
+    }
+    const back = () => {
+      video.removeEventListener('loadedmetadata', back);
+      try { if (at > 0.5) video.currentTime = at; } catch (_) { /* fine */ }
+      if (playing) video.play().catch(() => {});
     };
-    rv.remote.ondisconnect = () => { if (this._cast === cast) { this._castQuiet('pause'); this._castEnd(false, 'The TV was disconnected.'); } };
-    asked.catch((e) => {
-      if (this._cast !== cast) return;
-      const why = e && e.name === 'NotFoundError' ? 'this browser found no TV it can cast to here'
-        : e && e.name === 'NotSupportedError' ? 'this browser cannot cast this (in the Home Assistant app, open Home Assistant in Chrome or Safari instead)'
-        : e && e.name === 'NotAllowedError' ? 'no TV was chosen'
-        : `${(e && e.name) || 'error'}: ${(e && e.message) || e}`;
-      this._castEnd(false, 'Not cast: ' + why + '.');
-    });
+    video.addEventListener('loadedmetadata', back);
+    video.load();
+  }
+
+  // Back to the file here; the relay's link ends.
+  _castUnlink(message) {
+    const link = this._castLink;
+    if (!link) return;
+    if (this._el && this._vurl === link.blob) this._castLinkVideo(false);
+    this._castLink = null;
+    const cast = link.cast;
+    cast.cancelled = true;
+    if (cast.unsub) { try { cast.unsub(); } catch (_) { /* connection gone */ } }
+    this._castWake(false);
+    if (message) this._toast(message);
     this._castShow();
-    if (!this._castTimer) this._castTimer = setInterval(() => this._castSync(), 250);
   }
 
   // Open the relay: Home Assistant asks for blocks of the file, this answers them.
@@ -173,7 +211,7 @@ export class CastPart {
     const answer = async (req, start, length) => {
       try {
         const body = await file.slice(start, start + length).arrayBuffer();
-        if (this._cast !== cast && this._castPrep !== cast) return;
+        if (this._cast !== cast && this._castPrep !== cast && !(this._castLink && this._castLink.cast === cast)) return;
         const r = await this._hass.fetchWithAuth(`/api/oggstudio/relay_data/${cast.relay}/${req}`, { method: 'POST', body });
         if (r.ok) { cast.sent = (cast.sent || 0) + length; this._castShowSoon(); }
       } catch (_) { /* the TV asks again */ }
@@ -207,6 +245,7 @@ export class CastPart {
 
   async _castStart(entity) {
     this._castPicker(false);
+    this._castUnlink();
     const file = this._vfileObj;
     if (!file) { this._toast('Choose a video first'); return; }
     if (this._cast) this._castEnd(this._cast.entity !== entity);
@@ -386,9 +425,10 @@ export class CastPart {
     if (!this._el) return;
     const btn = this._el('vcast');
     const cast = this._cast;
-    const text = !cast ? '📺 Cast' : cast.phase === 'starting' ? '📺 …' : '📺 On TV';
+    const link = this._castLink && this._castLink.connected;
+    const text = link ? '📺 On TV' : !cast ? '📺 Cast' : cast.phase === 'starting' ? '📺 …' : '📺 On TV';
     if (btn.textContent !== text) btn.textContent = text;
-    btn.classList.toggle('on', Boolean(cast && cast.phase === 'on'));
+    btn.classList.toggle('on', Boolean(link || (cast && cast.phase === 'on')));
     this._videoStatus();
   }
 }
