@@ -145,7 +145,7 @@ export class StrokePart {
       }
       if (Math.abs(st.pos - before) > 0.5 && now - (this._stDragMark || 0) >= 50) { this._stDragMark = now; this._stMark(now); }
     } else if (this._rp && this._rp.playing) {
-      st.pos = this._rpPos();          // replaying: the script moves the bar
+      st.pos = this._simple ? this._lim(this._rpPos()) : this._rpPos();   // replaying: the script moves the bar (inside the limits on the Play card)
     }
     const vel = dt > 0 ? (st.pos - before) / dt * 1000 : 0;
     st.vel = st.vel * 0.6 + vel * 0.4;

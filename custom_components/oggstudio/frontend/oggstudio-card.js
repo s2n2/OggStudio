@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.15.11";
+  var VERSION = "0.15.12";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -2198,7 +2198,7 @@ ${STYLES}
           this._stMark(now);
         }
       } else if (this._rp && this._rp.playing) {
-        st.pos = this._rpPos();
+        st.pos = this._simple ? this._lim(this._rpPos()) : this._rpPos();
       }
       const vel = dt > 0 ? (st.pos - before) / dt * 1e3 : 0;
       st.vel = st.vel * 0.6 + vel * 0.4;
