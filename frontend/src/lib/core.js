@@ -1,7 +1,7 @@
 // Part of the OggStudio card. Built into custom_components/oggstudio/frontend/oggstudio-card.js (npm run build).
 
 export const TAG = 'oggstudio-card';
-export const VERSION = '0.15.10';
+export const VERSION = '0.15.11';
 export const DEVICE_KEY = 'oggstudio_device';
 export const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
 export const SAMPLE_MS = 100;

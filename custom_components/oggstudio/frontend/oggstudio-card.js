@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.15.10";
+  var VERSION = "0.15.11";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -6009,7 +6009,14 @@ ${STYLES}
         } else for (const i of [0, 1]) if (!this._padActive[i]) this._setPad(i, r.levels[i]);
       }
       if (this._simple) {
-        this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._isLinear(i) ? { goal: this._lim(r.levels[0]), dur: 180 } : this._mapLevel(i, r.levels[i])), 0.6);
+        if (this._strokeKind) {
+          const pos = this._lim(r.levels[0]);
+          const dt = now - (au.posAt || now);
+          const vel = dt > 0 && au.pos !== void 0 ? (pos - au.pos) / dt * 1e3 : 0;
+          au.pos = pos;
+          au.posAt = now;
+          this._strokeOut(pos, vel);
+        } else this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._isLinear(i) ? { goal: this._lim(r.levels[0]), dur: 180 } : this._mapLevel(i, r.levels[i])), 0.6);
         if (this._ctl === "video" && !this._hbActive && !this._vrec) this._showHBar(0, this._strokeKind ? this._lim(r.levels[0]) : r.levels[0]);
       } else this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._mapLevel(i, r.levels[i])), 0.6);
       if (now - (au.shownAt || 0) > 1e3) {
