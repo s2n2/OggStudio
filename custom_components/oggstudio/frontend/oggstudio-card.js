@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.14.1";
+  var VERSION = "0.14.2";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -1587,7 +1587,7 @@ ${STYLES}
               <label>Sound from</label><select id="ausrc"><option value="mic">Microphone</option><option value="file">A music file on this device</option><option value="video">The video in Video sync</option><option value="tab">Another tab (share its audio)</option></select>
               <div id="aufilebox" hidden><input id="aufile" type="file" accept="audio/*,video/*" style="margin-top:6px"><audio id="auel" controls preload="metadata"></audio></div>
               <label>Feel</label><select id="aumode"></select>
-              <div class="moodrow"><label title="How easily it reacts">Sensitivity</label><input id="ausens" type="range" min="0" max="100" step="5" value="50"><b id="ausensv">50%</b></div>
+              <div class="moodrow"><label title="Low: only the loudest moments and hardest hits. High: quiet parts and soft hits come through too">Sensitivity</label><input id="ausens" type="range" min="0" max="100" step="5" value="50"><b id="ausensv">50%</b></div>
               <div class="meter"><i id="aum1"></i></div><div class="meter m2"><i id="aum2"></i></div>
               <div class="rpinfo" id="auinfo"></div>
               <button id="augo" type="button" class="go" style="margin-top:6px">♪ Start</button>
@@ -5136,12 +5136,29 @@ ${STYLES}
 
   // frontend/src/lib/audio.js
   var AUDIO_MODES = { beat: "Beat: a pulse on every beat", bass: "Bass: follows the low end", volume: "Volume: follows the loudness" };
-  var AUDIO_GATE = 0.02;
-  var band = (bins, hzPerBin, from, to) => {
-    const a = Math.max(1, Math.floor(from / hzPerBin)), b = Math.min(bins.length - 1, Math.ceil(to / hzPerBin));
-    let sum = 0;
-    for (let i = a; i <= b; i++) sum += bins[i];
-    return b >= a ? sum / ((b - a + 1) * 255) : 0;
+  var AMP = new Float32Array(256);
+  for (let b = 0; b < 256; b++) AMP[b] = Math.pow(10, (b / 255 - 1) * 3.5);
+  var QUIET = AMP[0];
+  var audioGamma = (sens) => Math.pow(3, 1 - 2 * sens);
+  var audioGate = (sens) => 0.02 * Math.pow(10, -sens);
+  var beatClear = (sens) => 2 - 1.8 * sens;
+  var AVG_MS = 3e3;
+  var PEAK_HALF_MS = 8e3;
+  var FLUX_FRAMES = 40;
+  var BEAT_GAP_MS = 200;
+  var PULSE_HALF_MS = 120;
+  var ONSET_EDGES = [30, 90, 180, 350, 700, 1400, 2800, 5600];
+  var Band = class {
+    constructor() {
+      this.avg = 0;
+      this.peak = 0;
+    }
+    step(v, dt) {
+      this.peak = Math.max(v, this.peak * Math.pow(0.5, dt / PEAK_HALF_MS));
+      const n = v / (0.5 * this.peak + this.avg || 1);
+      this.avg += (v - this.avg) * Math.min(1, dt / AVG_MS);
+      return Math.min(1, Math.max(0, n));
+    }
   };
   var AudioFeel = class {
     constructor(sampleRate, fftSize) {
@@ -5149,43 +5166,74 @@ ${STYLES}
       this.reset();
     }
     reset() {
-      this.hist = [];
-      this.peak = { bass: 0.1, mid: 0.1, all: 0.1 };
+      this.bands = { bass: new Band(), mid: new Band(), all: new Band() };
+      this.prev = null;
+      this.body = 0;
+      this.flux = [];
+      this.fluxPeak = 0;
       this.pulse = 0;
       this.beatAt = -1e9;
       this.last = null;
       this.smooth = [0, 0];
       this.beats = 0;
     }
+    _range(from, to, n) {
+      return [Math.max(1, Math.floor(from / this.hz)), Math.min(n - 1, Math.ceil(to / this.hz))];
+    }
     // One reading. sens 0-1: how easily it reacts. Returns { levels, beat }.
     step(bins, now, mode = "beat", sens = 0.5) {
       const dt = this.last === null ? 50 : Math.min(250, Math.max(1, now - this.last));
       this.last = now;
-      const bass = band(bins, this.hz, 30, 180);
-      const mid = band(bins, this.hz, 300, 4e3);
-      const all = band(bins, this.hz, 30, 8e3);
-      const fade = Math.pow(0.5, dt / 6e3);
-      for (const [key, v] of [["bass", bass], ["mid", mid], ["all", all]]) this.peak[key] = Math.max(v, this.peak[key] * fade, 0.05);
-      const gain = 0.6 + sens * 0.9;
-      const rel = (v, key) => all < AUDIO_GATE ? 0 : Math.min(1, v / this.peak[key] * gain);
-      const avg = this.hist.length ? this.hist.reduce((a, b) => a + b, 0) / this.hist.length : bass;
-      this.hist.push(bass);
-      while (this.hist.length > 24) this.hist.shift();
-      const clear = 1.55 - sens * 0.45;
-      const beat = all >= AUDIO_GATE && this.hist.length > 4 && bass > avg * clear && bass > 0.06 && now - this.beatAt > 200;
+      const n = bins.length;
+      const top = this._range(30, 8e3, n)[1];
+      if (!this.amp || this.amp.length !== top + 1) this.amp = new Float32Array(top + 1);
+      const amp = this.amp;
+      for (let i = 0; i <= top; i++) amp[i] = AMP[bins[i]];
+      const mean = (from, to) => {
+        const [a, b] = this._range(from, to, n);
+        let sum = 0;
+        for (let i = a; i <= b; i++) sum += amp[i];
+        return b >= a ? sum / (b - a + 1) : 0;
+      };
+      const bass = mean(30, 180), mid = mean(300, 4e3), all = mean(30, 8e3);
+      const live = all >= audioGate(sens);
+      const gamma = audioGamma(sens);
+      const curve = (x) => x <= 0 ? 0 : Math.pow(x, gamma);
+      const nBass = this.bands.bass.step(bass, dt);
+      const nMid = this.bands.mid.step(mid, dt);
+      const nAll = this.bands.all.step(all, dt);
+      const now_ = ONSET_EDGES.slice(0, -1).map((from, k) => mean(from, ONSET_EDGES[k + 1]));
+      let flux = 0, body = 0;
+      now_.forEach((v, k) => {
+        const w = k < 3 ? 1 : 0.5;
+        body += v * w;
+        if (this.prev && v > this.prev[k]) flux += (v - this.prev[k]) * w;
+      });
+      this.prev = now_;
+      this.body += (body - this.body) * Math.min(1, dt / AVG_MS);
+      let beat = false;
+      const hist = this.flux;
+      if (hist.length >= 6) {
+        const avg = hist.reduce((x, y) => x + y, 0) / hist.length;
+        const dev = Math.sqrt(hist.reduce((x, y) => x + (y - avg) * (y - avg), 0) / hist.length);
+        beat = live && flux > QUIET && flux > this.body * 0.2 && flux > avg * 1.2 + dev * beatClear(sens) && now - this.beatAt > BEAT_GAP_MS;
+      }
+      hist.push(flux);
+      while (hist.length > FLUX_FRAMES) hist.shift();
+      this.fluxPeak = Math.max(flux, this.fluxPeak * Math.pow(0.5, dt / 4e3));
       if (beat) {
         this.beatAt = now;
         this.beats += 1;
-        this.pulse = Math.min(1, 0.55 + rel(bass, "bass") * 0.45);
-      } else this.pulse *= Math.pow(0.5, dt / 130);
-      let first;
-      if (mode === "bass") first = rel(bass, "bass");
-      else if (mode === "volume") first = rel(all, "all");
-      else first = Math.max(this.pulse, rel(bass, "bass") * 0.25);
-      const second = rel(mid, "mid");
+        this.pulse = curve(0.45 + 0.55 * Math.min(1, flux / (this.fluxPeak || flux)));
+      } else this.pulse *= Math.pow(0.5, dt / PULSE_HALF_MS);
+      if (!live) this.pulse = 0;
       const ease = (prev, v) => v >= prev ? v : prev + (v - prev) * Math.min(1, dt / 120);
-      this.smooth = [ease(this.smooth[0], first), ease(this.smooth[1], second)];
-      return { levels: this.smooth.map((v) => Math.round(v * 100)), beat };
+      let first;
+      if (mode === "beat") first = this.pulse;
+      else first = ease(this.smooth[0], live ? curve(mode === "bass" ? nBass : nAll) : 0);
+      const second = ease(this.smooth[1], live ? curve(nMid) : 0);
+      this.smooth = [first, second];
+      return { levels: this.smooth.map((v) => Math.round(Math.min(1, v) * 100)), beat };
     }
   };
 
@@ -5245,7 +5293,7 @@ ${STYLES}
         if (ctx.state === "suspended") await ctx.resume();
         const an = ctx.createAnalyser();
         an.fftSize = 2048;
-        an.smoothingTimeConstant = 0.3;
+        an.smoothingTimeConstant = 0;
         let node;
         if (src === "mic" || src === "tab") {
           if (!window.isSecureContext || !navigator.mediaDevices) throw new Error("the microphone and shared audio need Home Assistant opened over https (or in its app). A music file or the video works anywhere");
@@ -5314,7 +5362,7 @@ ${STYLES}
       const r = au.feel.step(au.bins, now, $("aumode").value, Number($("ausens").value) / 100);
       $("aum1").style.width = `${r.levels[0]}%`;
       $("aum2").style.width = `${r.levels[1]}%`;
-      if (now - au.outAt < 100) return;
+      if (!r.beat && now - au.outAt < 100) return;
       au.outAt = now;
       this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._mapLevel(i, r.levels[i])), 0.6);
       if (now - (au.shownAt || 0) > 1e3) {

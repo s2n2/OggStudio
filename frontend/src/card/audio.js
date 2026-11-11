@@ -47,7 +47,7 @@ export class AudioPart {
       if (ctx.state === 'suspended') await ctx.resume();
       const an = ctx.createAnalyser();
       an.fftSize = 2048;
-      an.smoothingTimeConstant = 0.3;
+      an.smoothingTimeConstant = 0;       // sharp onsets: the feel does its own smoothing
       let node;
       if (src === 'mic' || src === 'tab') {
         if (!window.isSecureContext || !navigator.mediaDevices) throw new Error('the microphone and shared audio need Home Assistant opened over https (or in its app). A music file or the video works anywhere');
@@ -101,7 +101,7 @@ export class AudioPart {
     const r = au.feel.step(au.bins, now, $('aumode').value, Number($('ausens').value) / 100);
     $('aum1').style.width = `${r.levels[0]}%`;
     $('aum2').style.width = `${r.levels[1]}%`;
-    if (now - au.outAt < 100) return;
+    if (!r.beat && now - au.outAt < 100) return;     // a beat goes out at once
     au.outAt = now;
     this._outApply([0, 1].map((i) => (i && !this._twoPads ? null : this._mapLevel(i, r.levels[i]))), 0.6);
     if (now - (au.shownAt || 0) > 1000) { au.shownAt = now; this._auShow(); }

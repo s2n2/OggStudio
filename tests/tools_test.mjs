@@ -63,32 +63,87 @@ assert.ok(stitchScripts(two, b).channels.V1.actions.length >= 4);
 assert.strictEqual('mood' in trimScript({ ...vib, mood: { x: 1 } }, 0, 1000), false);
 
 // ---- audio feel
+const { audioGamma, audioGate } = lib;
 const rate = 48000, fft = 2048;
-const frame = (bass, mid) => {
+let seed = 7;
+const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+// A frame: bass and mid levels (analyser bytes) with a little jitter, as real sound has.
+const frame = (bass, mid, jitter = 0) => {
   const bins = new Uint8Array(fft / 2);
   const hz = rate / fft;
-  for (let i = 1; i < bins.length; i++) { const f = i * hz; bins[i] = f < 200 ? bass : f < 4000 ? mid : 0; }
+  for (let i = 1; i < bins.length; i++) {
+    const f = i * hz;
+    const v = f < 200 ? bass : f < 8000 ? mid : 0;
+    bins[i] = v ? Math.max(0, Math.min(255, Math.round(v + (rnd() - 0.5) * jitter))) : 0;
+  }
   return bins;
 };
-let feel = new AudioFeel(rate, fft);
-let t = 0;
+const run = (feel, frames, make, mode, sens, t0 = 0) => {
+  const out = [];
+  for (let i = 0; i < frames; i++) out.push(feel.step(make(i), t0 + i * 50, mode, sens));
+  return out;
+};
+const avg = (rs, k = 0) => rs.reduce((a, r) => a + r.levels[k], 0) / rs.length;
+
+// The sensitivity scales are exponential and run the right way.
+assert.ok(Math.abs(audioGamma(0.5) - 1) < 1e-9 && audioGamma(0) > 2.9 && audioGamma(1) < 0.34);
+assert.ok(audioGate(0) > audioGate(0.5) && audioGate(0.5) > audioGate(1));
+
 // Silence gives nothing.
-for (let i = 0; i < 20; i++) { const r = feel.step(frame(0, 0), (t += 50)); assert.deepStrictEqual(r.levels, [0, 0]); assert.strictEqual(r.beat, false); }
-// A kick every 500 ms over steady mids: beats are found, about two a second.
-let peak = 0;
-for (let i = 0; i < 200; i++) {
-  const r = feel.step(frame(i % 10 === 0 ? 230 : 25, 90), (t += 50), 'beat', 0.5);
-  peak = Math.max(peak, r.levels[0]);
-  assert.ok(r.levels.every((v) => v >= 0 && v <= 100));
-}
-assert.ok(feel.beats >= 15 && feel.beats <= 22, `beats ${feel.beats}`);
-assert.ok(peak >= 80, `peak ${peak}`);
-// Volume and bass modes follow the sound without needing a beat.
+let feel = new AudioFeel(rate, fft);
+for (const r of run(feel, 20, () => frame(0, 0), 'beat', 0.5)) { assert.deepStrictEqual(r.levels, [0, 0]); assert.strictEqual(r.beat, false); }
+
+// A kick every 500 ms over steady, loud mids: about two beats a second,
+// a strong pulse on each and nothing in between.
 feel = new AudioFeel(rate, fft);
-let r;
-for (let i = 0; i < 20; i++) r = feel.step(frame(200, 200), i * 50, 'volume', 0.5);
-assert.ok(r.levels[0] > 60 && r.levels[1] > 60);
-for (let i = 20; i < 60; i++) r = feel.step(frame(0, 0), i * 50, 'bass', 0.5);
-assert.deepStrictEqual(r.levels, [0, 0]);
+let rs = run(feel, 200, (i) => frame(i % 10 === 0 ? 235 : 150, 170, 6), 'beat', 0.5);
+assert.ok(feel.beats >= 17 && feel.beats <= 22, `beats ${feel.beats}`);
+assert.ok(Math.max(...rs.map((r) => r.levels[0])) >= 80);
+assert.ok(rs.every((r) => r.levels.every((v) => v >= 0 && v <= 100)));
+const between = rs.filter((r, i) => i > 20 && i % 10 >= 6);
+assert.ok(avg(between) < 15, `between beats ${avg(between)}`);
+assert.ok(avg(rs.slice(20)) < 45, `beat mode is not stuck on full: ${avg(rs.slice(20))}`);
+
+// Loud sound with no beat (a held chord, a fan, hiss): no stream of pulses,
+// and no mode sits at full.
+for (const mode of ['beat', 'bass', 'volume']) {
+  feel = new AudioFeel(rate, fft);
+  rs = run(feel, 400, () => frame(215, 205, 8), mode, 0.5).slice(200);
+  assert.ok(avg(rs) < (mode === 'beat' ? 10 : 80), `${mode} on steady sound: ${avg(rs)}`);
+  if (mode === 'beat') assert.ok(feel.beats < 6, `beats in steady sound: ${feel.beats}`);
+}
+
+// Volume follows the loudness: up with a loud passage, down with a quiet one.
+feel = new AudioFeel(rate, fft);
+rs = run(feel, 240, (i) => (Math.floor(i / 40) % 2 ? frame(120, 120, 6) : frame(215, 215, 6)), 'volume', 0.5);
+const loud = rs.filter((r, i) => i >= 80 && Math.floor(i / 40) % 2 === 0 && i % 40 > 3 && i % 40 < 30);
+const soft = rs.filter((r, i) => i >= 80 && Math.floor(i / 40) % 2 === 1 && i % 40 > 8);
+assert.ok(avg(loud) > 55 && avg(loud, 1) > 55, `loud ${avg(loud)}`);
+assert.ok(avg(soft) < 15, `soft ${avg(soft)}`);
+// ...and it ends with the sound.
+const after = run(feel, 30, () => frame(0, 0), 'bass', 0.5, 240 * 50);
+assert.deepStrictEqual(after[after.length - 1].levels, [0, 0]);
+
+// More sensitivity: more comes through, at every step of the slider.
+const music = (i) => frame(i % 10 === 0 ? 225 : i % 10 === 5 ? 195 : 150, 140 + 40 * Math.sin(i / 7), 6);
+for (const mode of ['beat', 'bass', 'volume']) {
+  let prev = -1, first = null;
+  for (const sens of [0, 0.25, 0.5, 0.75, 1]) {
+    seed = 7;
+    feel = new AudioFeel(rate, fft);
+    const level = avg(run(feel, 300, music, mode, sens).slice(60));
+    if (process.env.SHOW) console.log(mode, sens, level.toFixed(1));
+    assert.ok(level >= prev && (sens < 1 || level > first), `${mode} at ${sens}: ${level} after ${prev}`);
+    assert.ok(level < 90, `${mode} at ${sens} is not stuck on full: ${level}`);
+    prev = level;
+    if (first === null) first = level;
+  }
+}
+// Quiet sound is silence at low sensitivity and heard at high.
+feel = new AudioFeel(rate, fft);
+assert.strictEqual(avg(run(feel, 100, (i) => frame(i % 10 === 0 ? 150 : 90, 95, 6), 'beat', 0.1)), 0);
+feel = new AudioFeel(rate, fft);
+run(feel, 100, (i) => frame(i % 10 === 0 ? 150 : 90, 95, 6), 'beat', 0.9);
+assert.ok(feel.beats >= 7, `quiet beats ${feel.beats}`);
 
 console.log('limits, script tools and audio feel passed');

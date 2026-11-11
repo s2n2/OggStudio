@@ -248,7 +248,7 @@ ${STYLES}
               <label>Sound from</label><select id="ausrc"><option value="mic">Microphone</option><option value="file">A music file on this device</option><option value="video">The video in Video sync</option><option value="tab">Another tab (share its audio)</option></select>
               <div id="aufilebox" hidden><input id="aufile" type="file" accept="audio/*,video/*" style="margin-top:6px"><audio id="auel" controls preload="metadata"></audio></div>
               <label>Feel</label><select id="aumode"></select>
-              <div class="moodrow"><label title="How easily it reacts">Sensitivity</label><input id="ausens" type="range" min="0" max="100" step="5" value="50"><b id="ausensv">50%</b></div>
+              <div class="moodrow"><label title="Low: only the loudest moments and hardest hits. High: quiet parts and soft hits come through too">Sensitivity</label><input id="ausens" type="range" min="0" max="100" step="5" value="50"><b id="ausensv">50%</b></div>
               <div class="meter"><i id="aum1"></i></div><div class="meter m2"><i id="aum2"></i></div>
               <div class="rpinfo" id="auinfo"></div>
               <button id="augo" type="button" class="go" style="margin-top:6px">♪ Start</button>
