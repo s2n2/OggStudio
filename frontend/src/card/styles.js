@@ -201,7 +201,6 @@ ha-card.simple #videobox{padding:8px}
 #aubox.fromvideo #ausrcbox,#aubox.fromvideo #aufilebox,#aubox.fromvideo #augo{display:none!important}
 #aubox.fromvideo{margin-top:8px;padding:10px;border-radius:14px;border:1px solid #293552;background:#0e1730}
 #aubox.fromvideo>label:first-of-type{margin-top:0}
-ha-card.simple .vrecrow{display:none}
 .vst{position:absolute;inset:0;pointer-events:none;z-index:2;opacity:.85;transition:opacity .6s}
 .vst.idle{opacity:.28}
 .vstrail{position:absolute;left:max(4px,env(safe-area-inset-left));top:10%;bottom:28%;width:34px;pointer-events:auto;touch-action:none;cursor:ns-resize}

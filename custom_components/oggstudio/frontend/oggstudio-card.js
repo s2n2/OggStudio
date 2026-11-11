@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.15.7";
+  var VERSION = "0.15.8";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -1550,7 +1550,6 @@ ha-card.simple #videobox{padding:8px}
 #aubox.fromvideo #ausrcbox,#aubox.fromvideo #aufilebox,#aubox.fromvideo #augo{display:none!important}
 #aubox.fromvideo{margin-top:8px;padding:10px;border-radius:14px;border:1px solid #293552;background:#0e1730}
 #aubox.fromvideo>label:first-of-type{margin-top:0}
-ha-card.simple .vrecrow{display:none}
 .vst{position:absolute;inset:0;pointer-events:none;z-index:2;opacity:.85;transition:opacity .6s}
 .vst.idle{opacity:.28}
 .vstrail{position:absolute;left:max(4px,env(safe-area-inset-left));top:10%;bottom:28%;width:34px;pointer-events:auto;touch-action:none;cursor:ns-resize}
@@ -6853,10 +6852,15 @@ ${STYLES}
         r.dir = m.dir;
       } else r.pos = Math.min(r.upper, Math.max(r.lower, r.pos));
       this._vsWasLive = true;
+      const dropped = vel === 0 && this._el("vspring").checked && !this._el("vstrail").classList.contains("active");
       if (this._strokeKind) {
-        if (vel > 0 || this._vsLastPos !== r.pos) this._strokeOut(r.pos, vel * 1e3 * r.dir);
+        const goal = dropped ? r.lower : r.pos;
+        if (vel > 0 || this._vsLastPos !== goal) this._strokeOut(goal, vel * 1e3 * r.dir);
+        this._vsLastPos = goal;
+        this._vlimShow();
+        return;
       } else {
-        const v = Math.round(r.pos);
+        const v = dropped ? 0 : Math.round(r.pos);
         for (const i of [0, 1]) this._setPad(i, v);
         this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._mapLevel(i, v)), 0.6);
       }

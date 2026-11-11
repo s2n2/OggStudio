@@ -475,9 +475,17 @@ export class PlayPart {
     if (vel > 0) { const m = strokeStep(r.pos, r.dir || 1, r.lower, r.upper, vel, dt); r.pos = m.pos; r.dir = m.dir; }
     else r.pos = Math.min(r.upper, Math.max(r.lower, r.pos));
     this._vsWasLive = true;
-    if (this._strokeKind) { if (vel > 0 || this._vsLastPos !== r.pos) this._strokeOut(r.pos, vel * 1000 * r.dir); }
-    else {
-      const v = Math.round(r.pos);
+    // By hand (speed 0) with "Drop to 0" ticked: it follows only while the
+    // range is held; let go and a vibrator stops, a stroker goes to the bottom.
+    const dropped = vel === 0 && this._el('vspring').checked && !this._el('vstrail').classList.contains('active');
+    if (this._strokeKind) {
+      const goal = dropped ? r.lower : r.pos;
+      if (vel > 0 || this._vsLastPos !== goal) this._strokeOut(goal, vel * 1000 * r.dir);
+      this._vsLastPos = goal;
+      this._vlimShow();
+      return;
+    } else {
+      const v = dropped ? 0 : Math.round(r.pos);
       for (const i of [0, 1]) this._setPad(i, v);
       this._outApply([0, 1].map((i) => (i && !this._twoPads ? null : this._mapLevel(i, v))), 0.6);
     }
