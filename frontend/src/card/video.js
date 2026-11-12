@@ -532,6 +532,7 @@ export class VideoPart {
     const hasSaved = saved && saved.attributes.scripts && Object.keys(saved.attributes.scripts).length > 0;
     for (const id of ['code', 'delete']) $(id).disabled = !hasSaved;
     if (this._simple && this._libPick) { $('delete').disabled = true; $('code').disabled = false; }
+    if (this._simple) $('libsavebox').hidden = !(this._libPick === 'take' && this._take);
     $('play').disabled = !hasSaved;
     // Stroke scripts: show the run mode, set to the one last used for it.
     const info = this._scriptInfo($('saved').value);

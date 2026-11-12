@@ -237,13 +237,13 @@ ${STYLES}
               <div class="val" id="utimer"></div>
             </div>
             <div id="ptbox" hidden>
-              <div class="ptgrid"><button type="button" class="ptbtn" data-pt="${PATTERN_RANDOM}">🎲 Random</button>${ptBtns(PATTERNS)}</div>
+              <div class="ptpick"><select id="ptsel" aria-label="Pattern"></select><button id="ptgo" type="button" class="go">▶ Play</button></div>
+              <div class="ptgrid" hidden><button type="button" class="ptbtn" data-pt="${PATTERN_RANDOM}">🎲 Random</button>${ptBtns(PATTERNS)}</div>
               <div id="ptdual" hidden><label>Two motors, each with its own part</label><div class="ptgrid">${ptBtns(PATTERNS_DUAL)}</div></div>
               <div class="moodrow"><label id="ptspeedlab">Speed</label><input id="ptspeed" type="range" min="0" max="100" step="5" value="50"><b id="ptspeedv"></b></div>
               <div class="moodrow"><label>Strength</label><input id="ptstr" type="range" min="20" max="100" step="5" value="100"><b id="ptstrv"></b></div>
               <div class="rpinfo" id="ptinfo"></div>
-              <button id="ptstop" type="button" class="stop" style="width:100%;margin-top:6px">■ Stop pattern</button>
-              <label>Or play a saved script</label>
+              <button id="ptstop" type="button" class="stop" style="width:100%;margin-top:6px" hidden>■ Stop pattern</button>
             </div>
             <div id="moodbox" hidden>
               <div class="moodgrid">${Object.entries(MOODS).map(([k, m]) => `<button type="button" class="moodbtn" data-mood="${k}"><span>${m.icon}</span>${m.label}</button>`).join('')}</div>
@@ -322,6 +322,7 @@ ${STYLES}
           <select id="saved"></select>
           <div id="libmodebox" hidden><label>Run as vibration using (remembered for this script)</label><select id="libmode">${runModeOptions()}</select></div>
           <div class="row" style="margin-top:8px"><select id="speed"></select><label class="check"><input id="loop" type="checkbox"> Loop</label></div>
+          <div id="libsavebox" hidden><label>Save the take as</label><div class="row"><input id="libname" type="text" placeholder="Name"><button id="libsave" type="button" style="flex:0 0 auto">💾 Save</button></div></div>
           <div class="row" style="margin-top:8px"><button id="play">▶ Play</button><button id="stop" class="stop">■ Stop</button><button id="code">Copy code</button><button id="delete">Delete</button></div>
         </section>
         <section id="videobox" data-part="video">

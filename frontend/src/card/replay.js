@@ -78,7 +78,7 @@ export class ReplayPart {
     const ctl = this._ctl;
     const simple = this._simple;
     for (const b of this.shadowRoot.querySelectorAll('.ctltabs button')) b.classList.toggle('on', b.dataset.ctl === ctl);
-    $('rpbox').hidden = !(ctl === 'replay' || (simple && (ctl === 'pattern' || ctl === 'library')));
+    $('rpbox').hidden = !(ctl === 'replay' || (simple && ctl === 'library'));
     // The Library has its own play controls: here only the progress of what plays.
     $('rpbox').classList.toggle('lib', simple && ctl === 'library');
     $('ptbox').hidden = ctl !== 'pattern';

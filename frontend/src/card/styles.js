@@ -320,5 +320,9 @@ ha-card.simple section#extrabox{margin-top:10px}
 ha-card.simple section[data-part="record"] .hint,ha-card.simple section[data-part="stroke"] .hint,ha-card.simple .hint.vshow{display:none}
 #rpbox.lib .rppick,#rpbox.lib .rppop,#rpbox.lib .rprow,#rpbox.lib #rptools,#rpbox.lib .subbox,#rpbox.lib.empty{display:none!important}
 #rpbox.lib{order:2;margin-top:8px}
+.ptpick{display:grid;grid-template-columns:minmax(0,1fr) 108px;gap:8px;margin-top:8px}
+.ptpick select{min-height:46px;font-size:14px}
+.ptpick button{min-height:46px}
+#libsavebox{margin-top:8px}
 [hidden],.off{display:none!important}
 `;

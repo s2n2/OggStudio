@@ -36,6 +36,25 @@ export class PlayPart {
     $('ptspeed').addEventListener('input', keep);
     $('ptstr').addEventListener('input', keep);
     $('ptstop').addEventListener('click', () => this._ptStop());
+    // The patterns as one list, played and stopped with one button.
+    $('ptgo').addEventListener('click', () => { if (this._pt) this._ptStop(); else this._ptStart($('ptsel').value); });
+    $('ptsel').addEventListener('change', () => { if (this._pt) this._ptStart($('ptsel').value); else this._ptShow(); });
+    // Save the current take from the Library.
+    $('libsave').addEventListener('click', async () => {
+      const name = $('libname').value.trim();
+      $('name').value = name;
+      await this._save();
+      if (!this._take && name) {
+        // Saved: it is now that script in the list.
+        this._libPick = null;
+        $('libname').value = '';
+        this._rp.name = name; this._rp.lib = name;
+        this._hass.callService('select', 'select_option', { entity_id: this._studio.saved, option: name }).catch(() => {});
+        this._rpShow();
+        this._update();
+      }
+    });
+    $('libname').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('libsave').click(); });
     // The video's side controls press the full controls they stand for.
     const video = $('video');
     $('vsfile').addEventListener('click', () => $('vfile').click());
@@ -94,9 +113,16 @@ export class PlayPart {
   }
 
   _urecStop() {
+    const before = this._take;
     if (this._recording) this._stopRecording();
     if (this._stRecording) this._stStop();
     if (this._tap) this._tapStop();
+    // A new take: the Library shows it, ready to play or save.
+    if (this._simple && this._take && this._take !== before) {
+      this._libPick = 'take';
+      if (this._ctl !== 'library') this._setCtl('library');
+      if (!this._rp.playing) this._rpLoad(this._take, 'Current take', null);
+    }
     this._update();
   }
 
@@ -295,6 +321,21 @@ export class PlayPart {
     const pt = this._pt;
     for (const b of this.shadowRoot.querySelectorAll('.ptbtn')) b.classList.toggle('on', Boolean(pt && pt.key === b.dataset.pt));
     $('ptdual').hidden = !this._twoPads || this._strokeKind;
+    // The list: Random, the patterns, and (two motors) the two-motor ones.
+    const dual = this._twoPads && !this._strokeKind;
+    const sel = $('ptsel');
+    const key = String(dual);
+    if (sel.dataset.key !== key) {
+      const keep = sel.value;
+      const group = (label, entries) => { const g = document.createElement('optgroup'); g.label = label; g.append(...entries.map(([k, t]) => new Option(t, k))); return g; };
+      sel.replaceChildren(new Option('🎲 Random', PATTERN_RANDOM), group('Patterns', Object.entries(PATTERNS)), ...(dual ? [group('Two motors', Object.entries(PATTERNS_DUAL))] : []));
+      sel.dataset.key = key;
+      sel.value = [...sel.options].some((o) => o.value === keep) ? keep : 'wave';
+    }
+    if (pt && sel.value !== pt.key && this.shadowRoot.activeElement !== sel) sel.value = pt.key;
+    $('ptgo').textContent = pt ? '■ Stop' : '▶ Play';
+    $('ptgo').classList.toggle('go', !pt);
+    $('ptgo').classList.toggle('stop', Boolean(pt));
     const random = Boolean(pt && pt.prog);
     $('ptspeedlab').textContent = random ? 'How busy' : 'Speed';
     $('ptspeedv').textContent = random ? `${$('ptspeed').value}%` : `${patternPeriod(Number($('ptspeed').value)).toFixed(1)} s`;

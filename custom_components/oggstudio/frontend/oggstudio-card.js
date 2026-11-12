@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.21.4";
+  var VERSION = "0.21.5";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -1694,6 +1694,10 @@ ha-card.simple section#extrabox{margin-top:10px}
 ha-card.simple section[data-part="record"] .hint,ha-card.simple section[data-part="stroke"] .hint,ha-card.simple .hint.vshow{display:none}
 #rpbox.lib .rppick,#rpbox.lib .rppop,#rpbox.lib .rprow,#rpbox.lib #rptools,#rpbox.lib .subbox,#rpbox.lib.empty{display:none!important}
 #rpbox.lib{order:2;margin-top:8px}
+.ptpick{display:grid;grid-template-columns:minmax(0,1fr) 108px;gap:8px;margin-top:8px}
+.ptpick select{min-height:46px;font-size:14px}
+.ptpick button{min-height:46px}
+#libsavebox{margin-top:8px}
 [hidden],.off{display:none!important}
 `;
 
@@ -1948,13 +1952,13 @@ ${STYLES}
               <div class="val" id="utimer"></div>
             </div>
             <div id="ptbox" hidden>
-              <div class="ptgrid"><button type="button" class="ptbtn" data-pt="${PATTERN_RANDOM}">🎲 Random</button>${ptBtns(PATTERNS)}</div>
+              <div class="ptpick"><select id="ptsel" aria-label="Pattern"></select><button id="ptgo" type="button" class="go">▶ Play</button></div>
+              <div class="ptgrid" hidden><button type="button" class="ptbtn" data-pt="${PATTERN_RANDOM}">🎲 Random</button>${ptBtns(PATTERNS)}</div>
               <div id="ptdual" hidden><label>Two motors, each with its own part</label><div class="ptgrid">${ptBtns(PATTERNS_DUAL)}</div></div>
               <div class="moodrow"><label id="ptspeedlab">Speed</label><input id="ptspeed" type="range" min="0" max="100" step="5" value="50"><b id="ptspeedv"></b></div>
               <div class="moodrow"><label>Strength</label><input id="ptstr" type="range" min="20" max="100" step="5" value="100"><b id="ptstrv"></b></div>
               <div class="rpinfo" id="ptinfo"></div>
-              <button id="ptstop" type="button" class="stop" style="width:100%;margin-top:6px">■ Stop pattern</button>
-              <label>Or play a saved script</label>
+              <button id="ptstop" type="button" class="stop" style="width:100%;margin-top:6px" hidden>■ Stop pattern</button>
             </div>
             <div id="moodbox" hidden>
               <div class="moodgrid">${Object.entries(MOODS).map(([k, m]) => `<button type="button" class="moodbtn" data-mood="${k}"><span>${m.icon}</span>${m.label}</button>`).join("")}</div>
@@ -2033,6 +2037,7 @@ ${STYLES}
           <select id="saved"></select>
           <div id="libmodebox" hidden><label>Run as vibration using (remembered for this script)</label><select id="libmode">${runModeOptions()}</select></div>
           <div class="row" style="margin-top:8px"><select id="speed"></select><label class="check"><input id="loop" type="checkbox"> Loop</label></div>
+          <div id="libsavebox" hidden><label>Save the take as</label><div class="row"><input id="libname" type="text" placeholder="Name"><button id="libsave" type="button" style="flex:0 0 auto">💾 Save</button></div></div>
           <div class="row" style="margin-top:8px"><button id="play">▶ Play</button><button id="stop" class="stop">■ Stop</button><button id="code">Copy code</button><button id="delete">Delete</button></div>
         </section>
         <section id="videobox" data-part="video">
@@ -3625,6 +3630,7 @@ ${STYLES}
         $("delete").disabled = true;
         $("code").disabled = false;
       }
+      if (this._simple) $("libsavebox").hidden = !(this._libPick === "take" && this._take);
       $("play").disabled = !hasSaved;
       const info = this._scriptInfo($("saved").value);
       $("libmodebox").hidden = true;
@@ -4346,7 +4352,7 @@ ${STYLES}
       const ctl = this._ctl;
       const simple = this._simple;
       for (const b of this.shadowRoot.querySelectorAll(".ctltabs button")) b.classList.toggle("on", b.dataset.ctl === ctl);
-      $("rpbox").hidden = !(ctl === "replay" || simple && (ctl === "pattern" || ctl === "library"));
+      $("rpbox").hidden = !(ctl === "replay" || simple && ctl === "library");
       $("rpbox").classList.toggle("lib", simple && ctl === "library");
       $("ptbox").hidden = ctl !== "pattern";
       $("moodbox").hidden = ctl !== "mood";
@@ -5174,7 +5180,7 @@ ${STYLES}
     _playScript(script, name, lib) {
       if (!script) return;
       this._plOff();
-      this._setCtl(this._simple ? this._ctl === "library" ? "library" : "pattern" : "replay");
+      this._setCtl(this._simple ? "library" : "replay");
       this._rpLoad(script, name, lib);
       if (SPEEDS.includes(this._el("speed").value)) this._el("rpspeed").value = this._el("speed").value;
       this._el("rploop").checked = this._el("loop").checked;
@@ -6673,6 +6679,32 @@ ${STYLES}
       $("ptspeed").addEventListener("input", keep);
       $("ptstr").addEventListener("input", keep);
       $("ptstop").addEventListener("click", () => this._ptStop());
+      $("ptgo").addEventListener("click", () => {
+        if (this._pt) this._ptStop();
+        else this._ptStart($("ptsel").value);
+      });
+      $("ptsel").addEventListener("change", () => {
+        if (this._pt) this._ptStart($("ptsel").value);
+        else this._ptShow();
+      });
+      $("libsave").addEventListener("click", async () => {
+        const name = $("libname").value.trim();
+        $("name").value = name;
+        await this._save();
+        if (!this._take && name) {
+          this._libPick = null;
+          $("libname").value = "";
+          this._rp.name = name;
+          this._rp.lib = name;
+          this._hass.callService("select", "select_option", { entity_id: this._studio.saved, option: name }).catch(() => {
+          });
+          this._rpShow();
+          this._update();
+        }
+      });
+      $("libname").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") $("libsave").click();
+      });
       const video = $("video");
       $("vsfile").addEventListener("click", () => $("vfile").click());
       $("vempty").addEventListener("click", () => $("vfile").click());
@@ -6747,9 +6779,15 @@ ${STYLES}
       this._urecShow();
     }
     _urecStop() {
+      const before = this._take;
       if (this._recording) this._stopRecording();
       if (this._stRecording) this._stStop();
       if (this._tap) this._tapStop();
+      if (this._simple && this._take && this._take !== before) {
+        this._libPick = "take";
+        if (this._ctl !== "library") this._setCtl("library");
+        if (!this._rp.playing) this._rpLoad(this._take, "Current take", null);
+      }
       this._update();
     }
     _urecTime() {
@@ -6957,6 +6995,25 @@ ${STYLES}
       const pt = this._pt;
       for (const b of this.shadowRoot.querySelectorAll(".ptbtn")) b.classList.toggle("on", Boolean(pt && pt.key === b.dataset.pt));
       $("ptdual").hidden = !this._twoPads || this._strokeKind;
+      const dual = this._twoPads && !this._strokeKind;
+      const sel = $("ptsel");
+      const key = String(dual);
+      if (sel.dataset.key !== key) {
+        const keep = sel.value;
+        const group = (label, entries) => {
+          const g = document.createElement("optgroup");
+          g.label = label;
+          g.append(...entries.map(([k, t]) => new Option(t, k)));
+          return g;
+        };
+        sel.replaceChildren(new Option("🎲 Random", PATTERN_RANDOM), group("Patterns", Object.entries(PATTERNS)), ...dual ? [group("Two motors", Object.entries(PATTERNS_DUAL))] : []);
+        sel.dataset.key = key;
+        sel.value = [...sel.options].some((o) => o.value === keep) ? keep : "wave";
+      }
+      if (pt && sel.value !== pt.key && this.shadowRoot.activeElement !== sel) sel.value = pt.key;
+      $("ptgo").textContent = pt ? "■ Stop" : "▶ Play";
+      $("ptgo").classList.toggle("go", !pt);
+      $("ptgo").classList.toggle("stop", Boolean(pt));
       const random = Boolean(pt && pt.prog);
       $("ptspeedlab").textContent = random ? "How busy" : "Speed";
       $("ptspeedv").textContent = random ? `${$("ptspeed").value}%` : `${patternPeriod(Number($("ptspeed").value)).toFixed(1)} s`;
