@@ -55,7 +55,13 @@ export class PlayPart {
     document.addEventListener('fullscreenchange', onFull);
     document.addEventListener('webkitfullscreenchange', onFull);
     for (const type of ['play', 'pause', 'ended', 'emptied', 'loadedmetadata']) video.addEventListener(type, () => this._vsideShow());
-    if (this._simple) this._auShow();
+    if (this._simple) {
+      // The general sound is mic, a file or a tab; the video's sound is the ♪ beside the video.
+      const opt = [...$('ausrc').options].find((o) => o.value === 'video');
+      if (opt) { opt.hidden = true; opt.disabled = true; }
+      if ($('ausrc').value === 'video') $('ausrc').value = 'mic';
+      this._auShow();
+    }
     this._ptShow();
     this._vsideShow();
     this._urecShow();
@@ -424,7 +430,7 @@ export class PlayPart {
   _vvScale(v) { const r = this._vsRange; return Math.round(r.lower + (Math.min(100, Math.max(0, v)) / 100) * (r.upper - r.lower)); }
 
   // Sound drives it (♪ on and sound running), each Feel its own way.
-  get _vsBeatOn() { return Boolean(this._vsLoad().beat && this._au); }
+  get _vsBeatOn() { return Boolean(this._au); }
   get _vsFeel() { const el = this._el && this._el('aumode'); return (el && el.value) || 'beat'; }
   get _vsPaced() { return this._vsBeatOn && ['beat', 'updown'].includes(this._vsFeel); }
 
@@ -463,7 +469,7 @@ export class PlayPart {
   // level (beat, up and down, bass or volume) inside its least and most.
   _vsSound(r) {
     const range = this._vsRange;
-    if (!range || !this._vsLoad().beat) return false;
+    if (!range) return false;
     if (r.beat) this._vsOnBeat(r.gap);
     if (this._strokeKind) {
       if (this._vsPaced) return true;           // the beat paces the strokes (the tick)
@@ -593,7 +599,7 @@ export class PlayPart {
     const cfg = this._vsLoad();
     const script = Boolean(this._vraw);
     const sound = this._vsBeatOn && !script;
-    $('vstbeat').hidden = !this._au || script;
+    $('vstbeat').hidden = true;
     $('vstbeat').classList.toggle('on', sound);
     const line = $('vstline');
     let pct;
@@ -719,28 +725,34 @@ export class PlayPart {
 
   // The video's own sound drives the devices: the audio settings sit under
   // the video while it is on.
+  // The video's own sound drives the devices: its settings sit under the
+  // video while it is on (as before), apart from the other sound.
   async _vaSet(on) {
     if (!this._el) return;
     const $ = this._el;
-    const fromVideo = Boolean(this._au && this._au.src === 'video');
     if (on) {
-      if (fromVideo) return;
+      if (this._vaudio) return;
       if (!this._vurl) { this._toast('Choose a video first'); return; }
       if (this._au) this._auStop();
       this._vaPrev = $('ausrc').value;
       $('ausrc').value = 'video';
       this._vaudio = true;
+      $('aubox').classList.add('fromvideo');
+      this._ctlShow();
       await this._auStart();
-      if (!this._au) { this._vaudio = false; $('ausrc').value = this._vaPrev && this._vaPrev !== 'video' ? this._vaPrev : 'mic'; this._auShow(); }
-      else if (this._tap && !$('video').paused) this._videoRun();
+      if (!this._au) { this._vaSet(false); return; }
+      if (this._tap && !$('video').paused) this._videoRun();
     } else {
-      if (!fromVideo && !this._vaudio) return;
+      if (!this._vaudio) return;
       this._vaudio = false;
-      if (fromVideo) this._auStop();
+      if (this._au && this._au.src === 'video') this._auStop();
+      $('aubox').classList.remove('fromvideo');
       $('ausrc').value = this._vaPrev && this._vaPrev !== 'video' ? this._vaPrev : 'mic';
+      this._ctlShow();
       this._auShow();
     }
     this._vsideShow();
   }
+
 
 }

@@ -84,7 +84,13 @@ export class ReplayPart {
     $('moodbox').hidden = ctl !== 'mood';
     $('aubox').hidden = simple ? ctl !== 'video' : !(ctl === 'audio' || (ctl === 'video' && this._vaudio));
     // Media: the sound settings sit under the video.
-    if (simple) { if (ctl === 'video') { if ($('aubox').parentElement !== $('vaubox')) $('vaubox').appendChild($('aubox')); } else if ($('aubox').parentElement !== $('ctlbox')) $('ctlbox').insertBefore($('aubox'), $('tgbox')); }
+    if (simple) {
+      // The video's sound sits under the video; any other sound in its own section.
+      const home = ctl !== 'video' ? null : this._vaudio ? $('vaubox') : $('sndbox');
+      if (home && $('aubox').parentElement !== home) home.appendChild($('aubox'));
+      if (!home && $('aubox').parentElement !== $('ctlbox')) $('ctlbox').insertBefore($('aubox'), $('tgbox'));
+      $('sndbox').hidden = ctl !== 'video' || this._vaudio;
+    }
     $('tgbox').hidden = ctl !== 'together';
     $('urecrow').hidden = !simple;
     if (simple) {

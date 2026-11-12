@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.20.0";
+  var VERSION = "0.20.1";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -1659,9 +1659,14 @@ button.outhead{display:flex;align-items:center;gap:8px;width:100%;min-height:36p
 .outbtns{display:flex;gap:8px;margin-top:8px}
 .outbtns button{flex:1;min-height:38px;margin:0;font-size:12.5px}
 .outbtns button[hidden]{display:none}
-ha-card.simple #vaubox #aubox{margin-top:10px;padding:12px;border-radius:15px;border:1px solid #364563;background:#17243e}
-ha-card.simple #vaubox #aubox>label:first-of-type{margin-top:0}
+ha-card.simple #vaubox #aubox,ha-card.simple #sndbox{margin-top:10px;padding:12px;border-radius:15px;border:1px solid #364563;background:#17243e}
+ha-card.simple #vaubox #aubox>label:first-of-type,ha-card.simple #sndbox #aubox>label:first-of-type{margin-top:0}
+.sndh{margin:0 0 4px;font-size:13px;font-weight:760;color:#e8edff}
+#sndbox #aubox{margin:0;padding:0;border:0;background:none}
 ha-card.simple button.vempty{min-height:160px}
+ha-card.simple .ctltabs button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:50px;line-height:1.1}
+ha-card.simple .ctltabs button .ti{font-size:15px;line-height:1}
+ha-card.simple .ctltabs button span:last-child{font-size:11.5px;white-space:nowrap}
 [hidden],.off{display:none!important}
 `;
 
@@ -1907,7 +1912,7 @@ ${STYLES}
         </section>
         <section data-part="outputs" id="outhome" class="off">
           <div id="ctlbox">
-            <div class="ctltabs" role="tablist"${this._variant.modes && this._variant.modes.length < 2 ? " hidden" : ""}>${(simple ? [["record", "✋ Manual"], ["pattern", "〰 Pattern"], ["mood", "◎ Mood"], ["video", "🎬 Media"]] : [["record", "● Record"], ["replay", "▶ Replay"], ["mood", "◎ Mood"], ["audio", "♪ Audio"], ["together", "🤝 Together"]]).filter(([k]) => !this._variant.modes || this._variant.modes.includes(k)).map(([k, t]) => `<button type="button" data-ctl="${k}">${t}</button>`).join("")}</div>
+            <div class="ctltabs" role="tablist"${this._variant.modes && this._variant.modes.length < 2 ? " hidden" : ""}>${(simple ? [["record", "✋ Manual"], ["pattern", "〰 Pattern"], ["mood", "◎ Mood"], ["video", "🎬 Media"]].map(([k, t]) => [k, `<span class="ti">${t.split(" ")[0]}</span><span>${t.split(" ").slice(1).join(" ")}</span>`]) : [["record", "● Record"], ["replay", "▶ Replay"], ["mood", "◎ Mood"], ["audio", "♪ Audio"], ["together", "🤝 Together"]]).filter(([k]) => !this._variant.modes || this._variant.modes.includes(k)).map(([k, t]) => `<button type="button" data-ctl="${k}">${t}</button>`).join("")}</div>
             <div id="urecrow" hidden>
               <div class="urechead"><div class="kind" role="group" aria-label="Vibrate or stroke"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div><button id="urec" class="rec" type="button">● Rec</button></div>
               <div class="val" id="utimer"></div>
@@ -2036,6 +2041,7 @@ ${STYLES}
           <input id="voff" type="range" min="-1000" max="1000" step="25" value="150">
           <div class="hint">Positive values send each moment slightly early to make up for Bluetooth delay. Pause, seek and playback speed all stay in sync.</div></div>
           <div id="vaubox"></div>
+          <div id="sndbox"><h4 class="sndh">♪ Sound</h4></div>
           <div class="hint vhide">To make a script for this video: press ● Rec, play the video and drag the slider (position in the Stroke view, intensity in Vibrate). You can pause, scrub back and record a section again; the newer pass replaces it. While a script plays, the slider shows it; hold the slider to take over until you let go.</div>
           <div class="hint vshow">Media: a video, music, the microphone or another tab. The slider under the video works with or without one: hold it to take over. On the video, the line on the left is the strength (a vibrator) or the speed (a stroker), and a stroker's range is on the right; ⛶ makes it full screen. ● Rec follows the video: play it and use the controls, or let a script (📂) or the sound of the video (♪) do the playing. Pause and it waits; go back and the new pass replaces what came after.</div>
         </section>
@@ -4302,9 +4308,10 @@ ${STYLES}
       $("moodbox").hidden = ctl !== "mood";
       $("aubox").hidden = simple ? ctl !== "video" : !(ctl === "audio" || ctl === "video" && this._vaudio);
       if (simple) {
-        if (ctl === "video") {
-          if ($("aubox").parentElement !== $("vaubox")) $("vaubox").appendChild($("aubox"));
-        } else if ($("aubox").parentElement !== $("ctlbox")) $("ctlbox").insertBefore($("aubox"), $("tgbox"));
+        const home = ctl !== "video" ? null : this._vaudio ? $("vaubox") : $("sndbox");
+        if (home && $("aubox").parentElement !== home) home.appendChild($("aubox"));
+        if (!home && $("aubox").parentElement !== $("ctlbox")) $("ctlbox").insertBefore($("aubox"), $("tgbox"));
+        $("sndbox").hidden = ctl !== "video" || this._vaudio;
       }
       $("tgbox").hidden = ctl !== "together";
       $("urecrow").hidden = !simple;
@@ -5440,7 +5447,8 @@ ${STYLES}
     }
     _limRender(force) {
       const $ = this._el;
-      const lims = this._devices.map((d) => [d, this._limits(d)]);
+      const chosen = new Set((this._outs || []).map((o, i) => (this._outDevice(i) || {}).id));
+      const lims = this._devices.filter((d) => chosen.has(d.id) && this._online(d)).map((d) => [d, this._limits(d)]);
       const any = lims.filter(([, l]) => isLimited(l));
       const label = any.length ? `⚙ Limits (${any.length} set)` : "⚙ Limits";
       if ($("limbtn").textContent !== label) $("limbtn").textContent = label;
@@ -5453,7 +5461,7 @@ ${STYLES}
         const vibe = d.vibe || !d.linear;
         return `<div class="limdev"><h4>${esc(d.name)}</h4>` + (vibe ? slider(d, "max", "Top intensity", 0, l.max) : "") + (d.linear ? slider(d, "lo", "Stroke range from", 0, l.lo) + slider(d, "hi", "Stroke range to", 0, l.hi) + slider(d, "speed", "Top stroke speed", 5, l.speed) : "") + "</div>";
       });
-      $("limlist").innerHTML = rows.join("") || '<div class="hint">No devices yet.</div>';
+      $("limlist").innerHTML = rows.join("") || '<div class="hint">No connected device: add one under Devices (and switch it on) to set its limits.</div>';
       for (const input of $("limlist").querySelectorAll("input")) {
         input.addEventListener("input", () => {
           input.previousElementSibling.querySelector("b").textContent = `${input.value}%`;
@@ -6616,7 +6624,15 @@ ${STYLES}
       document.addEventListener("fullscreenchange", onFull);
       document.addEventListener("webkitfullscreenchange", onFull);
       for (const type of ["play", "pause", "ended", "emptied", "loadedmetadata"]) video.addEventListener(type, () => this._vsideShow());
-      if (this._simple) this._auShow();
+      if (this._simple) {
+        const opt = [...$("ausrc").options].find((o) => o.value === "video");
+        if (opt) {
+          opt.hidden = true;
+          opt.disabled = true;
+        }
+        if ($("ausrc").value === "video") $("ausrc").value = "mic";
+        this._auShow();
+      }
       this._ptShow();
       this._vsideShow();
       this._urecShow();
@@ -7027,7 +7043,7 @@ ${STYLES}
     }
     // Sound drives it (♪ on and sound running), each Feel its own way.
     get _vsBeatOn() {
-      return Boolean(this._vsLoad().beat && this._au);
+      return Boolean(this._au);
     }
     get _vsFeel() {
       const el = this._el && this._el("aumode");
@@ -7074,7 +7090,7 @@ ${STYLES}
     // level (beat, up and down, bass or volume) inside its least and most.
     _vsSound(r) {
       const range = this._vsRange;
-      if (!range || !this._vsLoad().beat) return false;
+      if (!range) return false;
       if (r.beat) this._vsOnBeat(r.gap);
       if (this._strokeKind) {
         if (this._vsPaced) return true;
@@ -7216,7 +7232,7 @@ ${STYLES}
       const cfg = this._vsLoad();
       const script = Boolean(this._vraw);
       const sound = this._vsBeatOn && !script;
-      $("vstbeat").hidden = !this._au || script;
+      $("vstbeat").hidden = true;
       $("vstbeat").classList.toggle("on", sound);
       const line = $("vstline");
       let pct;
@@ -7378,12 +7394,13 @@ ${STYLES}
     }
     // The video's own sound drives the devices: the audio settings sit under
     // the video while it is on.
+    // The video's own sound drives the devices: its settings sit under the
+    // video while it is on (as before), apart from the other sound.
     async _vaSet(on) {
       if (!this._el) return;
       const $ = this._el;
-      const fromVideo = Boolean(this._au && this._au.src === "video");
       if (on) {
-        if (fromVideo) return;
+        if (this._vaudio) return;
         if (!this._vurl) {
           this._toast("Choose a video first");
           return;
@@ -7392,17 +7409,21 @@ ${STYLES}
         this._vaPrev = $("ausrc").value;
         $("ausrc").value = "video";
         this._vaudio = true;
+        $("aubox").classList.add("fromvideo");
+        this._ctlShow();
         await this._auStart();
         if (!this._au) {
-          this._vaudio = false;
-          $("ausrc").value = this._vaPrev && this._vaPrev !== "video" ? this._vaPrev : "mic";
-          this._auShow();
-        } else if (this._tap && !$("video").paused) this._videoRun();
+          this._vaSet(false);
+          return;
+        }
+        if (this._tap && !$("video").paused) this._videoRun();
       } else {
-        if (!fromVideo && !this._vaudio) return;
+        if (!this._vaudio) return;
         this._vaudio = false;
-        if (fromVideo) this._auStop();
+        if (this._au && this._au.src === "video") this._auStop();
+        $("aubox").classList.remove("fromvideo");
         $("ausrc").value = this._vaPrev && this._vaPrev !== "video" ? this._vaPrev : "mic";
+        this._ctlShow();
         this._auShow();
       }
       this._vsideShow();

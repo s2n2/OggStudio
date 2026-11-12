@@ -115,7 +115,9 @@ export class SafetyPart {
 
   _limRender(force) {
     const $ = this._el;
-    const lims = this._devices.map((d) => [d, this._limits(d)]);
+    // Only the connected devices chosen under Devices.
+    const chosen = new Set((this._outs || []).map((o, i) => (this._outDevice(i) || {}).id));
+    const lims = this._devices.filter((d) => chosen.has(d.id) && this._online(d)).map((d) => [d, this._limits(d)]);
     const any = lims.filter(([, l]) => isLimited(l));
     const label = any.length ? `⚙ Limits (${any.length} set)` : '⚙ Limits';
     if ($('limbtn').textContent !== label) $('limbtn').textContent = label;
@@ -131,7 +133,7 @@ export class SafetyPart {
         + (d.linear ? slider(d, 'lo', 'Stroke range from', 0, l.lo) + slider(d, 'hi', 'Stroke range to', 0, l.hi) + slider(d, 'speed', 'Top stroke speed', 5, l.speed) : '')
         + '</div>';
     });
-    $('limlist').innerHTML = rows.join('') || '<div class="hint">No devices yet.</div>';
+    $('limlist').innerHTML = rows.join('') || '<div class="hint">No connected device: add one under Devices (and switch it on) to set its limits.</div>';
     for (const input of $('limlist').querySelectorAll('input')) {
       input.addEventListener('input', () => { input.previousElementSibling.querySelector('b').textContent = `${input.value}%`; });
       input.addEventListener('change', () => this._limSet(input));

@@ -225,7 +225,7 @@ ${STYLES}
         <section data-part="outputs" id="outhome" class="off">
           <div id="ctlbox">
             <div class="ctltabs" role="tablist"${this._variant.modes && this._variant.modes.length < 2 ? ' hidden' : ''}>${(simple
-              ? [['record', '✋ Manual'], ['pattern', '〰 Pattern'], ['mood', '◎ Mood'], ['video', '🎬 Media']]
+              ? [['record', '✋ Manual'], ['pattern', '〰 Pattern'], ['mood', '◎ Mood'], ['video', '🎬 Media']].map(([k, t]) => [k, `<span class="ti">${t.split(' ')[0]}</span><span>${t.split(' ').slice(1).join(' ')}</span>`])
               : [['record', '● Record'], ['replay', '▶ Replay'], ['mood', '◎ Mood'], ['audio', '♪ Audio'], ['together', '🤝 Together']]
             ).filter(([k]) => !this._variant.modes || this._variant.modes.includes(k)).map(([k, t]) => `<button type="button" data-ctl="${k}">${t}</button>`).join('')}</div>
             <div id="urecrow" hidden>
@@ -356,6 +356,7 @@ ${STYLES}
           <input id="voff" type="range" min="-1000" max="1000" step="25" value="150">
           <div class="hint">Positive values send each moment slightly early to make up for Bluetooth delay. Pause, seek and playback speed all stay in sync.</div></div>
           <div id="vaubox"></div>
+          <div id="sndbox"><h4 class="sndh">♪ Sound</h4></div>
           <div class="hint vhide">To make a script for this video: press ● Rec, play the video and drag the slider (position in the Stroke view, intensity in Vibrate). You can pause, scrub back and record a section again; the newer pass replaces it. While a script plays, the slider shows it; hold the slider to take over until you let go.</div>
           <div class="hint vshow">Media: a video, music, the microphone or another tab. The slider under the video works with or without one: hold it to take over. On the video, the line on the left is the strength (a vibrator) or the speed (a stroker), and a stroker's range is on the right; ⛶ makes it full screen. ● Rec follows the video: play it and use the controls, or let a script (📂) or the sound of the video (♪) do the playing. Pause and it waits; go back and the new pass replaces what came after.</div>
         </section>
