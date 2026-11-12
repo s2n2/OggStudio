@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.21.2";
+  var VERSION = "0.21.3";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -1689,6 +1689,8 @@ ha-card.simple section#extrabox{margin-top:10px}
 #libslot > section{margin-top:8px;padding:0;border:0;background:none}
 #libslot > section h3{display:none}
 ha-card.simple section[data-part="record"] .hint,ha-card.simple section[data-part="stroke"] .hint,ha-card.simple .hint.vshow{display:none}
+#rpbox.lib .rppick,#rpbox.lib .rppop,#rpbox.lib .rprow,#rpbox.lib #rptools,#rpbox.lib .subbox,#rpbox.lib.empty{display:none!important}
+#rpbox.lib{order:2;margin-top:8px}
 [hidden],.off{display:none!important}
 `;
 
@@ -4332,6 +4334,7 @@ ${STYLES}
       const simple = this._simple;
       for (const b of this.shadowRoot.querySelectorAll(".ctltabs button")) b.classList.toggle("on", b.dataset.ctl === ctl);
       $("rpbox").hidden = !(ctl === "replay" || simple && (ctl === "pattern" || ctl === "library"));
+      $("rpbox").classList.toggle("lib", simple && ctl === "library");
       $("ptbox").hidden = ctl !== "pattern";
       $("moodbox").hidden = ctl !== "mood";
       $("aubox").hidden = simple ? false : !(ctl === "audio" || ctl === "video" && this._vaudio);
@@ -4726,6 +4729,7 @@ ${STYLES}
       }
     }
     _rpShow() {
+      if (this._el) this._el("rpbox").classList.toggle("empty", !(this._rp && this._rp.raw));
       if (this._simple && this._mediaShow) this._mediaShow();
       if (!this._el || !this._rp) return;
       const $ = this._el;

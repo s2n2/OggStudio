@@ -318,5 +318,7 @@ ha-card.simple section#extrabox{margin-top:10px}
 #libslot > section{margin-top:8px;padding:0;border:0;background:none}
 #libslot > section h3{display:none}
 ha-card.simple section[data-part="record"] .hint,ha-card.simple section[data-part="stroke"] .hint,ha-card.simple .hint.vshow{display:none}
+#rpbox.lib .rppick,#rpbox.lib .rppop,#rpbox.lib .rprow,#rpbox.lib #rptools,#rpbox.lib .subbox,#rpbox.lib.empty{display:none!important}
+#rpbox.lib{order:2;margin-top:8px}
 [hidden],.off{display:none!important}
 `;

@@ -79,6 +79,8 @@ export class ReplayPart {
     const simple = this._simple;
     for (const b of this.shadowRoot.querySelectorAll('.ctltabs button')) b.classList.toggle('on', b.dataset.ctl === ctl);
     $('rpbox').hidden = !(ctl === 'replay' || (simple && (ctl === 'pattern' || ctl === 'library')));
+    // The Library has its own play controls: here only the progress of what plays.
+    $('rpbox').classList.toggle('lib', simple && ctl === 'library');
     $('ptbox').hidden = ctl !== 'pattern';
     $('moodbox').hidden = ctl !== 'mood';
     $('aubox').hidden = simple ? false : !(ctl === 'audio' || (ctl === 'video' && this._vaudio));
@@ -419,6 +421,7 @@ export class ReplayPart {
   }
 
   _rpShow() {
+    if (this._el) this._el('rpbox').classList.toggle('empty', !(this._rp && this._rp.raw));
     if (this._simple && this._mediaShow) this._mediaShow();
     if (!this._el || !this._rp) return;
     const $ = this._el;
