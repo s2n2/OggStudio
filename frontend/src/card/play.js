@@ -9,6 +9,7 @@ import { STROKE_LIMIT_KEY, STROKE_PCT_MIN, strokeStep, strokeVel } from '../lib/
 const PATTERN_KEY = 'oggstudio_pattern';
 const VSTROKE_KEY = 'oggstudio_video_stroke';
 const VVIBE_KEY = 'oggstudio_video_vibe';
+const MEDIA_FOLD_KEY = 'oggstudio_media_fold';
 const PATTERN_HINT = 'Ogg\'s patterns, played from here: they show on the pads, stay inside your limits and can be recorded.';
 
 // Methods mixed into OggStudioCard: the Play card's own parts. One Record
@@ -55,6 +56,13 @@ export class PlayPart {
     document.addEventListener('fullscreenchange', onFull);
     document.addEventListener('webkitfullscreenchange', onFull);
     for (const type of ['play', 'pause', 'ended', 'emptied', 'loadedmetadata']) video.addEventListener(type, () => this._vsideShow());
+    // Video and Sound headers.
+    let mf = { v: false, s: true };
+    try { mf = { ...mf, ...(JSON.parse(localStorage.getItem(MEDIA_FOLD_KEY) || '{}') || {}) }; } catch (_) { /* private mode */ }
+    this._mediaFold('v', Boolean(mf.v));
+    this._mediaFold('s', Boolean(mf.s));
+    $('vidhead').addEventListener('click', () => this._mediaFold('v', !this._mfold.v, true));
+    $('sndhead').addEventListener('click', () => this._mediaFold('s', !this._mfold.s, true));
     if (this._simple) {
       // The general sound is mic, a file or a tab; the video's sound is the ♪ beside the video.
       const opt = [...$('ausrc').options].find((o) => o.value === 'video');
@@ -316,6 +324,7 @@ export class PlayPart {
     $('vsscript').classList.toggle('has', Boolean(this._vscript));
     $('vsoff').classList.toggle('on', $('voffbox').classList.contains('open'));
     $('vsfile').classList.toggle('has', has);
+    this._mediaShow();
     this._vsSync();
   }
 
@@ -725,6 +734,29 @@ export class PlayPart {
 
   // The video's own sound drives the devices: the audio settings sit under
   // the video while it is on.
+  // Video and Sound fold like Devices: Video open, Sound folded at first.
+  _mediaFold(which, folded, save) {
+    const $ = this._el;
+    this._mfold = this._mfold || { v: false, s: true };
+    this._mfold[which] = folded;
+    const box = which === 'v' ? $('videobox') : $('sndbox');
+    box.classList.toggle('mfold', folded);
+    $(which === 'v' ? 'vidhead' : 'sndhead').setAttribute('aria-expanded', String(!folded));
+    if (save) { try { localStorage.setItem(MEDIA_FOLD_KEY, JSON.stringify(this._mfold)); } catch (_) { /* private mode */ } }
+  }
+
+  // What each shows when folded: the video's name, the sound that is on.
+  _mediaShow() {
+    if (!this._el) return;
+    const $ = this._el;
+    const badge = (id, on, text) => { const el = $(id); el.classList.toggle('zero', !on); const b = el.querySelector('b'); if (b.textContent !== text) b.textContent = text; };
+    const video = $('video');
+    badge('vidbadge', Boolean(this._vurl), this._vurl ? `${(this._vname || 'video').slice(0, 18)}${video.paused ? '' : ' · playing'}` : 'none');
+    const au = this._au;
+    const src = { mic: 'microphone', file: 'music', tab: 'tab', video: 'from the video' };
+    badge('sndbadge', Boolean(au && au.src !== 'video'), au && au.src !== 'video' ? src[au.src] || 'on' : 'off');
+  }
+
   // The video's own sound drives the devices: its settings sit under the
   // video while it is on (as before), apart from the other sound.
   async _vaSet(on) {

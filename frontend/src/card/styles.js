@@ -290,11 +290,18 @@ button.outhead{display:flex;align-items:center;gap:8px;width:100%;min-height:36p
 .outbtns button[hidden]{display:none}
 ha-card.simple #vaubox #aubox,ha-card.simple #sndbox{margin-top:10px;padding:12px;border-radius:15px;border:1px solid #364563;background:#17243e}
 ha-card.simple #vaubox #aubox>label:first-of-type,ha-card.simple #sndbox #aubox>label:first-of-type{margin-top:0}
-.sndh{margin:0 0 4px;font-size:13px;font-weight:760;color:#e8edff}
 #sndbox #aubox{margin:0;padding:0;border:0;background:none}
 ha-card.simple button.vempty{min-height:160px}
 ha-card.simple .ctltabs button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:50px;line-height:1.1}
 ha-card.simple .ctltabs button .ti{font-size:15px;line-height:1}
 ha-card.simple .ctltabs button span:last-child{font-size:11.5px;white-space:nowrap}
+ha-card:not(.simple) .mhead{display:none}
+#videobox.mfold > :not(.mhead):not(#sndbox){display:none!important}
+#sndbox.mfold > :not(.mhead){display:none!important}
+.mfold > .mhead .chev{transform:rotate(-90deg)}
+ha-card.simple #sndbox{padding:8px 12px}
+#sndbox > .mhead{margin-bottom:2px}
+#sndbox #aubox{margin-top:6px}
+.mhead .outcount b{max-width:150px;overflow:hidden;text-overflow:ellipsis}
 [hidden],.off{display:none!important}
 `;

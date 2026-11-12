@@ -144,6 +144,7 @@ export class AudioPart {
   }
 
   _auShow() {
+    if (this._mediaShow) this._mediaShow();
     if (!this._el) return;
     const $ = this._el;
     const au = this._au;

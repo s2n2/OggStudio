@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.20.1";
+  var VERSION = "0.20.2";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -1661,12 +1661,19 @@ button.outhead{display:flex;align-items:center;gap:8px;width:100%;min-height:36p
 .outbtns button[hidden]{display:none}
 ha-card.simple #vaubox #aubox,ha-card.simple #sndbox{margin-top:10px;padding:12px;border-radius:15px;border:1px solid #364563;background:#17243e}
 ha-card.simple #vaubox #aubox>label:first-of-type,ha-card.simple #sndbox #aubox>label:first-of-type{margin-top:0}
-.sndh{margin:0 0 4px;font-size:13px;font-weight:760;color:#e8edff}
 #sndbox #aubox{margin:0;padding:0;border:0;background:none}
 ha-card.simple button.vempty{min-height:160px}
 ha-card.simple .ctltabs button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:50px;line-height:1.1}
 ha-card.simple .ctltabs button .ti{font-size:15px;line-height:1}
 ha-card.simple .ctltabs button span:last-child{font-size:11.5px;white-space:nowrap}
+ha-card:not(.simple) .mhead{display:none}
+#videobox.mfold > :not(.mhead):not(#sndbox){display:none!important}
+#sndbox.mfold > :not(.mhead){display:none!important}
+.mfold > .mhead .chev{transform:rotate(-90deg)}
+ha-card.simple #sndbox{padding:8px 12px}
+#sndbox > .mhead{margin-bottom:2px}
+#sndbox #aubox{margin-top:6px}
+.mhead .outcount b{max-width:150px;overflow:hidden;text-overflow:ellipsis}
 [hidden],.off{display:none!important}
 `;
 
@@ -2005,6 +2012,7 @@ ${STYLES}
           <div class="row" style="margin-top:8px"><button id="play">▶ Play</button><button id="stop" class="stop">■ Stop</button><button id="code">Copy code</button><button id="delete">Delete</button></div>
         </section>
         <section id="videobox" data-part="video">
+          <button type="button" class="outhead mhead" id="vidhead" aria-expanded="true"><span class="outtitle">🎬 Video</span><span class="outcount zero" id="vidbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button>
           <h3 class="vhide">Video sync</h3>
           <div class="hint vhide" style="margin-top:0">The video plays from this phone or computer. 📺 Cast streams it to a TV through Home Assistant while you watch; nothing is saved there. Keep this screen on while casting.</div>
           <div class="vhide"><label>Video</label><input id="vfile" type="file" accept="video/*"></div>
@@ -2041,7 +2049,7 @@ ${STYLES}
           <input id="voff" type="range" min="-1000" max="1000" step="25" value="150">
           <div class="hint">Positive values send each moment slightly early to make up for Bluetooth delay. Pause, seek and playback speed all stay in sync.</div></div>
           <div id="vaubox"></div>
-          <div id="sndbox"><h4 class="sndh">♪ Sound</h4></div>
+          <div id="sndbox"><button type="button" class="outhead mhead" id="sndhead" aria-expanded="true"><span class="outtitle">♪ Sound</span><span class="outcount zero" id="sndbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button></div>
           <div class="hint vhide">To make a script for this video: press ● Rec, play the video and drag the slider (position in the Stroke view, intensity in Vibrate). You can pause, scrub back and record a section again; the newer pass replaces it. While a script plays, the slider shows it; hold the slider to take over until you let go.</div>
           <div class="hint vshow">Media: a video, music, the microphone or another tab. The slider under the video works with or without one: hold it to take over. On the video, the line on the left is the strength (a vibrator) or the speed (a stroker), and a stroker's range is on the right; ⛶ makes it full screen. ● Rec follows the video: play it and use the controls, or let a script (📂) or the sound of the video (♪) do the playing. Pause and it waits; go back and the new pass replaces what came after.</div>
         </section>
@@ -6290,6 +6298,7 @@ ${STYLES}
       this._auShow();
     }
     _auShow() {
+      if (this._mediaShow) this._mediaShow();
       if (!this._el) return;
       const $ = this._el;
       const au = this._au;
@@ -6564,6 +6573,7 @@ ${STYLES}
   var PATTERN_KEY = "oggstudio_pattern";
   var VSTROKE_KEY = "oggstudio_video_stroke";
   var VVIBE_KEY = "oggstudio_video_vibe";
+  var MEDIA_FOLD_KEY = "oggstudio_media_fold";
   var PATTERN_HINT = "Ogg's patterns, played from here: they show on the pads, stay inside your limits and can be recorded.";
   var PlayPart = class {
     get _simple() {
@@ -6624,6 +6634,15 @@ ${STYLES}
       document.addEventListener("fullscreenchange", onFull);
       document.addEventListener("webkitfullscreenchange", onFull);
       for (const type of ["play", "pause", "ended", "emptied", "loadedmetadata"]) video.addEventListener(type, () => this._vsideShow());
+      let mf = { v: false, s: true };
+      try {
+        mf = { ...mf, ...JSON.parse(localStorage.getItem(MEDIA_FOLD_KEY) || "{}") || {} };
+      } catch (_) {
+      }
+      this._mediaFold("v", Boolean(mf.v));
+      this._mediaFold("s", Boolean(mf.s));
+      $("vidhead").addEventListener("click", () => this._mediaFold("v", !this._mfold.v, true));
+      $("sndhead").addEventListener("click", () => this._mediaFold("s", !this._mfold.s, true));
       if (this._simple) {
         const opt = [...$("ausrc").options].find((o) => o.value === "video");
         if (opt) {
@@ -6897,6 +6916,7 @@ ${STYLES}
       $("vsscript").classList.toggle("has", Boolean(this._vscript));
       $("vsoff").classList.toggle("on", $("voffbox").classList.contains("open"));
       $("vsfile").classList.toggle("has", has);
+      this._mediaShow();
       this._vsSync();
     }
     // Full screen: the video and the slider over it (on its right, under the
@@ -7394,6 +7414,37 @@ ${STYLES}
     }
     // The video's own sound drives the devices: the audio settings sit under
     // the video while it is on.
+    // Video and Sound fold like Devices: Video open, Sound folded at first.
+    _mediaFold(which, folded, save) {
+      const $ = this._el;
+      this._mfold = this._mfold || { v: false, s: true };
+      this._mfold[which] = folded;
+      const box = which === "v" ? $("videobox") : $("sndbox");
+      box.classList.toggle("mfold", folded);
+      $(which === "v" ? "vidhead" : "sndhead").setAttribute("aria-expanded", String(!folded));
+      if (save) {
+        try {
+          localStorage.setItem(MEDIA_FOLD_KEY, JSON.stringify(this._mfold));
+        } catch (_) {
+        }
+      }
+    }
+    // What each shows when folded: the video's name, the sound that is on.
+    _mediaShow() {
+      if (!this._el) return;
+      const $ = this._el;
+      const badge = (id, on, text) => {
+        const el = $(id);
+        el.classList.toggle("zero", !on);
+        const b = el.querySelector("b");
+        if (b.textContent !== text) b.textContent = text;
+      };
+      const video = $("video");
+      badge("vidbadge", Boolean(this._vurl), this._vurl ? `${(this._vname || "video").slice(0, 18)}${video.paused ? "" : " · playing"}` : "none");
+      const au = this._au;
+      const src = { mic: "microphone", file: "music", tab: "tab", video: "from the video" };
+      badge("sndbadge", Boolean(au && au.src !== "video"), au && au.src !== "video" ? src[au.src] || "on" : "off");
+    }
     // The video's own sound drives the devices: its settings sit under the
     // video while it is on (as before), apart from the other sound.
     async _vaSet(on) {
