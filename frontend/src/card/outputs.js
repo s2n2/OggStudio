@@ -404,21 +404,34 @@ export class OutputsPart {
     return res.response.script;
   }
 
-  async _copySaved() {
-    if (this._simple && this._libPick === 'take' && this._take) { await this._copy(this._take); return; }
-    if (this._simple && this._libPick === 'loaded' && this._rp.raw) { await this._copy(this._rp.raw); return; }
-    try { await this._copy(await this._getSaved(this._el('saved').value)); } catch (e) { this._toast(e.message || String(e)); }
+  // Copy straight from the tap: the clipboard is asked at once (phones
+  // allow it only then), with the code to follow as soon as it is ready.
+  _copySaved() {
+    if (this._simple && this._libPick === 'take' && this._take) { this._copy(this._take); return; }
+    if (this._simple && this._libPick === 'loaded' && this._rp.raw) { this._copy(this._rp.raw); return; }
+    const name = this._el('saved').value;
+    if (this._rp && this._rp.raw && this._rp.lib === name) { this._copy(this._rp.raw); return; }
+    this._copy(() => this._getSaved(name));
   }
 
-  async _copy(script) {
+  _copy(script) {
     if (!script) return;
-    const code = await encodeCode(script);
-    try { await navigator.clipboard.writeText(code); this._toast(`Code copied (${code.length} characters)`); }
-    catch (e) {
+    const codeP = (async () => { const s = typeof script === 'function' ? await script() : script; if (!s) throw new Error('No script'); return encodeCode(s); })();
+    let asked;
+    try {
+      if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+        asked = navigator.clipboard.write([new ClipboardItem({ 'text/plain': codeP.then((c) => new Blob([c], { type: 'text/plain' })) })]);
+      } else asked = codeP.then((c) => navigator.clipboard.writeText(c));
+    } catch (e) { asked = Promise.reject(e); }
+    asked.then(async () => this._toast(`Code copied (${(await codeP).length} characters)`)).catch(async () => {
+      let code;
+      try { code = await codeP; } catch (e) { this._toast('Could not get the script: ' + (e.message || e)); return; }
+      // No clipboard here: show the code to copy by hand.
+      if (this._simple) { window.prompt('Copy this code:', code); return; }
       const out = this._el('codeout');
       out.hidden = false; out.value = code; out.select();
       this._toast('Clipboard unavailable: the code is shown in the Import box; copy it from there.');
-    }
+    });
   }
 
   async _delete() {
