@@ -17,7 +17,7 @@ export class ReplayPart {
     this._rp = { raw: null, conv: null, name: '', lib: null, playing: false, t: 0, len: 0, last: 0, outAt: 0 };
     let ctl = null;
     try { ctl = localStorage.getItem(`oggstudio_ctl:${this.localName}`); } catch (_) { /* private mode */ }
-    const kept = this._simple ? ['pattern', 'mood'] : ['replay', 'mood', 'audio', 'together'];
+    const kept = this._simple ? ['pattern', 'mood', 'library'] : ['replay', 'mood', 'audio', 'together'];
     const modes = this._variant.modes;
     this._ctl = this._togetherOnly ? 'together' : modes ? (modes.includes(ctl) ? ctl : modes[0]) : kept.includes(ctl) ? ctl : 'record';
     for (const b of this.shadowRoot.querySelectorAll('.ctltabs button')) b.addEventListener('click', () => this._setCtl(b.dataset.ctl));
@@ -78,7 +78,7 @@ export class ReplayPart {
     const ctl = this._ctl;
     const simple = this._simple;
     for (const b of this.shadowRoot.querySelectorAll('.ctltabs button')) b.classList.toggle('on', b.dataset.ctl === ctl);
-    $('rpbox').hidden = !(ctl === 'replay' || (simple && ctl === 'pattern'));
+    $('rpbox').hidden = !(ctl === 'replay' || (simple && (ctl === 'pattern' || ctl === 'library')));
     $('ptbox').hidden = ctl !== 'pattern';
     $('moodbox').hidden = ctl !== 'mood';
     $('aubox').hidden = simple ? false : !(ctl === 'audio' || (ctl === 'video' && this._vaudio));
@@ -92,7 +92,14 @@ export class ReplayPart {
     if (simple) {
       // Controls (pads or stroke bar), Video and Sound are all there.
       for (const sec of this.shadowRoot.querySelectorAll('[data-part="record"],[data-part="stroke"]')) sec.classList.toggle('off', !this._parts.includes(sec.dataset.part));
-      const gslot = this.shadowRoot.querySelector('[data-part="record"]:not(.off) .gpslot,[data-part="stroke"]:not(.off) .gpslot');
+      // The controller and Import live under Extras; the Library is a Controls tab.
+      const gslot = $('xgpslot');
+      const lib = this.shadowRoot.querySelector('section[data-part="library"]');
+      if (lib.parentElement !== $('libslot')) $('libslot').appendChild(lib);
+      lib.classList.toggle('off', ctl !== 'library');
+      const imp = this.shadowRoot.querySelector('section[data-part="import"]');
+      if (imp.parentElement !== $('extrabox')) $('extrabox').appendChild(imp);
+      imp.classList.remove('off');
       if (gslot) gslot.appendChild($('gp'));
       $('gp').hidden = !gslot;
     }

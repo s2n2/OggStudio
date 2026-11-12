@@ -310,5 +310,13 @@ ha-card.cfold #ctlhead .chev{transform:rotate(-90deg)}
 ha-card.simple .moodgrid{grid-template-columns:repeat(auto-fill,minmax(98px,1fr));gap:5px}
 ha-card.simple .moodgrid button.moodbtn{flex-direction:row;justify-content:flex-start;gap:6px;min-height:38px;padding:0 9px;font-size:12px;border-radius:11px}
 ha-card.simple .moodgrid button.moodbtn span{font-size:15px}
+ha-card:not(.simple) #extrabox{display:none}
+ha-card.simple section#extrabox{margin-top:10px}
+#extrabox.mfold > :not(.mhead){display:none!important}
+#extrabox > section{margin-top:10px;padding:0;border:0;background:none}
+#extrabox #xgpslot{display:block;margin-top:6px}
+#libslot > section{margin-top:8px;padding:0;border:0;background:none}
+#libslot > section h3{display:none}
+ha-card.simple section[data-part="record"] .hint,ha-card.simple section[data-part="stroke"] .hint,ha-card.simple .hint.vshow{display:none}
 [hidden],.off{display:none!important}
 `;

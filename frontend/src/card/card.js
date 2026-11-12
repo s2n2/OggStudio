@@ -90,6 +90,7 @@ export class OggStudioCard extends HTMLElement {
     }
     // Sound comes straight after the video (Play cards).
     this._el('sndbox').style.order = this._el('videobox').style.order;
+    this._el('extrabox').style.order = this._el('videobox').style.order;
     for (const tog of this.shadowRoot.querySelectorAll('.kind')) {
       tog.hidden = !this._canToggleKind;
       for (const b of tog.querySelectorAll('button')) b.classList.toggle('on', b.dataset.kind === this._recKind);
@@ -228,7 +229,7 @@ ${STYLES}
           <div id="ctlbox">
             <button type="button" class="outhead mhead" id="ctlhead" aria-expanded="true"><span class="outtitle">🎛 Controls</span><span class="outcount zero" id="ctlbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button>
             <div class="ctltabs" role="tablist"${this._variant.modes && this._variant.modes.length < 2 ? ' hidden' : ''}>${(simple
-              ? [['record', '✋ Manual'], ['pattern', '〰 Pattern'], ['mood', '◎ Mood']].map(([k, t]) => [k, `<span class="ti">${t.split(' ')[0]}</span><span>${t.split(' ').slice(1).join(' ')}</span>`])
+              ? [['record', '✋ Manual'], ['pattern', '〰 Pattern'], ['mood', '◎ Mood'], ['library', '📚 Library']].map(([k, t]) => [k, `<span class="ti">${t.split(' ')[0]}</span><span>${t.split(' ').slice(1).join(' ')}</span>`])
               : [['record', '● Record'], ['replay', '▶ Replay'], ['mood', '◎ Mood'], ['audio', '♪ Audio'], ['together', '🤝 Together']]
             ).filter(([k]) => !this._variant.modes || this._variant.modes.includes(k)).map(([k, t]) => `<button type="button" data-ctl="${k}">${t}</button>`).join('')}</div>
             <div id="urecrow" hidden>
@@ -281,6 +282,7 @@ ${STYLES}
               <div class="rpinfo" id="auinfo"></div>
               <button id="augo" type="button" class="go" style="margin-top:6px">♪ Start</button>
             </div>
+            <div id="libslot"></div>
             <div id="tgbox" hidden>
               <div id="tgidle">
                 <div class="hint" style="margin-top:0">Play together from two places. Each of you gets a slider that drives the other's devices, by feel, inside the limits each has set. Either of you can stop both sides at any time.</div>
@@ -364,6 +366,7 @@ ${STYLES}
           <div class="hint vshow">The slider under the video works with or without a video: hold it to take over. Patterns and moods (Controls) and sound (Sound) can play with the video; the newest one started has the devices. On the video, the line on the left is the strength (a vibrator) or the speed (a stroker), and a stroker's range is on the right; ⛶ makes it full screen. ● Rec follows the video: play it and use the controls, or let a script (📂) or the sound of the video (♪) do the playing. Pause and it waits; go back and the new pass replaces what came after.</div>
         </section>
         <section id="sndbox"><button type="button" class="outhead mhead" id="sndhead" aria-expanded="true"><span class="outtitle">♪ Sound</span><span class="outcount zero" id="sndbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button></section>
+        <section id="extrabox"><button type="button" class="outhead mhead" id="extrahead" aria-expanded="true"><span class="outtitle">🧰 Extras</span><span class="outcount zero" id="extrabadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button><div class="gpslot" id="xgpslot"></div></section>
         <section data-part="import">
           <h3>Import</h3>
           <textarea id="paste" placeholder="Paste a funscript, an ogg1: code, or JSON"></textarea>

@@ -354,7 +354,7 @@ export class OutputsPart {
   _playScript(script, name, lib) {
     if (!script) return;
     this._plOff();
-    this._setCtl(this._simple ? 'pattern' : 'replay');
+    this._setCtl(this._simple ? (this._ctl === 'library' ? 'library' : 'pattern') : 'replay');
     this._rpLoad(script, name, lib);
     if (SPEEDS.includes(this._el('speed').value)) this._el('rpspeed').value = this._el('speed').value;
     this._el('rploop').checked = this._el('loop').checked;
