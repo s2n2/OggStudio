@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.21.5";
+  var VERSION = "0.21.6";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -4315,7 +4315,6 @@ ${STYLES}
     _setCtl(mode) {
       if (mode === this._ctl) return;
       const from = this._ctl;
-      if (this._simple && this._urecOn && [from, mode].some((m) => m === "record" || m === "video")) this._urecStop();
       if (from === "record") {
         if (this._recording) this._stopRecording();
         if (this._stRecording) this._stStop();
@@ -6773,9 +6772,7 @@ ${STYLES}
         this._urecStop();
         return;
       }
-      if (this._ctl !== "record") this._tapStart();
-      else if (this._strokeKind) this._stStart();
-      else this._startRecording();
+      this._tapStart();
       this._urecShow();
     }
     _urecStop() {

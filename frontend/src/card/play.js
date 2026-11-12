@@ -106,9 +106,9 @@ export class PlayPart {
   // other mode records what it plays: what the pads or the bar show.
   _urecToggle() {
     if (this._urecOn) { this._urecStop(); return; }
-    if (this._ctl !== 'record') this._tapStart();
-    else if (this._strokeKind) this._stStart();
-    else this._startRecording();
+    // One recorder for every tab: it follows the pads or the stroke bar
+    // (whatever drives them), so a recording carries on across tabs.
+    this._tapStart();
     this._urecShow();
   }
 

@@ -54,7 +54,6 @@ export class ReplayPart {
     if (mode === this._ctl) return;
     const from = this._ctl;
     // One recording does not run across by-hand, the video's clock and the rest.
-    if (this._simple && this._urecOn && [from, mode].some((m) => m === 'record' || m === 'video')) this._urecStop();
     if (from === 'record') {
       if (this._recording) this._stopRecording();
       if (this._stRecording) this._stStop();
