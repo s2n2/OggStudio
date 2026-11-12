@@ -384,6 +384,7 @@ export class PlayPart {
   // (a stroker: stroke, anything else: vibrate), and can be switched back.
   _autoKind() {
     if (!this._simple || !this._outs || this._autoKindBusy || this._variant.kind) return;
+    if (!this._outs.length) return;
     const kind = this._isLinear(0) ? 'stroke' : 'vibrate';
     if (kind === this._recKind) return;
     this._autoKindBusy = true;
@@ -485,7 +486,7 @@ export class PlayPart {
     const lv = r.levels.map((v) => this._vvScale(v));
     range.pos = lv[0];
     for (const i of [0, 1]) this._setPad(i, lv[i]);
-    this._outApply([0, 1].map((i) => (i && !this._twoPads ? null : this._mapLevel(i, lv[i]))), 0.6);
+    this._outApply(this._outIdx.map((i) => this._mapLevel(i, lv[i % 2])), 0.6);
     this._vsWasLive = true;
     this._vlimShow();
     return true;
@@ -557,7 +558,7 @@ export class PlayPart {
     r.pos = v;
     if (v > 0) {
       for (const i of [0, 1]) this._setPad(i, v);
-      this._outApply([0, 1].map((i) => (i && !this._twoPads ? null : this._mapLevel(i, v))), 0.6);
+      this._outApply(this._outIdx.map((i) => this._mapLevel(i, v)), 0.6);
       this._vsWasLive = true;
     } else if (this._vsWasLive) {
       this._vsWasLive = false;

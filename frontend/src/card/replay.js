@@ -155,19 +155,19 @@ export class ReplayPart {
     if (raw.mood) {
       // A mood: vibrators get its vibration tracks (scaled by Strength), strokers its strokes.
       const k = this._moodStrength();
-      return [0, 1].map((i) => {
+      return this._outIdx.map((i) => {
         const p = parseTarget(this._outTargetValue(i));
         this._aiLabel(i, null);
         if (p && p.motor === 'l') return moodSoften(sampleAt(raw.actions, ms), k, ms);
-        return sampleAt(raw.mood.vibe[i] || raw.mood.vibe[0], ms) * k;
+        return sampleAt(raw.mood.vibe[i % 2] || raw.mood.vibe[0], ms) * k;
       });
     }
-    return [0, 1].map((i) => {
-      const v1 = i && raw.channels && raw.channels.V1 && raw.channels.V1.actions;
+    return this._outIdx.map((i) => {
+      const v1 = (i % 2) && raw.channels && raw.channels.V1 && raw.channels.V1.actions;
       const second = Boolean(v1 && v1.length);
       const track = second ? v1 : raw.actions;
       const p = parseTarget(this._outTargetValue(i));
-      const m = this._outs[i].m;
+      const m = this._outAt(i).m;
       if (m === FOLLOW_AI) {
         // Stroke into a vibrator, or vibration into a stroker: by feel. Same kind: as it is.
         const linear = Boolean(p && p.motor === 'l');
@@ -199,10 +199,10 @@ export class ReplayPart {
       const next = nextAction(raw.actions, ms);
       return next ? { goal: moodSoften(next.pos, this._moodStrength(), next.at), dur: (next.at - ms) / (rate || 1) } : null;
     }
-    const v1 = i && raw.channels && raw.channels.V1 && raw.channels.V1.actions;
+    const v1 = (i % 2) && raw.channels && raw.channels.V1 && raw.channels.V1.actions;
     const second = Boolean(v1 && v1.length);
     let src = second ? v1 : raw.actions;
-    if (this._outs[i].m === FOLLOW_AI && !isStroke(raw)) {
+    if (this._outAt(i).m === FOLLOW_AI && !isStroke(raw)) {
       const key = `ai:${second ? 1 : 0}:s`;
       if (!cache[key]) cache[key] = aiVibeToStroke(src);
       src = cache[key].actions;
@@ -214,7 +214,7 @@ export class ReplayPart {
 
   // Live AI feel per output (one engine each, restarted when stopped).
   _aiLiveFor(i, kind) {
-    this._aiLive = this._aiLive || [null, null];
+    this._aiLive = this._aiLive || [];
     if (!this._aiLive[i] || this._aiLive[i].kind !== kind) this._aiLive[i] = new AiLive(kind);
     return this._aiLive[i];
   }
@@ -229,13 +229,13 @@ export class ReplayPart {
 
   // What each output's AI feel is doing now, shown under it.
   _aiLabel(i, label) {
-    this._aiLabels = this._aiLabels || [null, null];
+    this._aiLabels = this._aiLabels || [];
     this._aiLabels[i] = label;
     const now = performance.now();
     if (now - (this._aiShownAt || 0) < 250 || !this._el) return;
     this._aiShownAt = now;
     [...this.shadowRoot.querySelectorAll('.outai')].forEach((el, j) => {
-      const l = this._outs[j].m === FOLLOW_AI ? this._aiLabels[j] : null;
+      const l = this._outAt(j).m === FOLLOW_AI ? this._aiLabels[j] : null;
       el.hidden = !l;
       if (l && el.textContent !== `✨ ${l}`) el.textContent = `✨ ${l}`;
     });
@@ -244,7 +244,7 @@ export class ReplayPart {
   // A live value (pad, slider) mapped by an output's way of following.
   _mapLive(i, value, vel) {
     const p = parseTarget(this._outTargetValue(i));
-    const m = this._outs[i].m;
+    const m = this._outAt(i).m;
     if (p && p.motor === 'l' && m === FOLLOW_AI) {
       // Vibration in, stroker out: strokes planned from the vibration's mood.
       const eng = this._aiLiveFor(i, 'vibe');
@@ -272,15 +272,15 @@ export class ReplayPart {
     const now = performance.now();
     this._padVel = this._padVel || [0, 0];
     this._padPrev = this._padPrev || [null, null];
-    const out = [0, 1].map((i) => {
-      if (i && !this._twoPads) return null;
-      const v = this._vals[i];
-      const prev = this._padPrev[i];
+    for (const k of [0, 1]) {
+      const v = this._vals[k];
+      const prev = this._padPrev[k];
       const dt = prev ? now - prev.at : 0;
-      this._padVel[i] = this._padVel[i] * 0.6 + (dt > 0 ? (v - prev.v) / dt * 1000 : 0) * 0.4;
-      this._padPrev[i] = { v, at: now };
-      return this._mapLive(i, v, this._padVel[i]);
-    });
+      this._padVel[k] = this._padVel[k] * 0.6 + (dt > 0 ? (v - prev.v) / dt * 1000 : 0) * 0.4;
+      this._padPrev[k] = { v, at: now };
+    }
+    // Devices 1 and 3 follow the first pad, 2 and 4 the second.
+    const out = this._outIdx.map((i) => (i % 2 && !this._twoPads ? null : this._mapLive(i, this._vals[i % 2], this._padVel[i % 2])));
     this._outApply(out, 1.0);
   }
 
@@ -288,7 +288,7 @@ export class ReplayPart {
   _useRemembered(lib, script) {
     const info = lib && this._scriptInfo(lib);
     const p = parseTarget(this._outTargetValue(0));
-    if (info && info.mode && RUN_MODES[info.mode] && isStroke(script) && p && p.motor !== 'l') { this._outs[0].m = info.mode; this._outSave(); }
+    if (info && info.mode && RUN_MODES[info.mode] && isStroke(script) && p && p.motor !== 'l' && this._outs[0]) { this._outs[0].m = info.mode; this._outSave(); }
   }
 
   // The script converted with one run mode (cached per mode).
@@ -333,7 +333,7 @@ export class ReplayPart {
     this._ptStop();
     const video = this._el('video');
     if (video && !video.paused) video.pause();     // one thing drives the devices at a time
-    if (rp.lib && isStroke(rp.raw) && RUN_MODES[this._outs[0].m]) this._setMode(rp.lib, this._outs[0].m);
+    if (rp.lib && isStroke(rp.raw) && RUN_MODES[this._outAt(0).m]) this._setMode(rp.lib, this._outAt(0).m);
     rp.playing = true;
     this._outRender();
     rp.last = performance.now();
@@ -391,15 +391,15 @@ export class ReplayPart {
     } else if (rp.raw) {
       // Vibrate view: each device (and its pad) follows its own way; a
       // vibration script plays as it is (second track on pad 2).
-      const targets = [0, 1].map((i) => parseTarget(this._outTargetValue(i)));
+      const targets = this._outIdx.map((i) => parseTarget(this._outTargetValue(i)));
       const vals = this._mapScript(rp.raw, rp.t, rp.convs || (rp.convs = {}));
       for (const i of [0, 1]) if (!this._padActive || !this._padActive[i]) this._setPad(i, vals[i]);
       if (now - rp.outAt >= 100 || targets.some((t) => t && t.motor === 'l')) {
         if (now - rp.outAt >= 100) rp.outAt = now;
-        const out = [0, 1].map((i) => {
-          if (i && !this._twoPads) return null;
-          if (targets[i] && targets[i].motor === 'l') return (this._padActive && this._padActive[i]) ? { goal: this._vals[i], dur: 150 } : (this._goalFrom(i, rp.raw, rp.t, this._rpSpeed(), rp.convs) || { goal: this._vals[i], dur: 150 });
-          return this._vals[i];
+        const out = this._outIdx.map((i) => {
+          const k = i % 2;
+          if (targets[i] && targets[i].motor === 'l') return (this._padActive && this._padActive[k]) ? { goal: this._vals[k], dur: 150 } : (this._goalFrom(i, rp.raw, rp.t, this._rpSpeed(), rp.convs) || { goal: this._vals[k], dur: 150 });
+          return i < 2 || (this._padActive && this._padActive[k]) ? this._vals[k] : vals[i];
         });
         this._outApply(out, 0.6);
       }

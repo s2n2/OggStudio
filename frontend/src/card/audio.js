@@ -123,9 +123,9 @@ export class AudioPart {
         const vel = dt > 0 && au.pos !== undefined ? (pos - au.pos) / dt * 1000 : 0;
         au.pos = pos; au.posAt = now;
         this._strokeOut(pos, vel);
-      } else this._outApply([0, 1].map((i) => (i && !this._twoPads ? null : this._isLinear(i) ? { goal: r.levels[0], dur: 180 } : this._mapLevel(i, r.levels[i]))), 0.6);
+      } else this._outApply(this._outIdx.map((i) => (this._isLinear(i) ? { goal: r.levels[0], dur: 180 } : this._mapLevel(i, r.levels[i % 2]))), 0.6);
       if (this._ctl === 'video' && !this._hbActive && !this._vrec) this._showHBar(0, this._strokeKind ? this._lim(r.levels[0]) : r.levels[0]);
-    } else this._outApply([0, 1].map((i) => (i && !this._twoPads ? null : this._mapLevel(i, r.levels[i]))), 0.6);
+    } else this._outApply(this._outIdx.map((i) => this._mapLevel(i, r.levels[i % 2])), 0.6);
     if (now - (au.shownAt || 0) > 1000) { au.shownAt = now; this._auShow(); }
   }
 

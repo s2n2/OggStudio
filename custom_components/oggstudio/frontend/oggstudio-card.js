@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.18.0";
+  var VERSION = "0.19.0";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -1633,16 +1633,31 @@ ha-card.simple #liverow,ha-card.simple #stliverow{display:none!important}
 .vstrail.active .hu{top:-7px}
 .vstrail.active .hl{bottom:-7px}
 .vstrail .dot{position:absolute;left:50%;width:10px;height:10px;margin:0 0 -5px -5px;border-radius:50%;background:rgba(255,255,255,.75);box-shadow:0 0 0 1px rgba(0,0,0,.45)}
-.outrow{grid-template-columns:auto minmax(0,1fr) minmax(0,1fr)}
-.outrow.solo{grid-template-columns:auto minmax(0,1fr)}
-.outrow.solo.take{grid-template-columns:auto minmax(0,1fr) auto}
-.outrow .outai,.outrow .outtake{grid-column:2/-1}
 .urechead{justify-content:space-between;align-items:center}
 .urechead .kind{flex:0 1 auto}
 .urechead .kind button{min-height:42px;padding:0 12px;font-size:12px}
 .urechead button.rec{flex:0 0 auto;width:auto;min-height:42px;padding:0 18px;font-size:13px;border-radius:13px}
 ha-card.simple .hbar{margin-top:10px;border-radius:15px;border-color:#364563;background:#17243e}
 ha-card.simple .hbar .fill{background:linear-gradient(90deg,rgba(49,198,184,.55),rgba(123,204,250,.75))}
+button.outhead{display:flex;align-items:center;gap:8px;width:100%;min-height:36px;padding:0 2px;border:0;background:none;color:#e8edff;text-align:left}
+.outhead .outtitle{flex:1;font-size:14px;font-weight:760;letter-spacing:-.01em}
+.outcount{display:flex;align-items:center;gap:5px;border:1px solid rgba(100,218,189,.23);background:rgba(40,124,115,.17);padding:6px 10px;border-radius:30px;font-size:11px;font-weight:600;color:#9adbd1;white-space:nowrap}
+.outcount i{width:7px;height:7px;border-radius:50%;background:#58d6b2;box-shadow:0 0 0 4px rgba(64,194,164,.11)}
+.outcount b{font-weight:800;color:#e7fff9;font-variant-numeric:tabular-nums}
+.outcount.zero{border-color:rgba(174,194,246,.14);color:var(--muted);background:rgba(169,184,217,.08)}
+.outcount.zero i{background:#72809f;box-shadow:none}
+.outhead .chev{font-size:13px;color:#a8b8da;transition:transform .18s ease}
+.outbox.folded .chev{transform:rotate(-90deg)}
+#outrows{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.outrow{display:grid;grid-template-columns:auto auto minmax(0,1fr) minmax(0,1fr) 34px;gap:6px;margin-top:0;align-items:center}
+.outrow.take{grid-template-columns:auto auto minmax(0,1fr) 34px}
+.outrow .outpad{display:grid;place-items:center;width:18px;height:18px;border-radius:6px;background:rgba(152,168,249,.16);color:#c5d2f0;font-size:10px;font-weight:800}
+.outrow .outpad[hidden]{display:none}
+.outrow button.outdel{min-height:34px;width:34px;padding:0;font-size:12px;border-radius:10px;color:#e9adb7;background:rgba(246,104,121,.08);border-color:rgba(246,104,121,.2)}
+.outrow .outai,.outrow .outtake{grid-column:3/-1}
+.outbtns{display:flex;gap:8px;margin-top:8px}
+.outbtns button{flex:1;min-height:38px;margin:0;font-size:12.5px}
+.outbtns button[hidden]{display:none}
 [hidden],.off{display:none!important}
 `;
 
@@ -1957,11 +1972,13 @@ ${STYLES}
             </div>
           </div>
           <div class="outbox" id="outbox">
-            <label>Devices, and how each follows (used for recording, replay, library and video)</label>
-            <div class="outrow" data-row="0"><input class="outon" type="checkbox" role="switch" title="Active: this device follows" aria-label="First device active"><select class="outt" aria-label="First device"></select><select class="outm" aria-label="How the first device follows"></select><div class="outai" hidden></div><button class="outtake" type="button" hidden>Take control</button></div>
-            <div class="outrow" data-row="1"><input class="outon" type="checkbox" role="switch" title="Active: this device follows" aria-label="Second device active"><select class="outt" aria-label="Second device"></select><select class="outm" aria-label="How the second device follows"></select><div class="outai" hidden></div><button class="outtake" type="button" hidden>Take control</button></div>
+            <button id="outfold" type="button" class="outhead" aria-expanded="true"><span class="outtitle">Devices</span><span class="outcount" id="outcount"><i></i><b>0</b> connected</span><span class="chev" aria-hidden="true">▾</span></button>
+            <div id="outbody">
+            <div id="outrows"></div>
             <div class="outnote" id="outnote"></div>
-            <button id="limbtn" type="button" class="limbtn">⚙ Limits</button>
+            <div class="outbtns"><button id="outadd" type="button">＋ Add device</button><button id="limbtn" type="button" class="limbtn">⚙ Limits</button></div>
+            <div class="hint" id="outhint" hidden>Devices 1 and 3 follow the first pad, 2 and 4 the second.</div>
+            </div>
             <div class="subbox" id="limbox" hidden><div id="limlist"></div><div class="hint">Nothing goes past these, whatever is driving: pads, scripts, moods, audio or a partner. They are kept in Home Assistant for every card.</div></div>
           </div>
         </section>
@@ -2358,7 +2375,7 @@ ${STYLES}
         return;
       }
       this._take = { version: "1.0", inverted: false, range: 100, actions: acts, metadata: { creator: "OggStudio", type: "stroke" } };
-      const m = this._outs[0].m;
+      const m = this._outAt(0).m;
       this._el("takemode").value = RUN_MODES[m] ? m : RUN_MODE_DEFAULT;
       this._toast(`Recorded ${fmt(duration(this._take))} of strokes. Save it below, or download the .funscript for a Handy.`);
       this._update();
@@ -3130,7 +3147,7 @@ ${STYLES}
         if (held) {
           const h = this._hvals[0];
           for (const i of [0, 1]) if (!this._padActive || !this._padActive[i]) this._setPad(i, h);
-          this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._mapLive(i, h, this._vVel)), 0.6);
+          this._outApply(this._outIdx.map((i) => this._mapLive(i, h, this._vVel)), 0.6);
           return;
         }
         let vals = this._mapScript(this._vraw || { actions: [] }, ms, this._vconvs || (this._vconvs = {}));
@@ -3139,13 +3156,12 @@ ${STYLES}
           if (this._vsRange) this._vsRange.pos = vals[0];
         }
         for (const i of [0, 1]) if (!this._padActive || !this._padActive[i]) this._setPad(i, vals[i]);
-        const out = [0, 1].map((i) => {
-          if (i && !this._twoPads) return null;
+        const out = this._outIdx.map((i) => {
           const p = parseTarget(this._outTargetValue(i));
           if (p && p.motor === "l") {
-            return this._vraw && this._goalFrom(i, this._vraw, ms, video.playbackRate, this._vconvs || (this._vconvs = {})) || { goal: this._vals[i], dur: 150 };
+            return this._vraw && this._goalFrom(i, this._vraw, ms, video.playbackRate, this._vconvs || (this._vconvs = {})) || { goal: this._vals[i % 2], dur: 150 };
           }
-          return this._vals[i];
+          return i < 2 ? this._vals[i] : vals[i];
         });
         this._outApply(out, 0.6);
       }
@@ -3626,8 +3642,9 @@ ${STYLES}
       });
     }
     // Pads: one, or two when a second output is chosen (one track each).
+    // Two pads when a device follows the second (device 2 or 4).
     get _twoPads() {
-      return Boolean(this._outs) && this._outTargetValue(1) !== "off";
+      return Boolean(this._outs) && this._outs.some((o, i) => i % 2 === 1 && parseTarget(this._outTargetValue(i)));
     }
     _levels() {
       const levels = [this._vals[0] / 100];
@@ -4378,19 +4395,19 @@ ${STYLES}
     _mapScript(raw, ms, cache) {
       if (raw.mood) {
         const k = this._moodStrength();
-        return [0, 1].map((i) => {
+        return this._outIdx.map((i) => {
           const p = parseTarget(this._outTargetValue(i));
           this._aiLabel(i, null);
           if (p && p.motor === "l") return moodSoften(sampleAt(raw.actions, ms), k, ms);
-          return sampleAt(raw.mood.vibe[i] || raw.mood.vibe[0], ms) * k;
+          return sampleAt(raw.mood.vibe[i % 2] || raw.mood.vibe[0], ms) * k;
         });
       }
-      return [0, 1].map((i) => {
-        const v1 = i && raw.channels && raw.channels.V1 && raw.channels.V1.actions;
+      return this._outIdx.map((i) => {
+        const v1 = i % 2 && raw.channels && raw.channels.V1 && raw.channels.V1.actions;
         const second = Boolean(v1 && v1.length);
         const track = second ? v1 : raw.actions;
         const p = parseTarget(this._outTargetValue(i));
-        const m = this._outs[i].m;
+        const m = this._outAt(i).m;
         if (m === FOLLOW_AI) {
           const linear = Boolean(p && p.motor === "l");
           if (linear === isStroke(raw)) {
@@ -4423,10 +4440,10 @@ ${STYLES}
         const next2 = nextAction(raw.actions, ms);
         return next2 ? { goal: moodSoften(next2.pos, this._moodStrength(), next2.at), dur: (next2.at - ms) / (rate || 1) } : null;
       }
-      const v1 = i && raw.channels && raw.channels.V1 && raw.channels.V1.actions;
+      const v1 = i % 2 && raw.channels && raw.channels.V1 && raw.channels.V1.actions;
       const second = Boolean(v1 && v1.length);
       let src = second ? v1 : raw.actions;
-      if (this._outs[i].m === FOLLOW_AI && !isStroke(raw)) {
+      if (this._outAt(i).m === FOLLOW_AI && !isStroke(raw)) {
         const key = `ai:${second ? 1 : 0}:s`;
         if (!cache[key]) cache[key] = aiVibeToStroke(src);
         src = cache[key].actions;
@@ -4437,7 +4454,7 @@ ${STYLES}
     }
     // Live AI feel per output (one engine each, restarted when stopped).
     _aiLiveFor(i, kind) {
-      this._aiLive = this._aiLive || [null, null];
+      this._aiLive = this._aiLive || [];
       if (!this._aiLive[i] || this._aiLive[i].kind !== kind) this._aiLive[i] = new AiLive(kind);
       return this._aiLive[i];
     }
@@ -4450,13 +4467,13 @@ ${STYLES}
     }
     // What each output's AI feel is doing now, shown under it.
     _aiLabel(i, label) {
-      this._aiLabels = this._aiLabels || [null, null];
+      this._aiLabels = this._aiLabels || [];
       this._aiLabels[i] = label;
       const now = performance.now();
       if (now - (this._aiShownAt || 0) < 250 || !this._el) return;
       this._aiShownAt = now;
       [...this.shadowRoot.querySelectorAll(".outai")].forEach((el, j) => {
-        const l = this._outs[j].m === FOLLOW_AI ? this._aiLabels[j] : null;
+        const l = this._outAt(j).m === FOLLOW_AI ? this._aiLabels[j] : null;
         el.hidden = !l;
         if (l && el.textContent !== `✨ ${l}`) el.textContent = `✨ ${l}`;
       });
@@ -4464,7 +4481,7 @@ ${STYLES}
     // A live value (pad, slider) mapped by an output's way of following.
     _mapLive(i, value, vel) {
       const p = parseTarget(this._outTargetValue(i));
-      const m = this._outs[i].m;
+      const m = this._outAt(i).m;
       if (p && p.motor === "l" && m === FOLLOW_AI) {
         const eng = this._aiLiveFor(i, "vibe");
         const move = eng.move(performance.now(), value);
@@ -4492,22 +4509,21 @@ ${STYLES}
       const now = performance.now();
       this._padVel = this._padVel || [0, 0];
       this._padPrev = this._padPrev || [null, null];
-      const out = [0, 1].map((i) => {
-        if (i && !this._twoPads) return null;
-        const v = this._vals[i];
-        const prev = this._padPrev[i];
+      for (const k of [0, 1]) {
+        const v = this._vals[k];
+        const prev = this._padPrev[k];
         const dt = prev ? now - prev.at : 0;
-        this._padVel[i] = this._padVel[i] * 0.6 + (dt > 0 ? (v - prev.v) / dt * 1e3 : 0) * 0.4;
-        this._padPrev[i] = { v, at: now };
-        return this._mapLive(i, v, this._padVel[i]);
-      });
+        this._padVel[k] = this._padVel[k] * 0.6 + (dt > 0 ? (v - prev.v) / dt * 1e3 : 0) * 0.4;
+        this._padPrev[k] = { v, at: now };
+      }
+      const out = this._outIdx.map((i) => i % 2 && !this._twoPads ? null : this._mapLive(i, this._vals[i % 2], this._padVel[i % 2]));
       this._outApply(out, 1);
     }
     // A saved stroke script's remembered run mode becomes the first device's follow type.
     _useRemembered(lib, script) {
       const info = lib && this._scriptInfo(lib);
       const p = parseTarget(this._outTargetValue(0));
-      if (info && info.mode && RUN_MODES[info.mode] && isStroke(script) && p && p.motor !== "l") {
+      if (info && info.mode && RUN_MODES[info.mode] && isStroke(script) && p && p.motor !== "l" && this._outs[0]) {
         this._outs[0].m = info.mode;
         this._outSave();
       }
@@ -4577,7 +4593,7 @@ ${STYLES}
       this._ptStop();
       const video = this._el("video");
       if (video && !video.paused) video.pause();
-      if (rp.lib && isStroke(rp.raw) && RUN_MODES[this._outs[0].m]) this._setMode(rp.lib, this._outs[0].m);
+      if (rp.lib && isStroke(rp.raw) && RUN_MODES[this._outAt(0).m]) this._setMode(rp.lib, this._outAt(0).m);
       rp.playing = true;
       this._outRender();
       rp.last = performance.now();
@@ -4642,15 +4658,15 @@ ${STYLES}
       if (this._strokeKind) {
         this._stRun();
       } else if (rp.raw) {
-        const targets = [0, 1].map((i) => parseTarget(this._outTargetValue(i)));
+        const targets = this._outIdx.map((i) => parseTarget(this._outTargetValue(i)));
         const vals = this._mapScript(rp.raw, rp.t, rp.convs || (rp.convs = {}));
         for (const i of [0, 1]) if (!this._padActive || !this._padActive[i]) this._setPad(i, vals[i]);
         if (now - rp.outAt >= 100 || targets.some((t) => t && t.motor === "l")) {
           if (now - rp.outAt >= 100) rp.outAt = now;
-          const out = [0, 1].map((i) => {
-            if (i && !this._twoPads) return null;
-            if (targets[i] && targets[i].motor === "l") return this._padActive && this._padActive[i] ? { goal: this._vals[i], dur: 150 } : this._goalFrom(i, rp.raw, rp.t, this._rpSpeed(), rp.convs) || { goal: this._vals[i], dur: 150 };
-            return this._vals[i];
+          const out = this._outIdx.map((i) => {
+            const k = i % 2;
+            if (targets[i] && targets[i].motor === "l") return this._padActive && this._padActive[k] ? { goal: this._vals[k], dur: 150 } : this._goalFrom(i, rp.raw, rp.t, this._rpSpeed(), rp.convs) || { goal: this._vals[k], dur: 150 };
+            return i < 2 || this._padActive && this._padActive[k] ? this._vals[k] : vals[i];
           });
           this._outApply(out, 0.6);
         }
@@ -4706,6 +4722,9 @@ ${STYLES}
   }
 
   // frontend/src/card/outputs.js
+  var MAX_OUTS = 4;
+  var OUT_FOLD_KEY = "oggstudio_outputs_folded";
+  var NO_OUT = Object.freeze({ t: "none", m: "position", on: true });
   var OutputsPart = class {
     // ---------------------------------------------------------- outputs
     _bindOutputs() {
@@ -4715,30 +4734,86 @@ ${STYLES}
         saved = JSON.parse(localStorage.getItem(OUT_KEY) || "null");
       } catch (_) {
       }
-      const t = saved && Array.isArray(saved.t) ? saved.t : [];
-      const m = saved && Array.isArray(saved.m) ? saved.m : [];
-      const on = saved && Array.isArray(saved.on) ? saved.on : [];
-      this._outs = [0, 1].map((i) => ({ t: typeof t[i] === "string" ? t[i] : i ? "off" : null, m: typeof m[i] === "string" ? m[i] : "position", on: on[i] !== false }));
-      for (const row of this.shadowRoot.querySelectorAll(".outrow")) {
-        const i = Number(row.dataset.row);
-        row.querySelector(".outt").addEventListener("change", (e) => {
-          this._outSwitch(i, { t: e.target.value });
-        });
-        row.querySelector(".outm").addEventListener("change", (e) => {
-          this._outSwitch(i, { m: e.target.value });
-        });
-        row.querySelector(".outtake").addEventListener("click", () => this._outTake(i));
-        const sw = row.querySelector(".outon");
-        sw.checked = this._outs[i].on;
-        sw.addEventListener("change", () => {
+      if (saved && Array.isArray(saved.t)) {
+        const m = Array.isArray(saved.m) ? saved.m : [];
+        const on = Array.isArray(saved.on) ? saved.on : [];
+        this._outs = saved.t.map((t, i) => ({ t, m: typeof m[i] === "string" ? m[i] : "position", on: on[i] !== false })).filter((o) => o.t !== "none" && o.t !== "off" && (o.t === null || typeof o.t === "string")).slice(0, MAX_OUTS);
+      } else this._outs = [{ t: null, m: "position", on: true }];
+      let fold = false;
+      try {
+        fold = localStorage.getItem(OUT_FOLD_KEY) === "1";
+      } catch (_) {
+      }
+      this._outFold(fold);
+      $("outfold").addEventListener("click", () => this._outFold(!this._outFolded, true));
+      $("outadd").addEventListener("click", () => this._outAdd());
+      const rows = $("outrows");
+      const at = (e) => {
+        const row = e.target.closest(".outrow");
+        return row ? Number(row.dataset.row) : -1;
+      };
+      rows.addEventListener("change", (e) => {
+        const i = at(e);
+        if (i < 0 || !this._outs[i]) return;
+        if (e.target.classList.contains("outt")) this._outSwitch(i, { t: e.target.value });
+        else if (e.target.classList.contains("outm")) this._outSwitch(i, { m: e.target.value });
+        else if (e.target.classList.contains("outon")) {
           this._outStop();
-          this._outs[i].on = sw.checked;
+          this._outs[i].on = e.target.checked;
           this._outSave();
           if (this._simple) this._el("stlive").checked = this._anyActive;
           this._outRender();
-        });
-      }
+        }
+      });
+      rows.addEventListener("click", (e) => {
+        const i = at(e);
+        if (i < 0) return;
+        if (e.target.closest(".outtake")) this._outTake(i);
+        else if (e.target.closest(".outdel")) this._outRemove(i);
+      });
       this._outRender();
+    }
+    // Folded: just the count of connected devices.
+    _outFold(on, save) {
+      this._outFolded = Boolean(on);
+      this._el("outbody").hidden = this._outFolded;
+      this._el("outfold").setAttribute("aria-expanded", String(!this._outFolded));
+      this._el("outbox").classList.toggle("folded", this._outFolded);
+      if (this._outFolded) this._el("limbox").hidden = true;
+      if (save) {
+        try {
+          localStorage.setItem(OUT_FOLD_KEY, this._outFolded ? "1" : "0");
+        } catch (_) {
+        }
+      }
+    }
+    _outAdd() {
+      if (this._outs.length >= MAX_OUTS) return;
+      const used = new Set(this._outs.map((o, i) => (parseTarget(this._outTargetValue(i)) || {}).id));
+      const dev = this._devices.find((d) => !used.has(d.id) && this._online(d)) || this._devices.find((d) => !used.has(d.id)) || this._devices[0];
+      const t = dev ? `${dev.id}|${dev.linear && !dev.vibe ? "l" : "b"}` : null;
+      this._outStop();
+      this._outs.push({ t, m: "position", on: true });
+      this._outSave();
+      this._outRender();
+      if (this._simple && this._outs.length === 1) this._autoKind();
+      this._update();
+    }
+    _outRemove(i) {
+      this._outStop();
+      this._outs.splice(i, 1);
+      this._outSave();
+      this._outRender();
+      if (this._simple) this._el("stlive").checked = this._anyActive;
+      this._update();
+    }
+    // An output by place, or a stand-in (no device) where there is none: the
+    // two pads always have a first output each (1 and 2; 3 and 4 follow too).
+    _outAt(i) {
+      return this._outs && this._outs[i] || NO_OUT;
+    }
+    get _outIdx() {
+      return Array.from({ length: Math.max(2, this._outs ? this._outs.length : 0) }, (_, i) => i);
     }
     // Any device switched on (and chosen)?
     get _anyActive() {
@@ -4751,20 +4826,23 @@ ${STYLES}
       }
     }
     _outSwitch(i, change) {
+      if (!this._outs[i]) return;
       this._outStop();
       Object.assign(this._outs[i], change);
       this._outSave();
       this._outRender();
-      if (this._simple && "t" in change) this._autoKind();
+      if (this._simple && "t" in change && i === 0) this._autoKind();
       this._update();
     }
     // The saved target if it still exists, else a sensible default.
     _outTargetValue(i) {
-      const t = this._outs[i].t;
-      if (t === "none" || t === "off") return t;
+      const o = this._outs && this._outs[i];
+      if (!o) return "none";
+      const t = o.t;
+      if (t === "none" || t === "off") return "none";
       const p = parseTarget(t);
       if (p && this._devices.some((d) => d.id === p.id)) return t;
-      if (i === 1) return "off";
+      if (i > 0) return "none";
       if (!this._registryDone) return "none";
       const id = this._remembered && this._remembered.id;
       const dev = this._devices.find((d) => d.id === id) || this._devices.find((d) => this._online(d)) || this._devices[0];
@@ -4873,38 +4951,50 @@ ${STYLES}
       this._claimAt = {};
       this._outLast = {};
       this._linLast = {};
-      this._aiLive = [null, null];
+      this._aiLive = [];
     }
     _outRender() {
       if (!this._el || !this._outs) return;
+      const $ = this._el;
       const stroke = this._strokeKind;
-      const devs = [...this._devices].sort((a, b) => Number(this._online(b)) - Number(this._online(a)) || a.name.localeCompare(b.name));
-      const opts = (i) => {
-        const list = i ? [["off", stroke ? "— No second device —" : "— No second pad —"], ...stroke ? [] : [["none", "Second pad, no device"]]] : [["none", "No device (record only)"]];
-        for (const d of devs) {
-          const name = this._online(d) ? d.name : `${d.name} (offline)`;
-          const vibe = d.vibe || !d.linear;
-          if (vibe && !d.dual) list.push([`${d.id}|b`, name]);
-          if (vibe && d.dual) list.push([`${d.id}|b`, `${name} · both motors`], [`${d.id}|0`, `${name} · motor 1`], [`${d.id}|1`, `${name} · motor 2`]);
-          if (d.linear) list.push([`${d.id}|l`, `${name} · stroker`]);
-        }
-        return list;
-      };
-      const labels = [];
-      for (const row of this.shadowRoot.querySelectorAll(".outrow")) {
+      const devs = [...this._devices].sort((a, b2) => Number(this._online(b2)) - Number(this._online(a)) || a.name.localeCompare(b2.name));
+      const list = [];
+      for (const d of devs) {
+        const name = this._online(d) ? d.name : `${d.name} (offline)`;
+        const vibe = d.vibe || !d.linear;
+        if (vibe && !d.dual) list.push([`${d.id}|b`, name]);
+        if (vibe && d.dual) list.push([`${d.id}|b`, `${name} · both motors`], [`${d.id}|0`, `${name} · motor 1`], [`${d.id}|1`, `${name} · motor 2`]);
+        if (d.linear) list.push([`${d.id}|l`, `${name} · stroker`]);
+      }
+      if (!list.length) list.push(["none", "No device found"]);
+      const box = $("outrows");
+      const n = this._outs.length;
+      if (box.children.length !== n) {
+        box.replaceChildren(...this._outs.map((o, i) => {
+          const row = document.createElement("div");
+          row.className = "outrow";
+          row.dataset.row = String(i);
+          row.innerHTML = `<input class="outon" type="checkbox" role="switch" title="Active: this device follows" aria-label="Device ${i + 1} active"><span class="outpad" title="Follows pad ${i % 2 + 1}">${i % 2 + 1}</span><select class="outt" aria-label="Device ${i + 1}"></select><select class="outm" aria-label="How device ${i + 1} follows"></select><button class="outdel" type="button" title="Remove this device" aria-label="Remove device ${i + 1}">✕</button><div class="outai" hidden></div><button class="outtake" type="button" hidden>Take control</button>`;
+          return row;
+        }));
+      }
+      const labels = ["Pad 1", "Pad 2"];
+      for (const row of box.querySelectorAll(".outrow")) {
         const i = Number(row.dataset.row);
+        const o = this._outs[i];
         const sel = row.querySelector(".outt");
-        const list = opts(i);
         const key = JSON.stringify([stroke, list]);
         if (sel.dataset.key !== key) {
           sel.replaceChildren(...list.map(([v, t]) => new Option(t, v)));
           sel.dataset.key = key;
         }
         const value = this._outTargetValue(i);
-        if ([...sel.options].some((o) => o.value === value)) sel.value = value;
+        if ([...sel.options].some((op) => op.value === value)) sel.value = value;
         const p = parseTarget(value);
         const dev = p && this._devices.find((d) => d.id === p.id);
-        labels.push(dev ? p.motor === "b" ? dev.name : p.motor === "l" ? `${dev.name} (stroker)` : `${dev.name} m${Number(p.motor) + 1}` : `Pad ${i + 1}`);
+        if (i < 2) labels[i] = dev ? p.motor === "b" ? dev.name : p.motor === "l" ? `${dev.name} (stroker)` : `${dev.name} m${Number(p.motor) + 1}` : `Pad ${i + 1}`;
+        row.querySelector(".outon").checked = o.on !== false;
+        row.querySelector(".outpad").hidden = n < 2;
         const msel = row.querySelector(".outm");
         const modes = p && p.motor === "l" ? [[FOLLOW_STROKER, "Stroker: follows the position"], [FOLLOW_AI, "✨ AI feel: strokes from a vibration's mood"]] : [[FOLLOW_AI, "✨ AI feel: patterns from the stroke's mood"], ...Object.entries(RUN_MODES).map(([v, t]) => [v, t.replace(/ \(vibration scripts\)/, "")]), [FOLLOW_STROKER, "Stroker: level = position"]];
         const mkey = JSON.stringify(modes);
@@ -4912,17 +5002,28 @@ ${STYLES}
           msel.replaceChildren(...modes.map(([v, t]) => new Option(t, v)));
           msel.dataset.key = mkey;
         }
-        if (!modes.some(([v]) => v === this._outs[i].m)) this._outs[i].m = p && p.motor !== "l" && this._outs[i].m !== FOLLOW_AI ? "position" : modes[0][0];
-        msel.value = this._outs[i].m;
+        if (!modes.some(([v]) => v === o.m)) o.m = p && p.motor !== "l" && o.m !== FOLLOW_AI ? "position" : modes[0][0];
+        msel.value = o.m;
         const owner = dev && this._claimedBy(dev);
         const take = row.querySelector(".outtake");
         take.hidden = !owner;
         if (owner) take.textContent = `Take control (${owner.label || "in use"})`;
-        msel.hidden = value === "off" || Boolean(owner);
-        row.querySelector(".outon").style.visibility = value === "off" || value === "none" ? "hidden" : "";
-        row.classList.toggle("solo", msel.hidden);
+        msel.hidden = Boolean(owner);
         row.classList.toggle("take", Boolean(owner));
       }
+      $("outadd").hidden = n >= MAX_OUTS;
+      $("limbtn").hidden = n === 0;
+      if (!n) $("limbox").hidden = true;
+      $("outhint").hidden = n < 2;
+      const live = this._outs.filter((o, i) => {
+        if (o.on === false) return false;
+        const d = this._outDevice(i);
+        return Boolean(d && this._online(d));
+      }).length;
+      const cnt = $("outcount");
+      cnt.classList.toggle("zero", !live);
+      const b = cnt.querySelector("b");
+      if (b.textContent !== String(live)) b.textContent = String(live);
       this._padLabels = labels;
       for (const [i, id] of [[0, "pad1"], [1, "pad2"]]) {
         const lab = this._el(id).querySelector(".lab");
@@ -5007,7 +5108,7 @@ ${STYLES}
         return;
       }
       try {
-        await this._hass.callService("oggstudio", "save", { name, script: this._take, ...isStroke(this._take) && RUN_MODES[this._outs[0].m] ? { mode: this._outs[0].m } : {} });
+        await this._hass.callService("oggstudio", "save", { name, script: this._take, ...isStroke(this._take) && RUN_MODES[this._outAt(0).m] ? { mode: this._outAt(0).m } : {} });
         this._toast(`Saved "${name}"`);
         this._take = null;
         this._el("name").value = "";
@@ -6144,9 +6245,9 @@ ${STYLES}
           au.pos = pos;
           au.posAt = now;
           this._strokeOut(pos, vel);
-        } else this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._isLinear(i) ? { goal: r.levels[0], dur: 180 } : this._mapLevel(i, r.levels[i])), 0.6);
+        } else this._outApply(this._outIdx.map((i) => this._isLinear(i) ? { goal: r.levels[0], dur: 180 } : this._mapLevel(i, r.levels[i % 2])), 0.6);
         if (this._ctl === "video" && !this._hbActive && !this._vrec) this._showHBar(0, this._strokeKind ? this._lim(r.levels[0]) : r.levels[0]);
-      } else this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._mapLevel(i, r.levels[i])), 0.6);
+      } else this._outApply(this._outIdx.map((i) => this._mapLevel(i, r.levels[i % 2])), 0.6);
       if (now - (au.shownAt || 0) > 1e3) {
         au.shownAt = now;
         this._auShow();
@@ -6371,7 +6472,7 @@ ${STYLES}
       if (accept && fresh) {
         tg.driving = true;
         const v = tg.in.v;
-        this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._mapLevel(i, v[i] ?? v[0])), 0.6);
+        this._outApply(this._outIdx.map((i) => this._mapLevel(i, v[i % 2] ?? v[0])), 0.6);
       } else if (tg.driving) {
         tg.driving = false;
         this._outStop();
@@ -6860,6 +6961,7 @@ ${STYLES}
     // (a stroker: stroke, anything else: vibrate), and can be switched back.
     _autoKind() {
       if (!this._simple || !this._outs || this._autoKindBusy || this._variant.kind) return;
+      if (!this._outs.length) return;
       const kind = this._isLinear(0) ? "stroke" : "vibrate";
       if (kind === this._recKind) return;
       this._autoKindBusy = true;
@@ -6987,7 +7089,7 @@ ${STYLES}
       const lv = r.levels.map((v) => this._vvScale(v));
       range.pos = lv[0];
       for (const i of [0, 1]) this._setPad(i, lv[i]);
-      this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._mapLevel(i, lv[i])), 0.6);
+      this._outApply(this._outIdx.map((i) => this._mapLevel(i, lv[i % 2])), 0.6);
       this._vsWasLive = true;
       this._vlimShow();
       return true;
@@ -7075,7 +7177,7 @@ ${STYLES}
       r.pos = v;
       if (v > 0) {
         for (const i of [0, 1]) this._setPad(i, v);
-        this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._mapLevel(i, v)), 0.6);
+        this._outApply(this._outIdx.map((i) => this._mapLevel(i, v)), 0.6);
         this._vsWasLive = true;
       } else if (this._vsWasLive) {
         this._vsWasLive = false;

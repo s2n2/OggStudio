@@ -225,7 +225,7 @@ export class StrokePart {
     this._stActs = [];
     if (acts.length < 2 || acts[acts.length - 1].at < 200) { this._toast('Nothing recorded.'); this._stShow(); return; }
     this._take = { version: '1.0', inverted: false, range: 100, actions: acts, metadata: { creator: 'OggStudio', type: 'stroke' } };
-    const m = this._outs[0].m;
+    const m = this._outAt(0).m;
     this._el('takemode').value = RUN_MODES[m] ? m : RUN_MODE_DEFAULT;
     this._toast(`Recorded ${fmt(duration(this._take))} of strokes. Save it below, or download the .funscript for a Handy.`);
     this._update();

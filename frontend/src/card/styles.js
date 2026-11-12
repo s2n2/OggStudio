@@ -263,15 +263,30 @@ ha-card.simple #liverow,ha-card.simple #stliverow{display:none!important}
 .vstrail.active .hu{top:-7px}
 .vstrail.active .hl{bottom:-7px}
 .vstrail .dot{position:absolute;left:50%;width:10px;height:10px;margin:0 0 -5px -5px;border-radius:50%;background:rgba(255,255,255,.75);box-shadow:0 0 0 1px rgba(0,0,0,.45)}
-.outrow{grid-template-columns:auto minmax(0,1fr) minmax(0,1fr)}
-.outrow.solo{grid-template-columns:auto minmax(0,1fr)}
-.outrow.solo.take{grid-template-columns:auto minmax(0,1fr) auto}
-.outrow .outai,.outrow .outtake{grid-column:2/-1}
 .urechead{justify-content:space-between;align-items:center}
 .urechead .kind{flex:0 1 auto}
 .urechead .kind button{min-height:42px;padding:0 12px;font-size:12px}
 .urechead button.rec{flex:0 0 auto;width:auto;min-height:42px;padding:0 18px;font-size:13px;border-radius:13px}
 ha-card.simple .hbar{margin-top:10px;border-radius:15px;border-color:#364563;background:#17243e}
 ha-card.simple .hbar .fill{background:linear-gradient(90deg,rgba(49,198,184,.55),rgba(123,204,250,.75))}
+button.outhead{display:flex;align-items:center;gap:8px;width:100%;min-height:36px;padding:0 2px;border:0;background:none;color:#e8edff;text-align:left}
+.outhead .outtitle{flex:1;font-size:14px;font-weight:760;letter-spacing:-.01em}
+.outcount{display:flex;align-items:center;gap:5px;border:1px solid rgba(100,218,189,.23);background:rgba(40,124,115,.17);padding:6px 10px;border-radius:30px;font-size:11px;font-weight:600;color:#9adbd1;white-space:nowrap}
+.outcount i{width:7px;height:7px;border-radius:50%;background:#58d6b2;box-shadow:0 0 0 4px rgba(64,194,164,.11)}
+.outcount b{font-weight:800;color:#e7fff9;font-variant-numeric:tabular-nums}
+.outcount.zero{border-color:rgba(174,194,246,.14);color:var(--muted);background:rgba(169,184,217,.08)}
+.outcount.zero i{background:#72809f;box-shadow:none}
+.outhead .chev{font-size:13px;color:#a8b8da;transition:transform .18s ease}
+.outbox.folded .chev{transform:rotate(-90deg)}
+#outrows{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.outrow{display:grid;grid-template-columns:auto auto minmax(0,1fr) minmax(0,1fr) 34px;gap:6px;margin-top:0;align-items:center}
+.outrow.take{grid-template-columns:auto auto minmax(0,1fr) 34px}
+.outrow .outpad{display:grid;place-items:center;width:18px;height:18px;border-radius:6px;background:rgba(152,168,249,.16);color:#c5d2f0;font-size:10px;font-weight:800}
+.outrow .outpad[hidden]{display:none}
+.outrow button.outdel{min-height:34px;width:34px;padding:0;font-size:12px;border-radius:10px;color:#e9adb7;background:rgba(246,104,121,.08);border-color:rgba(246,104,121,.2)}
+.outrow .outai,.outrow .outtake{grid-column:3/-1}
+.outbtns{display:flex;gap:8px;margin-top:8px}
+.outbtns button{flex:1;min-height:38px;margin:0;font-size:12.5px}
+.outbtns button[hidden]{display:none}
 [hidden],.off{display:none!important}
 `;

@@ -296,11 +296,13 @@ ${STYLES}
             </div>
           </div>
           <div class="outbox" id="outbox">
-            <label>Devices, and how each follows (used for recording, replay, library and video)</label>
-            <div class="outrow" data-row="0"><input class="outon" type="checkbox" role="switch" title="Active: this device follows" aria-label="First device active"><select class="outt" aria-label="First device"></select><select class="outm" aria-label="How the first device follows"></select><div class="outai" hidden></div><button class="outtake" type="button" hidden>Take control</button></div>
-            <div class="outrow" data-row="1"><input class="outon" type="checkbox" role="switch" title="Active: this device follows" aria-label="Second device active"><select class="outt" aria-label="Second device"></select><select class="outm" aria-label="How the second device follows"></select><div class="outai" hidden></div><button class="outtake" type="button" hidden>Take control</button></div>
+            <button id="outfold" type="button" class="outhead" aria-expanded="true"><span class="outtitle">Devices</span><span class="outcount" id="outcount"><i></i><b>0</b> connected</span><span class="chev" aria-hidden="true">▾</span></button>
+            <div id="outbody">
+            <div id="outrows"></div>
             <div class="outnote" id="outnote"></div>
-            <button id="limbtn" type="button" class="limbtn">⚙ Limits</button>
+            <div class="outbtns"><button id="outadd" type="button">＋ Add device</button><button id="limbtn" type="button" class="limbtn">⚙ Limits</button></div>
+            <div class="hint" id="outhint" hidden>Devices 1 and 3 follow the first pad, 2 and 4 the second.</div>
+            </div>
             <div class="subbox" id="limbox" hidden><div id="limlist"></div><div class="hint">Nothing goes past these, whatever is driving: pads, scripts, moods, audio or a partner. They are kept in Home Assistant for every card.</div></div>
           </div>
         </section>

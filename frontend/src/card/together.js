@@ -126,7 +126,7 @@ export class TogetherPart {
     if (accept && fresh) {
       tg.driving = true;
       const v = tg.in.v;
-      this._outApply([0, 1].map((i) => (i && !this._twoPads ? null : this._mapLevel(i, v[i] ?? v[0]))), 0.6);
+      this._outApply(this._outIdx.map((i) => this._mapLevel(i, v[i % 2] ?? v[0])), 0.6);
     } else if (tg.driving) {
       tg.driving = false;
       this._outStop();

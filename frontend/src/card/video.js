@@ -157,19 +157,18 @@ export class VideoPart {
         // The slider, mapped per device like the pads.
         const h = this._hvals[0];
         for (const i of [0, 1]) if (!this._padActive || !this._padActive[i]) this._setPad(i, h);
-        this._outApply([0, 1].map((i) => (i && !this._twoPads ? null : this._mapLive(i, h, this._vVel))), 0.6);
+        this._outApply(this._outIdx.map((i) => this._mapLive(i, h, this._vVel)), 0.6);
         return;
       }
       let vals = this._mapScript(this._vraw || { actions: [] }, ms, this._vconvs || (this._vconvs = {}));
       if (this._simple && this._vraw) { vals = vals.map((v) => this._vvScale(v)); if (this._vsRange) this._vsRange.pos = vals[0]; }
       for (const i of [0, 1]) if (!this._padActive || !this._padActive[i]) this._setPad(i, vals[i]);
-      const out = [0, 1].map((i) => {
-        if (i && !this._twoPads) return null;
+      const out = this._outIdx.map((i) => {
         const p = parseTarget(this._outTargetValue(i));
         if (p && p.motor === 'l') {
-          return (this._vraw && this._goalFrom(i, this._vraw, ms, video.playbackRate, this._vconvs || (this._vconvs = {}))) || { goal: this._vals[i], dur: 150 };
+          return (this._vraw && this._goalFrom(i, this._vraw, ms, video.playbackRate, this._vconvs || (this._vconvs = {}))) || { goal: this._vals[i % 2], dur: 150 };
         }
-        return this._vals[i];
+        return i < 2 ? this._vals[i] : vals[i];
       });
       this._outApply(out, 0.6);
     }
@@ -584,7 +583,8 @@ export class VideoPart {
   }
 
   // Pads: one, or two when a second output is chosen (one track each).
-  get _twoPads() { return Boolean(this._outs) && this._outTargetValue(1) !== 'off'; }
+  // Two pads when a device follows the second (device 2 or 4).
+  get _twoPads() { return Boolean(this._outs) && this._outs.some((o, i) => i % 2 === 1 && parseTarget(this._outTargetValue(i))); }
 
   _levels() {
     const levels = [this._vals[0] / 100];

@@ -5,6 +5,10 @@ import { SAMPLE_MS, SPEEDS, TAKE_SRC, decodeText, duration, encodeCode, fmt } fr
 import { limitLevels, limitMove } from '../lib/limits.js';
 import { FOLLOW_STROKER, OUT_KEY, outLevels, parseTarget } from '../lib/outputs.js';
 
+const MAX_OUTS = 4;
+const OUT_FOLD_KEY = 'oggstudio_outputs_folded';
+const NO_OUT = Object.freeze({ t: 'none', m: 'position', on: true });
+
 // Methods mixed into OggStudioCard.
 export class OutputsPart {
   // ---------------------------------------------------------- outputs
@@ -12,28 +16,81 @@ export class OutputsPart {
     const $ = this._el;
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem(OUT_KEY) || 'null'); } catch (_) { /* private mode */ }
-    const t = saved && Array.isArray(saved.t) ? saved.t : [];
-    const m = saved && Array.isArray(saved.m) ? saved.m : [];
-    const on = saved && Array.isArray(saved.on) ? saved.on : [];
-    this._outs = [0, 1].map((i) => ({ t: typeof t[i] === 'string' ? t[i] : (i ? 'off' : null), m: typeof m[i] === 'string' ? m[i] : 'position', on: on[i] !== false }));
-    for (const row of this.shadowRoot.querySelectorAll('.outrow')) {
-      const i = Number(row.dataset.row);
-      row.querySelector('.outt').addEventListener('change', (e) => { this._outSwitch(i, { t: e.target.value }); });
-      row.querySelector('.outm').addEventListener('change', (e) => { this._outSwitch(i, { m: e.target.value }); });
-      row.querySelector('.outtake').addEventListener('click', () => this._outTake(i));
-      // Active: this device follows (on by default). Off, it is left alone.
-      const sw = row.querySelector('.outon');
-      sw.checked = this._outs[i].on;
-      sw.addEventListener('change', () => {
+    if (saved && Array.isArray(saved.t)) {
+      // Up to four devices; "none" and "off" (from the old two-row box) are no device.
+      const m = Array.isArray(saved.m) ? saved.m : [];
+      const on = Array.isArray(saved.on) ? saved.on : [];
+      this._outs = saved.t.map((t, i) => ({ t, m: typeof m[i] === 'string' ? m[i] : 'position', on: on[i] !== false }))
+        .filter((o) => o.t !== 'none' && o.t !== 'off' && (o.t === null || typeof o.t === 'string')).slice(0, MAX_OUTS);
+    } else this._outs = [{ t: null, m: 'position', on: true }];    // first use: the remembered (or first) device
+    let fold = false;
+    try { fold = localStorage.getItem(OUT_FOLD_KEY) === '1'; } catch (_) { /* private mode */ }
+    this._outFold(fold);
+    $('outfold').addEventListener('click', () => this._outFold(!this._outFolded, true));
+    $('outadd').addEventListener('click', () => this._outAdd());
+    // The rows are drawn from the list; their controls are handled here.
+    const rows = $('outrows');
+    const at = (e) => { const row = e.target.closest('.outrow'); return row ? Number(row.dataset.row) : -1; };
+    rows.addEventListener('change', (e) => {
+      const i = at(e);
+      if (i < 0 || !this._outs[i]) return;
+      if (e.target.classList.contains('outt')) this._outSwitch(i, { t: e.target.value });
+      else if (e.target.classList.contains('outm')) this._outSwitch(i, { m: e.target.value });
+      else if (e.target.classList.contains('outon')) {
+        // Active: this device follows (on by default). Off, it is left alone.
         this._outStop();
-        this._outs[i].on = sw.checked;
+        this._outs[i].on = e.target.checked;
         this._outSave();
         if (this._simple) this._el('stlive').checked = this._anyActive;
         this._outRender();
-      });
-    }
+      }
+    });
+    rows.addEventListener('click', (e) => {
+      const i = at(e);
+      if (i < 0) return;
+      if (e.target.closest('.outtake')) this._outTake(i);
+      else if (e.target.closest('.outdel')) this._outRemove(i);
+    });
     this._outRender();
   }
+
+  // Folded: just the count of connected devices.
+  _outFold(on, save) {
+    this._outFolded = Boolean(on);
+    this._el('outbody').hidden = this._outFolded;
+    this._el('outfold').setAttribute('aria-expanded', String(!this._outFolded));
+    this._el('outbox').classList.toggle('folded', this._outFolded);
+    if (this._outFolded) this._el('limbox').hidden = true;
+    if (save) { try { localStorage.setItem(OUT_FOLD_KEY, this._outFolded ? '1' : '0'); } catch (_) { /* private mode */ } }
+  }
+
+  _outAdd() {
+    if (this._outs.length >= MAX_OUTS) return;
+    // The next device not already in the list (a stroker as a stroker).
+    const used = new Set(this._outs.map((o, i) => (parseTarget(this._outTargetValue(i)) || {}).id));
+    const dev = this._devices.find((d) => !used.has(d.id) && this._online(d)) || this._devices.find((d) => !used.has(d.id)) || this._devices[0];   // or one again (its other motor, say)
+    const t = dev ? `${dev.id}|${dev.linear && !dev.vibe ? 'l' : 'b'}` : null;
+    this._outStop();
+    this._outs.push({ t, m: 'position', on: true });
+    this._outSave();
+    this._outRender();
+    if (this._simple && this._outs.length === 1) this._autoKind();
+    this._update();
+  }
+
+  _outRemove(i) {
+    this._outStop();
+    this._outs.splice(i, 1);
+    this._outSave();
+    this._outRender();
+    if (this._simple) this._el('stlive').checked = this._anyActive;
+    this._update();
+  }
+
+  // An output by place, or a stand-in (no device) where there is none: the
+  // two pads always have a first output each (1 and 2; 3 and 4 follow too).
+  _outAt(i) { return (this._outs && this._outs[i]) || NO_OUT; }
+  get _outIdx() { return Array.from({ length: Math.max(2, this._outs ? this._outs.length : 0) }, (_, i) => i); }
 
   // Any device switched on (and chosen)?
   get _anyActive() { return Boolean(this._outs) && this._outs.some((o, i) => o.on !== false && parseTarget(this._outTargetValue(i))); }
@@ -44,21 +101,24 @@ export class OutputsPart {
 
   _outSwitch(i, change) {
     // A device that stops being an output goes quiet (and is released).
+    if (!this._outs[i]) return;
     this._outStop();
     Object.assign(this._outs[i], change);
     this._outSave();
     this._outRender();
-    if (this._simple && 't' in change) this._autoKind();
+    if (this._simple && 't' in change && i === 0) this._autoKind();
     this._update();
   }
 
   // The saved target if it still exists, else a sensible default.
   _outTargetValue(i) {
-    const t = this._outs[i].t;
-    if (t === 'none' || t === 'off') return t;
+    const o = this._outs && this._outs[i];
+    if (!o) return 'none';
+    const t = o.t;
+    if (t === 'none' || t === 'off') return 'none';
     const p = parseTarget(t);
     if (p && this._devices.some((d) => d.id === p.id)) return t;
-    if (i === 1) return 'off';
+    if (i > 0) return 'none';
     if (!this._registryDone) return 'none';
     const id = this._remembered && this._remembered.id;
     const dev = this._devices.find((d) => d.id === id) || this._devices.find((d) => this._online(d)) || this._devices[0];
@@ -165,36 +225,49 @@ export class OutputsPart {
     this._claimAt = {};
     this._outLast = {};
     this._linLast = {};
-    this._aiLive = [null, null];
+    this._aiLive = [];
   }
 
   _outRender() {
     if (!this._el || !this._outs) return;
+    const $ = this._el;
     const stroke = this._strokeKind;
     const devs = [...this._devices].sort((a, b) => Number(this._online(b)) - Number(this._online(a)) || a.name.localeCompare(b.name));
-    const opts = (i) => {
-      const list = i ? [['off', stroke ? '— No second device —' : '— No second pad —'], ...(stroke ? [] : [['none', 'Second pad, no device']])] : [['none', 'No device (record only)']];
-      for (const d of devs) {
-        const name = this._online(d) ? d.name : `${d.name} (offline)`;
-        const vibe = d.vibe || !d.linear;   // a stroker-only device has no vibration
-        if (vibe && !d.dual) list.push([`${d.id}|b`, name]);
-        if (vibe && d.dual) list.push([`${d.id}|b`, `${name} · both motors`], [`${d.id}|0`, `${name} · motor 1`], [`${d.id}|1`, `${name} · motor 2`]);
-        if (d.linear) list.push([`${d.id}|l`, `${name} · stroker`]);
-      }
-      return list;
-    };
-    const labels = [];
-    for (const row of this.shadowRoot.querySelectorAll('.outrow')) {
+    const list = [];
+    for (const d of devs) {
+      const name = this._online(d) ? d.name : `${d.name} (offline)`;
+      const vibe = d.vibe || !d.linear;   // a stroker-only device has no vibration
+      if (vibe && !d.dual) list.push([`${d.id}|b`, name]);
+      if (vibe && d.dual) list.push([`${d.id}|b`, `${name} · both motors`], [`${d.id}|0`, `${name} · motor 1`], [`${d.id}|1`, `${name} · motor 2`]);
+      if (d.linear) list.push([`${d.id}|l`, `${name} · stroker`]);
+    }
+    if (!list.length) list.push(['none', 'No device found']);
+    // One row per device (up to four); redrawn when the count changes.
+    const box = $('outrows');
+    const n = this._outs.length;
+    if (box.children.length !== n) {
+      box.replaceChildren(...this._outs.map((o, i) => {
+        const row = document.createElement('div');
+        row.className = 'outrow';
+        row.dataset.row = String(i);
+        row.innerHTML = `<input class="outon" type="checkbox" role="switch" title="Active: this device follows" aria-label="Device ${i + 1} active"><span class="outpad" title="Follows pad ${(i % 2) + 1}">${(i % 2) + 1}</span><select class="outt" aria-label="Device ${i + 1}"></select><select class="outm" aria-label="How device ${i + 1} follows"></select><button class="outdel" type="button" title="Remove this device" aria-label="Remove device ${i + 1}">✕</button><div class="outai" hidden></div><button class="outtake" type="button" hidden>Take control</button>`;
+        return row;
+      }));
+    }
+    const labels = ['Pad 1', 'Pad 2'];
+    for (const row of box.querySelectorAll('.outrow')) {
       const i = Number(row.dataset.row);
+      const o = this._outs[i];
       const sel = row.querySelector('.outt');
-      const list = opts(i);
       const key = JSON.stringify([stroke, list]);
       if (sel.dataset.key !== key) { sel.replaceChildren(...list.map(([v, t]) => new Option(t, v))); sel.dataset.key = key; }
       const value = this._outTargetValue(i);
-      if ([...sel.options].some((o) => o.value === value)) sel.value = value;
+      if ([...sel.options].some((op) => op.value === value)) sel.value = value;
       const p = parseTarget(value);
       const dev = p && this._devices.find((d) => d.id === p.id);
-      labels.push(dev ? (p.motor === 'b' ? dev.name : p.motor === 'l' ? `${dev.name} (stroker)` : `${dev.name} m${Number(p.motor) + 1}`) : `Pad ${i + 1}`);
+      if (i < 2) labels[i] = dev ? (p.motor === 'b' ? dev.name : p.motor === 'l' ? `${dev.name} (stroker)` : `${dev.name} m${Number(p.motor) + 1}`) : `Pad ${i + 1}`;
+      row.querySelector('.outon').checked = o.on !== false;
+      row.querySelector('.outpad').hidden = n < 2;
       // How it follows (stroke recorder): a stroker by position, a vibrator by a run mode.
       const msel = row.querySelector('.outm');
       const modes = p && p.motor === 'l'
@@ -202,18 +275,25 @@ export class OutputsPart {
         : [[FOLLOW_AI, "✨ AI feel: patterns from the stroke's mood"], ...Object.entries(RUN_MODES).map(([v, t]) => [v, t.replace(/ \(vibration scripts\)/, '')]), [FOLLOW_STROKER, 'Stroker: level = position']];
       const mkey = JSON.stringify(modes);
       if (msel.dataset.key !== mkey) { msel.replaceChildren(...modes.map(([v, t]) => new Option(t, v))); msel.dataset.key = mkey; }
-      if (!modes.some(([v]) => v === this._outs[i].m)) this._outs[i].m = p && p.motor !== 'l' && this._outs[i].m !== FOLLOW_AI ? 'position' : modes[0][0];
-      msel.value = this._outs[i].m;
+      if (!modes.some(([v]) => v === o.m)) o.m = p && p.motor !== 'l' && o.m !== FOLLOW_AI ? 'position' : modes[0][0];
+      msel.value = o.m;
       const owner = dev && this._claimedBy(dev);
       const take = row.querySelector('.outtake');
       take.hidden = !owner;
       if (owner) take.textContent = `Take control (${owner.label || 'in use'})`;
-      // How it follows applies to everything played or recorded; not for "no second device".
-      msel.hidden = value === 'off' || Boolean(owner);
-      row.querySelector('.outon').style.visibility = value === 'off' || value === 'none' ? 'hidden' : '';
-      row.classList.toggle('solo', msel.hidden);
+      msel.hidden = Boolean(owner);
       row.classList.toggle('take', Boolean(owner));
     }
+    $('outadd').hidden = n >= MAX_OUTS;
+    $('limbtn').hidden = n === 0;
+    if (!n) $('limbox').hidden = true;
+    $('outhint').hidden = n < 2;
+    // The count: devices on, chosen and connected.
+    const live = this._outs.filter((o, i) => { if (o.on === false) return false; const d = this._outDevice(i); return Boolean(d && this._online(d)); }).length;
+    const cnt = $('outcount');
+    cnt.classList.toggle('zero', !live);
+    const b = cnt.querySelector('b');
+    if (b.textContent !== String(live)) b.textContent = String(live);
     this._padLabels = labels;
     for (const [i, id] of [[0, 'pad1'], [1, 'pad2']]) { const lab = this._el(id).querySelector('.lab'); if (lab.textContent !== labels[i]) lab.textContent = labels[i]; }
     const two = this._twoPads;
@@ -287,7 +367,7 @@ export class OutputsPart {
     const name = this._el('name').value.trim();
     if (!name) { this._toast('Type a name first'); return; }
     try {
-      await this._hass.callService('oggstudio', 'save', { name, script: this._take, ...(isStroke(this._take) && RUN_MODES[this._outs[0].m] ? { mode: this._outs[0].m } : {}) });
+      await this._hass.callService('oggstudio', 'save', { name, script: this._take, ...(isStroke(this._take) && RUN_MODES[this._outAt(0).m] ? { mode: this._outAt(0).m } : {}) });
       this._toast(`Saved "${name}"`);
       this._take = null;
       this._el('name').value = '';
