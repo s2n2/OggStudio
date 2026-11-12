@@ -107,7 +107,7 @@ export class TogetherPart {
   }
 
   // My devices follow my partner only while I say so, on the Together tab.
-  get _tgAccepting() { const tg = this._tg; return Boolean(tg && tg.joined && this._ctl === 'together' && this._el('tgaccept').checked); }
+  get _tgAccepting() { const tg = this._tg; return Boolean(tg && tg.joined && (this._simple || this._ctl === 'together') && this._el('tgaccept').checked); }
 
   _tgTick() {
     const tg = this._tg;

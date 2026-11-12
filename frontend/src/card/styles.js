@@ -338,5 +338,11 @@ ha-card.simple .urecslot > #utimer{flex:0 0 auto;margin:0;text-align:left}
 ha-card.simple .stside.urecslot{align-items:stretch}
 ha-card.simple .stside.urecslot > button.rec{width:100%}
 ha-card.simple .stside.urecslot > #utimer{text-align:center}
+ha-card:not(.simple) .psec{display:none}
+ha-card.simple section.psec{margin-top:10px}
+.psec.mfold > :not(.mhead){display:none!important}
+.psec .tsub{margin:10px 0 4px;font-size:12.5px;font-weight:760;color:#e8edff}
+#toolsec .subbox,#tgsec #tgbox{margin-top:6px}
+#tgsec #tgbox{display:block}
 [hidden],.off{display:none!important}
 `;

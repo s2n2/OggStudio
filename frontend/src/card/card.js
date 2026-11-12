@@ -90,7 +90,7 @@ export class OggStudioCard extends HTMLElement {
     }
     // Sound comes straight after the video (Play cards).
     this._el('sndbox').style.order = this._el('videobox').style.order;
-    this._el('extrabox').style.order = this._el('videobox').style.order;
+    for (const id of ['tgsec', 'toolsec', 'locksec', 'extrabox']) this._el(id).style.order = this._el('videobox').style.order;
     for (const tog of this.shadowRoot.querySelectorAll('.kind')) {
       tog.hidden = !this._canToggleKind;
       for (const b of tog.querySelectorAll('button')) b.classList.toggle('on', b.dataset.kind === this._recKind);
@@ -367,6 +367,9 @@ ${STYLES}
           <div class="hint vshow">The slider under the video works with or without a video: hold it to take over. Patterns and moods (Controls) and sound (Sound) can play with the video; the newest one started has the devices. On the video, the line on the left is the strength (a vibrator) or the speed (a stroker), and a stroker's range is on the right; ⛶ makes it full screen. ● Rec follows the video: play it and use the controls, or let a script (📂) or the sound of the video (♪) do the playing. Pause and it waits; go back and the new pass replaces what came after.</div>
         </section>
         <section id="sndbox"><button type="button" class="outhead mhead" id="sndhead" aria-expanded="true"><span class="outtitle">♪ Sound</span><span class="outcount zero" id="sndbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button></section>
+        <section id="tgsec" class="psec"><button type="button" class="outhead mhead" id="tghead" aria-expanded="true"><span class="outtitle">🤝 Together</span><span class="outcount zero" id="tgbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button></section>
+        <section id="toolsec" class="psec"><button type="button" class="outhead mhead" id="toolhead" aria-expanded="true"><span class="outtitle">✂ Script tools</span><span class="outcount zero" id="toolbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button><div class="hint" id="toolinfo"></div><h4 class="tsub">Edit the script</h4><div id="tlslot"></div><h4 class="tsub">Queue</h4><div id="plslot"></div></section>
+        <section id="locksec" class="psec"><button type="button" class="outhead mhead" id="lockhead" aria-expanded="true"><span class="outtitle">🔒 Lock &amp; PIN</span><span class="outcount zero" id="lockbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button><div class="hint" id="lockinfo"></div><div class="row" style="margin-top:8px"><button id="locknow" type="button">🔒 Lock now</button><button id="lockset" type="button">⚙ PIN settings</button></div></section>
         <section id="extrabox"><button type="button" class="outhead mhead" id="extrahead" aria-expanded="true"><span class="outtitle">🧰 Extras</span><span class="outcount zero" id="extrabadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button><div class="gpslot" id="xgpslot"></div></section>
         <section data-part="import">
           <h3>Import</h3>

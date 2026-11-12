@@ -81,7 +81,7 @@ export class PlayPart {
     document.addEventListener('webkitfullscreenchange', onFull);
     for (const type of ['play', 'pause', 'ended', 'emptied', 'loadedmetadata']) video.addEventListener(type, () => this._vsideShow());
     // Video and Sound headers.
-    let mf = { c: false, v: true, s: true, x: true };
+    let mf = { c: false, v: true, s: true, x: true, t: true, p: true, l: true };
     try { mf = { ...mf, ...(JSON.parse(localStorage.getItem(MEDIA_FOLD_KEY) || '{}') || {}) }; } catch (_) { /* private mode */ }
     this._mediaFold('c', Boolean(mf.c));
     this._mediaFold('v', Boolean(mf.v));
@@ -89,6 +89,16 @@ export class PlayPart {
     $('ctlhead').addEventListener('click', () => this._mediaFold('c', !this._mfold.c, true));
     this._mediaFold('x', mf.x !== false);
     $('extrahead').addEventListener('click', () => this._mediaFold('x', !this._mfold.x, true));
+    for (const k of ['t', 'p', 'l']) this._mediaFold(k, mf[k] !== false);
+    $('tghead').addEventListener('click', () => this._mediaFold('t', !this._mfold.t, true));
+    $('toolhead').addEventListener('click', () => { this._mediaFold('p', !this._mfold.p, true); if (!this._mfold.p) { this._toolsUpdate(); this._plShow(); } });
+    $('lockhead').addEventListener('click', () => this._mediaFold('l', !this._mfold.l, true));
+    $('locknow').addEventListener('click', () => { if (this._needsLock) this._lock(); else this._toast('Set a PIN or discreet mode first (⚙ PIN settings).'); });
+    $('lockset').addEventListener('click', () => {
+      // The PIN is kept by Home Assistant: its OggStudio settings (admins).
+      history.pushState(null, '', '/config/integrations/integration/oggstudio');
+      window.dispatchEvent(new CustomEvent('location-changed', { detail: { replace: false } }));
+    });
     $('gpon').addEventListener('change', () => this._mediaShow());
     $('vidhead').addEventListener('click', () => this._mediaFold('v', !this._mfold.v, true));
     $('sndhead').addEventListener('click', () => this._mediaFold('s', !this._mfold.s, true));
@@ -838,11 +848,11 @@ export class PlayPart {
   // Video and Sound fold like Devices: Video open, Sound folded at first.
   _mediaFold(which, folded, save) {
     const $ = this._el;
-    this._mfold = this._mfold || { c: false, v: true, s: true, x: true };
+    this._mfold = this._mfold || { c: false, v: true, s: true, x: true, t: true, p: true, l: true };
     this._mfold[which] = folded;
-    const box = { c: this.shadowRoot.querySelector('ha-card'), v: $('videobox'), s: $('sndbox'), x: $('extrabox') }[which];
+    const box = { c: this.shadowRoot.querySelector('ha-card'), v: $('videobox'), s: $('sndbox'), x: $('extrabox'), t: $('tgsec'), p: $('toolsec'), l: $('locksec') }[which];
     box.classList.toggle(which === 'c' ? 'cfold' : 'mfold', folded);
-    $({ c: 'ctlhead', v: 'vidhead', s: 'sndhead', x: 'extrahead' }[which]).setAttribute('aria-expanded', String(!folded));
+    $({ c: 'ctlhead', v: 'vidhead', s: 'sndhead', x: 'extrahead', t: 'tghead', p: 'toolhead', l: 'lockhead' }[which]).setAttribute('aria-expanded', String(!folded));
     if (save) { try { localStorage.setItem(MEDIA_FOLD_KEY, JSON.stringify(this._mfold)); } catch (_) { /* private mode */ } }
   }
 
@@ -855,6 +865,17 @@ export class PlayPart {
     badge('vidbadge', Boolean(this._vurl), this._vurl ? `${(this._vname || 'video').slice(0, 18)}${video.paused ? '' : ' · playing'}` : 'none');
     const au = this._au;
     const src = { mic: 'microphone', file: 'music', tab: 'tab', video: 'from the video' };
+    // Together, the script tools, the lock.
+    const tg = this._tg;
+    badge('tgbadge', Boolean(tg && tg.joined), tg && tg.joined ? 'connected' : 'off');
+    const rpn = this._rp && this._rp.raw ? this._rp.name || 'script' : '';
+    badge('toolbadge', Boolean(rpn), rpn ? rpn.slice(0, 18) : 'no script');
+    const tinfo = rpn ? `Working on "${rpn}" (the script in the Library). Drag its bar to a spot, then cut; each change becomes the current take.` : 'Choose a script in the Library first.';
+    if (this._el('toolinfo').textContent !== tinfo) this._el('toolinfo').textContent = tinfo;
+    const p = this._privacy || {};
+    badge('lockbadge', Boolean(p.pin || p.discreet), p.pin ? 'PIN set' : p.discreet ? 'discreet' : 'off');
+    const linfo = `PIN: ${p.pin ? 'set' : 'none'} · Discreet: ${p.discreet ? 'on' : 'off'} · Auto-lock: ${p.auto_lock ? `${p.auto_lock} min` : 'off'}. These are set in Home Assistant (admins), and apply to every OggStudio card.`;
+    if (this._el('lockinfo').textContent !== linfo) this._el('lockinfo').textContent = linfo;
     // Extras: the controller when it is on.
     const gp = this._el('gpon');
     badge('extrabadge', Boolean(gp && gp.checked), gp && gp.checked ? 'controller' : '');

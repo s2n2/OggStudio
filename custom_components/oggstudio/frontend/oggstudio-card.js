@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.21.13";
+  var VERSION = "0.22.0";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -1712,6 +1712,12 @@ ha-card.simple .urecslot > #utimer{flex:0 0 auto;margin:0;text-align:left}
 ha-card.simple .stside.urecslot{align-items:stretch}
 ha-card.simple .stside.urecslot > button.rec{width:100%}
 ha-card.simple .stside.urecslot > #utimer{text-align:center}
+ha-card:not(.simple) .psec{display:none}
+ha-card.simple section.psec{margin-top:10px}
+.psec.mfold > :not(.mhead){display:none!important}
+.psec .tsub{margin:10px 0 4px;font-size:12.5px;font-weight:760;color:#e8edff}
+#toolsec .subbox,#tgsec #tgbox{margin-top:6px}
+#tgsec #tgbox{display:block}
 [hidden],.off{display:none!important}
 `;
 
@@ -1814,7 +1820,7 @@ ha-card.simple .stside.urecslot > #utimer{text-align:center}
         sec.style.order = String(parts.indexOf(sec.dataset.part) + 1);
       }
       this._el("sndbox").style.order = this._el("videobox").style.order;
-      this._el("extrabox").style.order = this._el("videobox").style.order;
+      for (const id of ["tgsec", "toolsec", "locksec", "extrabox"]) this._el(id).style.order = this._el("videobox").style.order;
       for (const tog of this.shadowRoot.querySelectorAll(".kind")) {
         tog.hidden = !this._canToggleKind;
         for (const b of tog.querySelectorAll("button")) b.classList.toggle("on", b.dataset.kind === this._recKind);
@@ -2096,6 +2102,9 @@ ${STYLES}
           <div class="hint vshow">The slider under the video works with or without a video: hold it to take over. Patterns and moods (Controls) and sound (Sound) can play with the video; the newest one started has the devices. On the video, the line on the left is the strength (a vibrator) or the speed (a stroker), and a stroker's range is on the right; ⛶ makes it full screen. ● Rec follows the video: play it and use the controls, or let a script (📂) or the sound of the video (♪) do the playing. Pause and it waits; go back and the new pass replaces what came after.</div>
         </section>
         <section id="sndbox"><button type="button" class="outhead mhead" id="sndhead" aria-expanded="true"><span class="outtitle">♪ Sound</span><span class="outcount zero" id="sndbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button></section>
+        <section id="tgsec" class="psec"><button type="button" class="outhead mhead" id="tghead" aria-expanded="true"><span class="outtitle">🤝 Together</span><span class="outcount zero" id="tgbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button></section>
+        <section id="toolsec" class="psec"><button type="button" class="outhead mhead" id="toolhead" aria-expanded="true"><span class="outtitle">✂ Script tools</span><span class="outcount zero" id="toolbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button><div class="hint" id="toolinfo"></div><h4 class="tsub">Edit the script</h4><div id="tlslot"></div><h4 class="tsub">Queue</h4><div id="plslot"></div></section>
+        <section id="locksec" class="psec"><button type="button" class="outhead mhead" id="lockhead" aria-expanded="true"><span class="outtitle">🔒 Lock &amp; PIN</span><span class="outcount zero" id="lockbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button><div class="hint" id="lockinfo"></div><div class="row" style="margin-top:8px"><button id="locknow" type="button">🔒 Lock now</button><button id="lockset" type="button">⚙ PIN settings</button></div></section>
         <section id="extrabox"><button type="button" class="outhead mhead" id="extrahead" aria-expanded="true"><span class="outtitle">🧰 Extras</span><span class="outcount zero" id="extrabadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button><div class="gpslot" id="xgpslot"></div></section>
         <section data-part="import">
           <h3>Import</h3>
@@ -4375,7 +4384,11 @@ ${STYLES}
         const home = this._vaudio ? $("vaubox") : $("sndbox");
         if ($("aubox").parentElement !== home) home.appendChild($("aubox"));
       }
-      $("tgbox").hidden = ctl !== "together";
+      $("tgbox").hidden = simple ? false : ctl !== "together";
+      if (simple) {
+        $("tlbox").hidden = false;
+        $("plbox").hidden = false;
+      }
       $("urecrow").hidden = true;
       if (simple) {
         for (const sec of this.shadowRoot.querySelectorAll('[data-part="record"],[data-part="stroke"]')) {
@@ -4395,6 +4408,9 @@ ${STYLES}
         if (lib.parentElement !== $("libslot")) $("libslot").appendChild(lib);
         lib.classList.toggle("off", ctl !== "library");
         if (ctl === "library" && !this._rp.raw && !this._rp.playing && !this._libPick) this._libPreview($("saved").value);
+        if ($("tgbox").parentElement !== $("tgsec")) $("tgsec").appendChild($("tgbox"));
+        if ($("tlbox").parentElement !== $("tlslot")) $("tlslot").appendChild($("tlbox"));
+        if ($("plbox").parentElement !== $("plslot")) $("plslot").appendChild($("plbox"));
         const imp = this.shadowRoot.querySelector('section[data-part="import"]');
         if (imp.parentElement !== $("extrabox")) $("extrabox").appendChild(imp);
         imp.classList.remove("off");
@@ -6628,7 +6644,7 @@ ${STYLES}
     // My devices follow my partner only while I say so, on the Together tab.
     get _tgAccepting() {
       const tg = this._tg;
-      return Boolean(tg && tg.joined && this._ctl === "together" && this._el("tgaccept").checked);
+      return Boolean(tg && tg.joined && (this._simple || this._ctl === "together") && this._el("tgaccept").checked);
     }
     _tgTick() {
       const tg = this._tg;
@@ -6831,7 +6847,7 @@ ${STYLES}
       document.addEventListener("fullscreenchange", onFull);
       document.addEventListener("webkitfullscreenchange", onFull);
       for (const type of ["play", "pause", "ended", "emptied", "loadedmetadata"]) video.addEventListener(type, () => this._vsideShow());
-      let mf = { c: false, v: true, s: true, x: true };
+      let mf = { c: false, v: true, s: true, x: true, t: true, p: true, l: true };
       try {
         mf = { ...mf, ...JSON.parse(localStorage.getItem(MEDIA_FOLD_KEY) || "{}") || {} };
       } catch (_) {
@@ -6842,6 +6858,24 @@ ${STYLES}
       $("ctlhead").addEventListener("click", () => this._mediaFold("c", !this._mfold.c, true));
       this._mediaFold("x", mf.x !== false);
       $("extrahead").addEventListener("click", () => this._mediaFold("x", !this._mfold.x, true));
+      for (const k of ["t", "p", "l"]) this._mediaFold(k, mf[k] !== false);
+      $("tghead").addEventListener("click", () => this._mediaFold("t", !this._mfold.t, true));
+      $("toolhead").addEventListener("click", () => {
+        this._mediaFold("p", !this._mfold.p, true);
+        if (!this._mfold.p) {
+          this._toolsUpdate();
+          this._plShow();
+        }
+      });
+      $("lockhead").addEventListener("click", () => this._mediaFold("l", !this._mfold.l, true));
+      $("locknow").addEventListener("click", () => {
+        if (this._needsLock) this._lock();
+        else this._toast("Set a PIN or discreet mode first (⚙ PIN settings).");
+      });
+      $("lockset").addEventListener("click", () => {
+        history.pushState(null, "", "/config/integrations/integration/oggstudio");
+        window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
+      });
       $("gpon").addEventListener("change", () => this._mediaShow());
       $("vidhead").addEventListener("click", () => this._mediaFold("v", !this._mfold.v, true));
       $("sndhead").addEventListener("click", () => this._mediaFold("s", !this._mfold.s, true));
@@ -7696,11 +7730,11 @@ ${STYLES}
     // Video and Sound fold like Devices: Video open, Sound folded at first.
     _mediaFold(which, folded, save) {
       const $ = this._el;
-      this._mfold = this._mfold || { c: false, v: true, s: true, x: true };
+      this._mfold = this._mfold || { c: false, v: true, s: true, x: true, t: true, p: true, l: true };
       this._mfold[which] = folded;
-      const box = { c: this.shadowRoot.querySelector("ha-card"), v: $("videobox"), s: $("sndbox"), x: $("extrabox") }[which];
+      const box = { c: this.shadowRoot.querySelector("ha-card"), v: $("videobox"), s: $("sndbox"), x: $("extrabox"), t: $("tgsec"), p: $("toolsec"), l: $("locksec") }[which];
       box.classList.toggle(which === "c" ? "cfold" : "mfold", folded);
-      $({ c: "ctlhead", v: "vidhead", s: "sndhead", x: "extrahead" }[which]).setAttribute("aria-expanded", String(!folded));
+      $({ c: "ctlhead", v: "vidhead", s: "sndhead", x: "extrahead", t: "tghead", p: "toolhead", l: "lockhead" }[which]).setAttribute("aria-expanded", String(!folded));
       if (save) {
         try {
           localStorage.setItem(MEDIA_FOLD_KEY, JSON.stringify(this._mfold));
@@ -7722,6 +7756,16 @@ ${STYLES}
       badge("vidbadge", Boolean(this._vurl), this._vurl ? `${(this._vname || "video").slice(0, 18)}${video.paused ? "" : " · playing"}` : "none");
       const au = this._au;
       const src = { mic: "microphone", file: "music", tab: "tab", video: "from the video" };
+      const tg = this._tg;
+      badge("tgbadge", Boolean(tg && tg.joined), tg && tg.joined ? "connected" : "off");
+      const rpn = this._rp && this._rp.raw ? this._rp.name || "script" : "";
+      badge("toolbadge", Boolean(rpn), rpn ? rpn.slice(0, 18) : "no script");
+      const tinfo = rpn ? `Working on "${rpn}" (the script in the Library). Drag its bar to a spot, then cut; each change becomes the current take.` : "Choose a script in the Library first.";
+      if (this._el("toolinfo").textContent !== tinfo) this._el("toolinfo").textContent = tinfo;
+      const p = this._privacy || {};
+      badge("lockbadge", Boolean(p.pin || p.discreet), p.pin ? "PIN set" : p.discreet ? "discreet" : "off");
+      const linfo = `PIN: ${p.pin ? "set" : "none"} · Discreet: ${p.discreet ? "on" : "off"} · Auto-lock: ${p.auto_lock ? `${p.auto_lock} min` : "off"}. These are set in Home Assistant (admins), and apply to every OggStudio card.`;
+      if (this._el("lockinfo").textContent !== linfo) this._el("lockinfo").textContent = linfo;
       const gp = this._el("gpon");
       badge("extrabadge", Boolean(gp && gp.checked), gp && gp.checked ? "controller" : "");
       this._el("extrabadge").hidden = !(gp && gp.checked);
