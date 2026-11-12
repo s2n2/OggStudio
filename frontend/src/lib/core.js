@@ -1,7 +1,7 @@
 // Part of the OggStudio card. Built into custom_components/oggstudio/frontend/oggstudio-card.js (npm run build).
 
 export const TAG = 'oggstudio-card';
-export const VERSION = '0.22.0';
+export const VERSION = '0.23.0';
 export const DEVICE_KEY = 'oggstudio_device';
 export const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
 export const SAMPLE_MS = 100;
@@ -15,26 +15,21 @@ export const VIDEO_OFFSET_KEY = 'oggstudio_video_offset';
 export const PARTS = ['record', 'stroke', 'take', 'library', 'video', 'import'];
 export const NO_DEVICE = 'none';           // record without a device
 export const TAKE_SRC = 'take';      // "Current take" in script lists (never a saved name)
-// One card class, several dashboard cards: each shows a subset of the parts.
+// One card: Play. The earlier cards are retired; their names open the
+// Play card (hidden from the card picker) so dashboards keep working.
+const PLAY = { name: 'OggStudio Play', sub: 'Manual, pattern, mood, library, video and sound: record any of them', parts: ['record', 'video', 'take'], simple: true, size: 10,
+  description: 'Everything in one card: play by hand, a pattern, a mood, a saved script, a video or sound, record any of it, and Together, script editing, a queue and the lock.' };
+const PLAY_STROKE = { ...PLAY, parts: ['stroke', 'video', 'take'], hidden: true };
 export const VARIANTS = {
-  'oggstudio-card': { name: 'OggStudio', sub: 'Record, import, replay and sync to video', parts: PARTS.filter((p) => p !== 'stroke'), size: 9,
-    description: 'Everything in one card: record, library, video sync and import.' },
-  'oggstudio-recorder-card': { name: 'OggStudio Recorder', sub: 'Draw a pattern with your finger and save it', parts: ['record', 'take'], kind: 'vibrate', size: 6,
-    description: 'Big touch pads to record (or just play live), then save the take.' },
-  'oggstudio-player-card': { name: 'OggStudio Player', sub: 'Play saved patterns and import scripts', parts: ['library', 'take', 'import'], size: 5,
-    description: 'Pick a saved pattern and play it; paste or load funscripts and share codes.' },
-  'oggstudio-video-card': { name: 'OggStudio Video', sub: 'Play a local video with its script, or record one', parts: ['video', 'take'], kind: 'vibrate', size: 7,
-    description: 'Sync a video on this device with a script, and record a funscript for it.' },
-  'oggstudio-stroke-card': { name: 'OggStudio Stroke', sub: 'Record stroke scripts (for a Handy) between two limits', parts: ['stroke', 'take'], kind: 'stroke', size: 8,
-    description: 'Stroke recorder: set an upper and lower limit, hold a speed to stroke between them, record a stroke funscript.' },
-  'oggstudio-play-card': { name: 'OggStudio Play', sub: 'Manual, pattern, mood, audio or video: record any of them', parts: ['record', 'video', 'take'], simple: true, size: 8,
-    description: 'One simple card: play by hand, a pattern, a mood, to sound or to a video, with one Record button for all of them.' },
-  'oggstudio-play-stroke-card': { name: 'OggStudio Play Stroke', sub: 'For a stroker: manual, pattern, mood, audio or video, and record any of them', parts: ['stroke', 'video', 'take'], simple: true, hidden: true, size: 8,
-    description: 'The Play card for a stroker (a Handy): stroke by hand, a pattern, a mood, to sound or to a video, inside your limits, with one Record button for all of them.' },
-  'oggstudio-video-stroke-card': { name: 'OggStudio Video Stroke', sub: 'A video with stroke range and speed: record a stroke script for it', parts: ['stroke', 'video', 'take'], simple: true, kind: 'stroke', modes: ['video'], size: 8,
-    description: 'Play a local video with a stroke range and speed (or a script, or its sound) driving a stroker, and record a stroke script in time with it.' },
-  'oggstudio-together-card': { name: 'OggStudio Together', sub: 'Play together from two places', parts: [], together: true, size: 4,
-    description: 'Start or join a Together session: each of you drives the devices of the other, inside the limits each has set.' },
+  'oggstudio-play-card': PLAY,
+  'oggstudio-card': { ...PLAY, hidden: true },
+  'oggstudio-recorder-card': { ...PLAY, hidden: true },
+  'oggstudio-player-card': { ...PLAY, hidden: true },
+  'oggstudio-video-card': { ...PLAY, hidden: true },
+  'oggstudio-stroke-card': PLAY_STROKE,
+  'oggstudio-play-stroke-card': PLAY_STROKE,
+  'oggstudio-video-stroke-card': PLAY_STROKE,
+  'oggstudio-together-card': { ...PLAY, hidden: true },
 };
 // Pointer capture can fail (a pointer already gone); never let it stop a press.
 export const capture = (el, e) => { try { el.setPointerCapture(e.pointerId); } catch (_) { /* no capture */ } };

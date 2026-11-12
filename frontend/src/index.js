@@ -32,6 +32,6 @@ if (!customElements.get(TAG)) {
     customElements.define(tag, cls);
     // The picker offers the Play cards (vibrator, stroker) and Together;
     // the other cards still work where they are already used.
-    if (variant.simple && !variant.modes && !variant.hidden || variant.together) window.customCards.push({ type: tag, name: variant.name, description: variant.description, preview: true });
+    if (!variant.hidden) window.customCards.push({ type: tag, name: variant.name, description: variant.description, preview: true });
   }
 }

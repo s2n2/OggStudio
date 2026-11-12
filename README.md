@@ -30,31 +30,31 @@ depend on the dashboard or network.
 
 ## Cards
 
-Eight cards come with OggStudio. Pick one that fits the dashboard, or use several:
+OggStudio has one card, **OggStudio Play** (`custom:oggstudio-play-card`). It does
+everything, in sections that fold away:
 
-| Card | Type | Shows |
-|---|---|---|
-| OggStudio | `custom:oggstudio-card` | Everything: record, library, video sync, import |
-| OggStudio Recorder | `custom:oggstudio-recorder-card` | Big touch pads to record or play live, then save |
-| OggStudio Player | `custom:oggstudio-player-card` | Saved patterns with speed and loop, plus import |
-| OggStudio Video | `custom:oggstudio-video-card` | Video sync and recording a funscript for a video |
-| OggStudio Stroke | `custom:oggstudio-stroke-card` | Stroke recorder with limits and three speeds (for a Handy) |
-| OggStudio Play | `custom:oggstudio-play-card` | One simple card: manual, Ogg patterns, mood, audio or video, with one Record button for all of them |
-| OggStudio Video Stroke | `custom:oggstudio-video-stroke-card` | A video with stroke range and speed (or a script, or its sound) driving a stroker; record a stroke script for it |
-| OggStudio Together | `custom:oggstudio-together-card` | Start or join a Together session from two places |
-
-Every card takes an optional `title`. The full card also takes `sections`, a list
-from `record`, `stroke`, `take`, `library`, `video` and `import`, to build your own mix
-(the full card leaves out `stroke` unless you list it):
+| Section | What it does |
+|---|---|
+| Devices | Up to four devices (1 and 3 follow the first pad, 2 and 4 the second), each with an on switch and how it follows; Vibrate / Stroke; Limits |
+| Controls | The pads (or stroke bar), Rec, and the Manual, Pattern, Mood and Library tabs |
+| Video | A video on this phone or computer, its script, sound, casting and full screen |
+| Sound | Microphone, a music file or another tab driving the devices |
+| Together | Play together from two places |
+| Script editing | Cut, repeat or join the script in the Library |
+| Queue | Play scripts and moods one after another |
+| Lock & PIN | Lock the card; the PIN is set in Home Assistant |
+| Extras | Game controller and Import |
 
 ```yaml
-type: custom:oggstudio-card
+type: custom:oggstudio-play-card
 title: Bedroom studio
-sections: [library, video, take]
 ```
 
-There is one device choice per card: the **Devices** box (see below). Record, Replay, the
-take and library ▶ Play buttons and the video all use it.
+The earlier cards (`oggstudio-card`, `-recorder-card`, `-player-card`, `-video-card`,
+`-stroke-card`, `-video-stroke-card`, `-together-card`) are retired: their names still
+work and open the Play card (the stroke ones on Stroke), so existing dashboards keep
+working. The rest of this page describes the features; on the Play card they sit in
+the sections above.
 
 ## Record and replay
 

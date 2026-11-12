@@ -39,7 +39,8 @@ export class OggStudioCard extends HTMLElement {
   static get variant() { return VARIANTS[TAG]; }
   get _variant() { return this.constructor.variant; }
   get _baseParts() {
-    const wanted = this._config && Array.isArray(this._config.sections) ? this._config.sections.filter((p) => PARTS.includes(p)) : [];
+    // The Play card has its own layout (an old full card's sections list is ignored).
+    const wanted = !this._variant.simple && this._config && Array.isArray(this._config.sections) ? this._config.sections.filter((p) => PARTS.includes(p)) : [];
     return wanted.length ? wanted : this._variant.parts;
   }
 
@@ -90,7 +91,7 @@ export class OggStudioCard extends HTMLElement {
     }
     // Sound comes straight after the video (Play cards).
     this._el('sndbox').style.order = this._el('videobox').style.order;
-    for (const id of ['tgsec', 'toolsec', 'locksec', 'extrabox']) this._el(id).style.order = this._el('videobox').style.order;
+    for (const id of ['tgsec', 'toolsec', 'queuesec', 'locksec', 'extrabox']) this._el(id).style.order = this._el('videobox').style.order;
     for (const tog of this.shadowRoot.querySelectorAll('.kind')) {
       tog.hidden = !this._canToggleKind;
       for (const b of tog.querySelectorAll('button')) b.classList.toggle('on', b.dataset.kind === this._recKind);
@@ -368,7 +369,8 @@ ${STYLES}
         </section>
         <section id="sndbox"><button type="button" class="outhead mhead" id="sndhead" aria-expanded="true"><span class="outtitle">♪ Sound</span><span class="outcount zero" id="sndbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button></section>
         <section id="tgsec" class="psec"><button type="button" class="outhead mhead" id="tghead" aria-expanded="true"><span class="outtitle">🤝 Together</span><span class="outcount zero" id="tgbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button></section>
-        <section id="toolsec" class="psec"><button type="button" class="outhead mhead" id="toolhead" aria-expanded="true"><span class="outtitle">✂ Script tools</span><span class="outcount zero" id="toolbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button><div class="hint" id="toolinfo"></div><h4 class="tsub">Edit the script</h4><div id="tlslot"></div><h4 class="tsub">Queue</h4><div id="plslot"></div></section>
+        <section id="toolsec" class="psec"><button type="button" class="outhead mhead" id="toolhead" aria-expanded="true"><span class="outtitle">✂ Script editing</span><span class="outcount zero" id="toolbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button><div class="hint" id="toolinfo"></div><div id="tlslot"></div></section>
+        <section id="queuesec" class="psec"><button type="button" class="outhead mhead" id="queuehead" aria-expanded="true"><span class="outtitle">☰ Queue</span><span class="outcount zero" id="queuebadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button><div id="plslot"></div></section>
         <section id="locksec" class="psec"><button type="button" class="outhead mhead" id="lockhead" aria-expanded="true"><span class="outtitle">🔒 Lock &amp; PIN</span><span class="outcount zero" id="lockbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button><div class="hint" id="lockinfo"></div><div class="row" style="margin-top:8px"><button id="locknow" type="button">🔒 Lock now</button><button id="lockset" type="button">⚙ PIN settings</button></div></section>
         <section id="extrabox"><button type="button" class="outhead mhead" id="extrahead" aria-expanded="true"><span class="outtitle">🧰 Extras</span><span class="outcount zero" id="extrabadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button><div class="gpslot" id="xgpslot"></div></section>
         <section data-part="import">

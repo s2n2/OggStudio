@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.22.0";
+  var VERSION = "0.23.0";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -15,80 +15,25 @@
   var PARTS = ["record", "stroke", "take", "library", "video", "import"];
   var NO_DEVICE = "none";
   var TAKE_SRC = "take";
+  var PLAY = {
+    name: "OggStudio Play",
+    sub: "Manual, pattern, mood, library, video and sound: record any of them",
+    parts: ["record", "video", "take"],
+    simple: true,
+    size: 10,
+    description: "Everything in one card: play by hand, a pattern, a mood, a saved script, a video or sound, record any of it, and Together, script editing, a queue and the lock."
+  };
+  var PLAY_STROKE = { ...PLAY, parts: ["stroke", "video", "take"], hidden: true };
   var VARIANTS = {
-    "oggstudio-card": {
-      name: "OggStudio",
-      sub: "Record, import, replay and sync to video",
-      parts: PARTS.filter((p) => p !== "stroke"),
-      size: 9,
-      description: "Everything in one card: record, library, video sync and import."
-    },
-    "oggstudio-recorder-card": {
-      name: "OggStudio Recorder",
-      sub: "Draw a pattern with your finger and save it",
-      parts: ["record", "take"],
-      kind: "vibrate",
-      size: 6,
-      description: "Big touch pads to record (or just play live), then save the take."
-    },
-    "oggstudio-player-card": {
-      name: "OggStudio Player",
-      sub: "Play saved patterns and import scripts",
-      parts: ["library", "take", "import"],
-      size: 5,
-      description: "Pick a saved pattern and play it; paste or load funscripts and share codes."
-    },
-    "oggstudio-video-card": {
-      name: "OggStudio Video",
-      sub: "Play a local video with its script, or record one",
-      parts: ["video", "take"],
-      kind: "vibrate",
-      size: 7,
-      description: "Sync a video on this device with a script, and record a funscript for it."
-    },
-    "oggstudio-stroke-card": {
-      name: "OggStudio Stroke",
-      sub: "Record stroke scripts (for a Handy) between two limits",
-      parts: ["stroke", "take"],
-      kind: "stroke",
-      size: 8,
-      description: "Stroke recorder: set an upper and lower limit, hold a speed to stroke between them, record a stroke funscript."
-    },
-    "oggstudio-play-card": {
-      name: "OggStudio Play",
-      sub: "Manual, pattern, mood, audio or video: record any of them",
-      parts: ["record", "video", "take"],
-      simple: true,
-      size: 8,
-      description: "One simple card: play by hand, a pattern, a mood, to sound or to a video, with one Record button for all of them."
-    },
-    "oggstudio-play-stroke-card": {
-      name: "OggStudio Play Stroke",
-      sub: "For a stroker: manual, pattern, mood, audio or video, and record any of them",
-      parts: ["stroke", "video", "take"],
-      simple: true,
-      hidden: true,
-      size: 8,
-      description: "The Play card for a stroker (a Handy): stroke by hand, a pattern, a mood, to sound or to a video, inside your limits, with one Record button for all of them."
-    },
-    "oggstudio-video-stroke-card": {
-      name: "OggStudio Video Stroke",
-      sub: "A video with stroke range and speed: record a stroke script for it",
-      parts: ["stroke", "video", "take"],
-      simple: true,
-      kind: "stroke",
-      modes: ["video"],
-      size: 8,
-      description: "Play a local video with a stroke range and speed (or a script, or its sound) driving a stroker, and record a stroke script in time with it."
-    },
-    "oggstudio-together-card": {
-      name: "OggStudio Together",
-      sub: "Play together from two places",
-      parts: [],
-      together: true,
-      size: 4,
-      description: "Start or join a Together session: each of you drives the devices of the other, inside the limits each has set."
-    }
+    "oggstudio-play-card": PLAY,
+    "oggstudio-card": { ...PLAY, hidden: true },
+    "oggstudio-recorder-card": { ...PLAY, hidden: true },
+    "oggstudio-player-card": { ...PLAY, hidden: true },
+    "oggstudio-video-card": { ...PLAY, hidden: true },
+    "oggstudio-stroke-card": PLAY_STROKE,
+    "oggstudio-play-stroke-card": PLAY_STROKE,
+    "oggstudio-video-stroke-card": PLAY_STROKE,
+    "oggstudio-together-card": { ...PLAY, hidden: true }
   };
   var capture = (el, e) => {
     try {
@@ -1755,7 +1700,7 @@ ha-card.simple section.psec{margin-top:10px}
       return this.constructor.variant;
     }
     get _baseParts() {
-      const wanted = this._config && Array.isArray(this._config.sections) ? this._config.sections.filter((p) => PARTS.includes(p)) : [];
+      const wanted = !this._variant.simple && this._config && Array.isArray(this._config.sections) ? this._config.sections.filter((p) => PARTS.includes(p)) : [];
       return wanted.length ? wanted : this._variant.parts;
     }
     // A card with one recorder (pads or stroke) can switch between the two
@@ -1820,7 +1765,7 @@ ha-card.simple section.psec{margin-top:10px}
         sec.style.order = String(parts.indexOf(sec.dataset.part) + 1);
       }
       this._el("sndbox").style.order = this._el("videobox").style.order;
-      for (const id of ["tgsec", "toolsec", "locksec", "extrabox"]) this._el(id).style.order = this._el("videobox").style.order;
+      for (const id of ["tgsec", "toolsec", "queuesec", "locksec", "extrabox"]) this._el(id).style.order = this._el("videobox").style.order;
       for (const tog of this.shadowRoot.querySelectorAll(".kind")) {
         tog.hidden = !this._canToggleKind;
         for (const b of tog.querySelectorAll("button")) b.classList.toggle("on", b.dataset.kind === this._recKind);
@@ -2103,7 +2048,8 @@ ${STYLES}
         </section>
         <section id="sndbox"><button type="button" class="outhead mhead" id="sndhead" aria-expanded="true"><span class="outtitle">♪ Sound</span><span class="outcount zero" id="sndbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button></section>
         <section id="tgsec" class="psec"><button type="button" class="outhead mhead" id="tghead" aria-expanded="true"><span class="outtitle">🤝 Together</span><span class="outcount zero" id="tgbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button></section>
-        <section id="toolsec" class="psec"><button type="button" class="outhead mhead" id="toolhead" aria-expanded="true"><span class="outtitle">✂ Script tools</span><span class="outcount zero" id="toolbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button><div class="hint" id="toolinfo"></div><h4 class="tsub">Edit the script</h4><div id="tlslot"></div><h4 class="tsub">Queue</h4><div id="plslot"></div></section>
+        <section id="toolsec" class="psec"><button type="button" class="outhead mhead" id="toolhead" aria-expanded="true"><span class="outtitle">✂ Script editing</span><span class="outcount zero" id="toolbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button><div class="hint" id="toolinfo"></div><div id="tlslot"></div></section>
+        <section id="queuesec" class="psec"><button type="button" class="outhead mhead" id="queuehead" aria-expanded="true"><span class="outtitle">☰ Queue</span><span class="outcount zero" id="queuebadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button><div id="plslot"></div></section>
         <section id="locksec" class="psec"><button type="button" class="outhead mhead" id="lockhead" aria-expanded="true"><span class="outtitle">🔒 Lock &amp; PIN</span><span class="outcount zero" id="lockbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button><div class="hint" id="lockinfo"></div><div class="row" style="margin-top:8px"><button id="locknow" type="button">🔒 Lock now</button><button id="lockset" type="button">⚙ PIN settings</button></div></section>
         <section id="extrabox"><button type="button" class="outhead mhead" id="extrahead" aria-expanded="true"><span class="outtitle">🧰 Extras</span><span class="outcount zero" id="extrabadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button><div class="gpslot" id="xgpslot"></div></section>
         <section data-part="import">
@@ -6847,7 +6793,7 @@ ${STYLES}
       document.addEventListener("fullscreenchange", onFull);
       document.addEventListener("webkitfullscreenchange", onFull);
       for (const type of ["play", "pause", "ended", "emptied", "loadedmetadata"]) video.addEventListener(type, () => this._vsideShow());
-      let mf = { c: false, v: true, s: true, x: true, t: true, p: true, l: true };
+      let mf = { c: false, v: true, s: true, x: true, t: true, p: true, q: true, l: true };
       try {
         mf = { ...mf, ...JSON.parse(localStorage.getItem(MEDIA_FOLD_KEY) || "{}") || {} };
       } catch (_) {
@@ -6858,11 +6804,15 @@ ${STYLES}
       $("ctlhead").addEventListener("click", () => this._mediaFold("c", !this._mfold.c, true));
       this._mediaFold("x", mf.x !== false);
       $("extrahead").addEventListener("click", () => this._mediaFold("x", !this._mfold.x, true));
-      for (const k of ["t", "p", "l"]) this._mediaFold(k, mf[k] !== false);
+      for (const k of ["t", "p", "q", "l"]) this._mediaFold(k, mf[k] !== false);
       $("tghead").addEventListener("click", () => this._mediaFold("t", !this._mfold.t, true));
       $("toolhead").addEventListener("click", () => {
         this._mediaFold("p", !this._mfold.p, true);
-        if (!this._mfold.p) {
+        if (!this._mfold.p) this._toolsUpdate();
+      });
+      $("queuehead").addEventListener("click", () => {
+        this._mediaFold("q", !this._mfold.q, true);
+        if (!this._mfold.q) {
           this._toolsUpdate();
           this._plShow();
         }
@@ -7730,11 +7680,11 @@ ${STYLES}
     // Video and Sound fold like Devices: Video open, Sound folded at first.
     _mediaFold(which, folded, save) {
       const $ = this._el;
-      this._mfold = this._mfold || { c: false, v: true, s: true, x: true, t: true, p: true, l: true };
+      this._mfold = this._mfold || { c: false, v: true, s: true, x: true, t: true, p: true, q: true, l: true };
       this._mfold[which] = folded;
-      const box = { c: this.shadowRoot.querySelector("ha-card"), v: $("videobox"), s: $("sndbox"), x: $("extrabox"), t: $("tgsec"), p: $("toolsec"), l: $("locksec") }[which];
+      const box = { c: this.shadowRoot.querySelector("ha-card"), v: $("videobox"), s: $("sndbox"), x: $("extrabox"), t: $("tgsec"), p: $("toolsec"), q: $("queuesec"), l: $("locksec") }[which];
       box.classList.toggle(which === "c" ? "cfold" : "mfold", folded);
-      $({ c: "ctlhead", v: "vidhead", s: "sndhead", x: "extrahead", t: "tghead", p: "toolhead", l: "lockhead" }[which]).setAttribute("aria-expanded", String(!folded));
+      $({ c: "ctlhead", v: "vidhead", s: "sndhead", x: "extrahead", t: "tghead", p: "toolhead", q: "queuehead", l: "lockhead" }[which]).setAttribute("aria-expanded", String(!folded));
       if (save) {
         try {
           localStorage.setItem(MEDIA_FOLD_KEY, JSON.stringify(this._mfold));
@@ -7762,6 +7712,9 @@ ${STYLES}
       badge("toolbadge", Boolean(rpn), rpn ? rpn.slice(0, 18) : "no script");
       const tinfo = rpn ? `Working on "${rpn}" (the script in the Library). Drag its bar to a spot, then cut; each change becomes the current take.` : "Choose a script in the Library first.";
       if (this._el("toolinfo").textContent !== tinfo) this._el("toolinfo").textContent = tinfo;
+      const pl = this._pl;
+      const n = pl && pl.items ? pl.items.length : 0;
+      badge("queuebadge", Boolean(pl && pl.on), pl && pl.on ? `playing ${pl.i + 1}/${n}` : n ? `${n} in queue` : "empty");
       const p = this._privacy || {};
       badge("lockbadge", Boolean(p.pin || p.discreet), p.pin ? "PIN set" : p.discreet ? "discreet" : "off");
       const linfo = `PIN: ${p.pin ? "set" : "none"} · Discreet: ${p.discreet ? "on" : "off"} · Auto-lock: ${p.auto_lock ? `${p.auto_lock} min` : "off"}. These are set in Home Assistant (admins), and apply to every OggStudio card.`;
@@ -7826,7 +7779,7 @@ ${STYLES}
         }
       };
       customElements.define(tag, cls);
-      if (variant.simple && !variant.modes && !variant.hidden || variant.together) window.customCards.push({ type: tag, name: variant.name, description: variant.description, preview: true });
+      if (!variant.hidden) window.customCards.push({ type: tag, name: variant.name, description: variant.description, preview: true });
     }
   }
 })();

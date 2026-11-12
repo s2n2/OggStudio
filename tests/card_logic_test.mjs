@@ -15,9 +15,12 @@ const { isStroke, STROKE_SPEEDS, STROKE_LIMITS_RESET, parseTarget, MOODS, VIBE_P
 // Card variants: each tag shows a valid subset of the parts, and every part needs a take box to save into.
 {
   const { PARTS, VARIANTS } = lib;
-  assert.deepStrictEqual(Object.keys(VARIANTS), ['oggstudio-card', 'oggstudio-recorder-card', 'oggstudio-player-card', 'oggstudio-video-card', 'oggstudio-stroke-card', 'oggstudio-play-card', 'oggstudio-play-stroke-card', 'oggstudio-video-stroke-card', 'oggstudio-together-card']);
-  assert.deepStrictEqual(VARIANTS['oggstudio-card'].parts, PARTS.filter((p) => p !== 'stroke'), 'the full card stays as it was; the stroke recorder is its own card');
-  assert.deepStrictEqual(VARIANTS['oggstudio-stroke-card'].parts, ['stroke', 'take']);
+  // One card (Play); the retired cards' names open it, hidden from the picker.
+  assert.deepStrictEqual(Object.keys(VARIANTS).filter((k) => !VARIANTS[k].hidden), ['oggstudio-play-card']);
+  for (const k of ['oggstudio-card', 'oggstudio-recorder-card', 'oggstudio-player-card', 'oggstudio-video-card', 'oggstudio-stroke-card', 'oggstudio-play-stroke-card', 'oggstudio-video-stroke-card', 'oggstudio-together-card']) {
+    assert.ok(VARIANTS[k] && VARIANTS[k].simple && VARIANTS[k].hidden, k + ' opens the Play card');
+  }
+  assert.deepStrictEqual(VARIANTS['oggstudio-stroke-card'].parts, ['stroke', 'video', 'take'], 'the old stroke card opens Play on Stroke');
   for (const v of Object.values(VARIANTS)) {
     assert.ok(v.parts.every((p) => PARTS.includes(p)), v.name);
     assert.ok(v.together || v.parts.includes('take'), v.name + ' can save what it makes');
