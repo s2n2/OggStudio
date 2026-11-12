@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.16.0";
+  var VERSION = "0.17.0";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -1573,9 +1573,57 @@ ha-card.simple #videobox{padding:8px}
 #aubox.fromvideo #ausrcbox,#aubox.fromvideo #aufilebox,#aubox.fromvideo #augo{display:none!important}
 #aubox.fromvideo{margin-top:8px;padding:10px;border-radius:14px;border:1px solid #293552;background:#0e1730}
 #aubox.fromvideo>label:first-of-type{margin-top:0}
+:host{font-family:var(--primary-font-family,Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif);color-scheme:dark;--line:rgba(174,194,246,.13);--muted:#9aa7c4;--ink:#f5f6ff}
+ha-card{border-radius:26px;padding:20px;box-shadow:0 20px 55px rgba(0,0,0,.22);background:radial-gradient(circle at calc(100% + 60px) -60px,rgba(105,100,240,.24),transparent 230px),radial-gradient(circle at -40px 300px,rgba(44,199,191,.09),transparent 220px),#0a1122}
+.head{gap:12px;margin-bottom:4px;align-items:center}
+.brand{flex:none;width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:15px;background:linear-gradient(155deg,#6adfd4,#667ee8);box-shadow:0 8px 25px rgba(74,169,210,.2);color:#091929}
+.brand svg{width:24px;height:24px}
+.htext{flex:1;min-width:0}
+.eyebrow{font-size:10px;font-weight:850;letter-spacing:.19em;color:#9ce2d9;text-transform:uppercase;margin-bottom:2px}
+.head h2{font-size:22px;letter-spacing:-.045em;line-height:1.07;font-weight:750;color:#f6f8ff}
+.head button.stop{min-height:34px;padding:0 12px;border-radius:30px;font-size:11.5px;font-weight:780;color:#ffbcc2;background:rgba(244,100,118,.09);border-color:rgba(239,115,134,.26)}
+.sub{font-size:12px;color:var(--muted);margin:2px 0 14px 56px;line-height:1.35}
+section{border:1px solid var(--line);border-radius:19px;padding:14px;background:linear-gradient(145deg,rgba(255,255,255,.056),rgba(255,255,255,.025))}
+h3{font-size:14px;letter-spacing:-.01em;color:#e8edff;font-weight:760}
+label{font-size:10.5px;font-weight:620;color:#99a9c5;letter-spacing:.01em;margin:8px 3px 5px}
+select{appearance:none;-webkit-appearance:none;min-height:40px;border-radius:12px;background:#17233c url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a6b5d7' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center/13px;border:1px solid #364563;color:#fff;font-weight:650;padding:8px 30px 8px 11px}
+button{border-radius:13px;font-weight:760;background:#24395a;border-color:rgba(118,200,239,.35);color:#bef2ff;transition:transform .12s ease,filter .15s ease}
+button:active:not(:disabled){transform:scale(.98)}
+button.go{border:0;border-radius:15px;color:#081b23;background:linear-gradient(115deg,#80f3d7,#7bccfa);box-shadow:0 5px 23px rgba(66,223,214,.14)}
+button.stop{color:#ffbcc2;background:rgba(244,100,118,.09);border-color:rgba(239,115,134,.26)}
+button.rec{border-radius:15px;min-height:54px;font-size:15px;font-weight:780;color:#ffc9d1;background:rgba(244,100,118,.14);border:1px solid rgba(239,115,134,.38)}
+button.rec.on{border-color:transparent;color:#2a0710;background:linear-gradient(115deg,#ff8aa0,#ffb38a);box-shadow:0 5px 23px rgba(255,120,140,.2)}
+input[type=checkbox]{appearance:none;-webkit-appearance:none;position:relative;flex:none;width:40px;height:24px;margin:0;border-radius:99px;border:1px solid #505e76;background:#2a3550;cursor:pointer;transition:.18s ease}
+input[type=checkbox]::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#d4daed;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .18s ease,background .18s ease}
+input[type=checkbox]:checked{background:linear-gradient(110deg,#31c6b8,#54d4bc);border-color:transparent}
+input[type=checkbox]:checked::after{transform:translateX(16px);background:#072a2d}
+.check{font-size:12px;font-weight:650;color:#d2dcf3;gap:9px}
+.pad,.strail,.stlane{border-radius:19px;border-color:#364563;background:#17243e}
+.pad .fill{background:linear-gradient(0deg,#31c6b8,#7bccfa)}
+.outbox{padding:10px 12px;border-radius:19px;background:rgba(255,255,255,.045)}
+ha-card.simple #ctlbox{padding:12px;border-radius:21px;border:1px solid rgba(142,123,250,.24);background:linear-gradient(125deg,rgba(112,95,217,.16),rgba(42,136,157,.065));margin-top:10px}
+.ctltabs button,ha-card.simple .ctltabs button{min-height:42px;border-radius:13px;background:rgba(255,255,255,.045);border:1px solid rgba(143,163,200,.2);color:#c5d2f0;font-weight:760}
+.ctltabs button.on{background:linear-gradient(110deg,#31c6b8,#54d4bc);color:#072a2d;border-color:transparent}
+.lsw{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;margin:0;padding:6px 10px;border-radius:15px;border:1px solid #364563;background:#17243e;color:#d2dcf3;font-size:11px;font-weight:720;cursor:pointer}
+ha-card.simple #liverow,ha-card.simple #stliverow{display:none!important}
+.ptgrid button.ptbtn,.moodgrid button.moodbtn{background:rgba(255,255,255,.045);border-color:rgba(143,163,200,.2);color:#d2dcf3}
+.ptgrid button.ptbtn.on,.moodgrid button.moodbtn.on{background:linear-gradient(110deg,#8f7dff,#b49cff);color:#140c3a;border-color:transparent}
+.vside button{border-radius:12px;background:rgba(255,255,255,.045);border-color:rgba(143,163,200,.2)}
+.vside button.on{background:linear-gradient(110deg,#31c6b8,#54d4bc)}
+.toast{color:#ffcf8a}
+/* Video controls: a slim line on each side of the video, faint while it plays */
 .vst{position:absolute;inset:0;pointer-events:none;z-index:2;opacity:.85;transition:opacity .6s}
 .vst.idle{opacity:.28}
-.vstrail{position:absolute;left:max(2px,env(safe-area-inset-left));top:calc(10% - 22px);bottom:calc(28% - 22px);width:40px;pointer-events:auto;touch-action:none;cursor:ns-resize}
+.vstspd{position:absolute;left:max(4px,env(safe-area-inset-left));top:8%;bottom:24%;width:40px;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:auto}
+.vstspd b{font-size:9.5px;font-weight:700;color:rgba(255,255,255,.85);text-shadow:0 1px 3px rgba(0,0,0,.9);white-space:nowrap}
+.vstline{position:relative;flex:1;width:40px;touch-action:none;cursor:ns-resize}
+.vstline::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.3);box-shadow:0 0 2px rgba(0,0,0,.6)}
+.vstline .dot{position:absolute;left:50%;width:12px;height:12px;margin:0 0 -6px -6px;border-radius:50%;background:rgba(255,255,255,.8);box-shadow:0 0 0 1px rgba(0,0,0,.45)}
+.vstline.active .dot{width:18px;height:18px;margin:0 0 -9px -9px;background:#fff}
+.vstline.dim .dot{background:rgba(255,255,255,.45)}
+.vstspd button{min-height:24px;width:30px;padding:0;font-size:12px;border-radius:9px;color:rgba(255,255,255,.85);background:rgba(0,0,0,.3);border-color:rgba(255,255,255,.25)}
+.vstspd button.on{background:rgba(255,255,255,.35);color:#fff;border-color:rgba(255,255,255,.5)}
+.vstrail{position:absolute;right:max(2px,env(safe-area-inset-right));top:calc(8% - 22px);bottom:calc(24% - 22px);width:40px;pointer-events:auto;touch-action:none;cursor:ns-resize}
 .vstrail .trk{position:absolute;left:0;right:0;top:22px;bottom:22px;pointer-events:none}
 .vstrail .trk::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.3);box-shadow:0 0 2px rgba(0,0,0,.6)}
 .vstrail .band{position:absolute;left:50%;width:6px;margin-left:-3px;border-radius:3px;background:rgba(255,255,255,.28);box-shadow:0 0 2px rgba(0,0,0,.5)}
@@ -1587,15 +1635,6 @@ ha-card.simple #videobox{padding:8px}
 .vstrail.active .hu{top:-7px}
 .vstrail.active .hl{bottom:-7px}
 .vstrail .dot{position:absolute;left:50%;width:10px;height:10px;margin:0 0 -5px -5px;border-radius:50%;background:rgba(255,255,255,.75);box-shadow:0 0 0 1px rgba(0,0,0,.45)}
-.vstspd{position:absolute;left:40px;right:40%;bottom:58px;display:flex;align-items:center;gap:6px;pointer-events:auto}
-.vstspd button{min-height:20px;padding:0 6px;font-size:10px;border-radius:8px;color:rgba(255,255,255,.85);background:rgba(0,0,0,.3);border-color:rgba(255,255,255,.25)}
-.vstspd button.on{background:rgba(255,255,255,.35);color:#fff;border-color:rgba(255,255,255,.5)}
-.vstline{position:relative;flex:1;height:24px;touch-action:none;cursor:ew-resize}
-.vstline::before{content:'';position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(255,255,255,.3);box-shadow:0 0 2px rgba(0,0,0,.6)}
-.vstline .dot{position:absolute;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:rgba(255,255,255,.75);box-shadow:0 0 0 1px rgba(0,0,0,.45)}
-.vstline.active .dot{width:14px;height:14px;margin:-7px 0 0 -7px}
-.vstline.dim .dot{background:rgba(255,255,255,.4)}
-.vstspd b{min-width:34px;font-size:9.5px;font-weight:700;color:rgba(255,255,255,.8);text-shadow:0 1px 3px rgba(0,0,0,.9)}
 [hidden],.off{display:none!important}
 `;
 
@@ -1795,7 +1834,7 @@ ${STYLES}
           <div class="hint" id="covermsg"></div>
           <button id="coverstop" type="button" class="stop">■ Stop all</button>
         </div>
-        <div class="head"><h2 id="title">${esc(this._config.title || this._variant.name)}</h2><button id="lockbtn" type="button" title="Lock this card" aria-label="Lock this card" hidden>🔒</button><button id="stopall" type="button" class="stop" title="Stop every device now">■ Stop all</button></div>
+        <div class="head"><div class="brand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg></div><div class="htext"><div class="eyebrow">OggStudio</div><h2 id="title">${esc(this._config.title || this._variant.name.replace(/^OggStudio\s*/, "") || "Studio")}</h2></div><button id="lockbtn" type="button" title="Lock this card" aria-label="Lock this card" hidden>🔒</button><button id="stopall" type="button" class="stop" title="Stop every device now">■ Stop all</button></div>
         <div class="sub" id="sub">${esc(this._variant.sub)} · v${VERSION}</div>
         <div id="devbox"><label>Playback device</label><select id="device"></select></div>
         <div class="gp" id="gp">
@@ -1843,7 +1882,7 @@ ${STYLES}
           <div id="ctlbox">
             <div class="ctltabs" role="tablist"${this._variant.modes && this._variant.modes.length < 2 ? " hidden" : ""}>${(simple ? [["record", "✋ Manual"], ["pattern", "〰 Pattern"], ["mood", "◎ Mood"], ["audio", "♪ Audio"], ["video", "🎬 Video"]] : [["record", "● Record"], ["replay", "▶ Replay"], ["mood", "◎ Mood"], ["audio", "♪ Audio"], ["together", "🤝 Together"]]).filter(([k]) => !this._variant.modes || this._variant.modes.includes(k)).map(([k, t]) => `<button type="button" data-ctl="${k}">${t}</button>`).join("")}</div>
             <div id="urecrow" hidden>
-              <div class="urechead"><button id="urec" class="rec" type="button">● Record</button><div class="kind" role="group" aria-label="Vibrate or stroke"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div></div>
+              <div class="urechead"><button id="urec" class="rec" type="button">● Record</button><label class="lsw" title="Devices follow the pads or the stroke bar while you touch them"><input id="ulive" type="checkbox" role="switch"><span>Live</span></label><div class="kind" role="group" aria-label="Vibrate or stroke"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div></div>
               <div class="val" id="utimer"></div>
             </div>
             <div id="ptbox" hidden>
@@ -1952,7 +1991,7 @@ ${STYLES}
               <video id="video" controls playsinline preload="metadata" disableremoteplayback hidden></video>
               <div class="vst" id="vst" hidden>
                 <div class="vstrail" id="vstrail" role="group" aria-label="Stroke range: drag the ends to set the limits, the middle to move it"><div class="trk"><div class="band"><span class="h hu"></span><span class="h hl"></span></div><div class="dot"></div></div></div>
-                <div class="vstspd"><button type="button" id="vstbeat" title="Speed follows the beat of the sound">♪ Beat</button><div class="vstline" id="vstline" role="slider" aria-label="Stroke speed" aria-valuemin="0" aria-valuemax="100"><div class="dot"></div></div><b id="vstspdv"></b></div>
+                <div class="vstspd"><b id="vstspdv"></b><div class="vstline" id="vstline" role="slider" aria-label="Stroke speed" aria-valuemin="0" aria-valuemax="100"><div class="dot"></div></div><button type="button" id="vstbeat" title="The sound drives it">♪</button></div>
               </div>
             </div>
           </div>
@@ -1969,7 +2008,7 @@ ${STYLES}
           <div class="hint">Positive values send each moment slightly early to make up for Bluetooth delay. Pause, seek and playback speed all stay in sync.</div></div>
           <div id="vaubox"></div>
           <div class="hint vhide">To make a script for this video: press ● Rec, play the video and drag the slider (position in the Stroke view, intensity in Vibrate). You can pause, scrub back and record a section again; the newer pass replaces it. While a script plays, the slider shows it; hold the slider to take over until you let go.</div>
-          <div class="hint vshow">The slider under the video drives your devices while you watch (⛶ puts it over the video, full screen). ● Record follows the video: play it and use the slider, or let a script (📂) or the sound of the video (♪) do the playing. Pause and it waits; go back and the new pass replaces what came after.</div>
+          <div class="hint vshow">On the video: the line on the left is the strength (a vibrator) or the speed (a stroker); hold it to take over. A stroker's range is on the right. ⛶ makes it full screen. ● Record follows the video: play it and use the controls, or let a script (📂) or the sound of the video (♪) do the playing. Pause and it waits; go back and the new pass replaces what came after.</div>
         </section>
         <section data-part="import">
           <h3>Import</h3>
@@ -2231,7 +2270,7 @@ ${STYLES}
       if (speed !== null) st.dir = st.dir || 1;
       this._stLive(now);
       this._stShow();
-      const busy = speed !== null || st.drag !== null || this._stRecording || this._el("stlive").checked || Boolean(this._rp && this._rp.playing);
+      const busy = speed !== null || st.drag !== null || this._stRecording || this._el("stlive").checked && !this._simple || Boolean(this._rp && this._rp.playing);
       if (!busy) this._stHalt();
     }
     _stHalt() {
@@ -3515,6 +3554,10 @@ ${STYLES}
         event.preventDefault();
         active = true;
         this._padActive[index] = true;
+        if (this._simple && this._el("ulive").checked && !this._live && !this._recording) {
+          this._livePad = true;
+          this._setLive(true);
+        }
         pad.classList.add("active");
         capture(pad, event);
         fromEvent(event);
@@ -3528,6 +3571,10 @@ ${STYLES}
         this._padActive[index] = false;
         pad.classList.remove("active");
         if (this._el("spring").checked && !(this._rp && this._rp.playing)) this._setPad(index, 0);
+        if (this._livePad && this._el("spring").checked && !this._padActive.some(Boolean)) {
+          this._livePad = false;
+          if (!this._recording) this._setLive(false);
+        }
       };
       for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) pad.addEventListener(type, release);
       pad.addEventListener("contextmenu", (event) => event.preventDefault());
@@ -4213,6 +4260,7 @@ ${STYLES}
       for (const id of ["rec", "timer", "strec", "liverow", "stliverow"]) $(id).hidden = ctl !== "record" || simple && id !== "liverow" && id !== "stliverow";
       this._rpShow();
       if (simple) {
+        $("stlive").checked = $("ulive").checked;
         this._vsideShow();
         this._urecShow();
       }
@@ -5347,7 +5395,7 @@ ${STYLES}
       cardEl.classList.toggle("locked", locked);
       $("cover").hidden = !locked;
       const neutral = p.discreet || locked;
-      const title = neutral ? p.name || "Studio" : this._config.title || this._variant.name;
+      const title = neutral ? p.name || "Studio" : this._config.title || this._variant.name.replace(/^OggStudio\s*/, "") || "Studio";
       if ($("title").textContent !== title) $("title").textContent = title;
       if ($("covername").textContent !== (p.name || "Studio")) $("covername").textContent = p.name || "Studio";
       $("sub").hidden = Boolean(p.discreet);
@@ -6343,6 +6391,7 @@ ${STYLES}
   // frontend/src/card/play.js
   var PATTERN_KEY = "oggstudio_pattern";
   var VSTROKE_KEY = "oggstudio_video_stroke";
+  var LIVE_KEY = "oggstudio_play_live";
   var VVIBE_KEY = "oggstudio_video_vibe";
   var PATTERN_HINT = "Ogg's patterns, played from here: they show on the pads, stay inside your limits and can be recorded.";
   var PlayPart = class {
@@ -6355,6 +6404,25 @@ ${STYLES}
     _bindPlay() {
       const $ = this._el;
       $("urec").addEventListener("click", () => this._urecToggle());
+      let live = true;
+      try {
+        live = localStorage.getItem(LIVE_KEY) !== "off";
+      } catch (_) {
+      }
+      $("ulive").checked = live;
+      $("stlive").checked = this._simple && live;
+      $("ulive").addEventListener("change", () => {
+        const on = $("ulive").checked;
+        try {
+          localStorage.setItem(LIVE_KEY, on ? "on" : "off");
+        } catch (_) {
+        }
+        $("stlive").checked = on;
+        if (!on && this._live) {
+          $("live").checked = false;
+          this._setLive(false);
+        }
+      });
       for (const b of this.shadowRoot.querySelectorAll(".ptbtn")) b.addEventListener("click", () => this._ptStart(b.dataset.pt));
       let kept = {};
       try {
@@ -6792,15 +6860,7 @@ ${STYLES}
     // vibrator's least and most intensity (kept apart).
     get _vsRange() {
       if (this._strokeKind) return this._st;
-      if (!this._vvLim) {
-        let kept = {};
-        try {
-          kept = JSON.parse(localStorage.getItem(VVIBE_KEY) || "{}") || {};
-        } catch (_) {
-        }
-        const ok = Number.isFinite(kept.lower) && Number.isFinite(kept.upper) && kept.upper - kept.lower >= 5;
-        this._vvLim = { lower: ok ? kept.lower : 0, upper: ok ? kept.upper : 100, pos: ok ? kept.lower : 0, dir: 1, last: null };
-      }
+      if (!this._vvLim) this._vvLim = { lower: 0, upper: 100, pos: 0, dir: 1, last: null };
       return this._vvLim;
     }
     _vsKeep() {
@@ -6964,6 +7024,7 @@ ${STYLES}
       if (!on) return;
       const stroke = this._strokeKind;
       $("vst").classList.toggle("vib", !stroke);
+      $("vstrail").hidden = !stroke;
       const band = $("vstrail").querySelector(".band");
       band.style.bottom = r.lower + "%";
       band.style.height = r.upper - r.lower + "%";
@@ -7001,7 +7062,7 @@ ${STYLES}
         if (!held && !sound && !script && r.pos <= 0) pct = 0;
         text = `${Math.round(r.pos)}%`;
       }
-      line.querySelector(".dot").style.left = Math.min(100, Math.max(0, pct)) + "%";
+      line.querySelector(".dot").style.bottom = Math.min(100, Math.max(0, pct)) + "%";
       line.setAttribute("aria-valuenow", String(pct));
       if ($("vstspdv").textContent !== text) $("vstspdv").textContent = text;
     }
@@ -7076,7 +7137,7 @@ ${STYLES}
       let sliding = false;
       const setLine = (e) => {
         const r = line.getBoundingClientRect();
-        const v = Math.min(100, Math.max(0, (e.clientX - r.left) / r.width * 100));
+        const v = Math.min(100, Math.max(0, (r.bottom - e.clientY) / r.height * 100));
         if (this._strokeKind) {
           const cfg = this._vsLoad();
           cfg.speed = Math.round(v / 5) * 5;
@@ -7116,7 +7177,7 @@ ${STYLES}
           this._vsWake();
         });
       }
-      $("vstbeat").textContent = "♪ Sound";
+      $("vstbeat").textContent = "♪";
       $("vstbeat").title = "The sound drives it, the way chosen in Feel";
       $("vstbeat").addEventListener("click", () => {
         const cfg = this._vsLoad();
@@ -7187,7 +7248,7 @@ ${STYLES}
         }
       };
       customElements.define(tag, cls);
-      window.customCards.push({ type: tag, name: variant.name, description: variant.description, preview: true });
+      if (variant.simple && !variant.modes || variant.together) window.customCards.push({ type: tag, name: variant.name, description: variant.description, preview: true });
     }
   }
 })();

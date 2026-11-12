@@ -152,7 +152,7 @@ export class StrokePart {
     if (speed !== null) st.dir = st.dir || 1;
     this._stLive(now);
     this._stShow();
-    const busy = speed !== null || st.drag !== null || this._stRecording || this._el('stlive').checked || Boolean(this._rp && this._rp.playing);
+    const busy = speed !== null || st.drag !== null || this._stRecording || (this._el('stlive').checked && !this._simple) || Boolean(this._rp && this._rp.playing);
     if (!busy) this._stHalt();
   }
 

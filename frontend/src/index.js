@@ -30,6 +30,8 @@ if (!customElements.get(TAG)) {
     if (customElements.get(tag)) continue;
     const cls = tag === TAG ? OggStudioCard : class extends OggStudioCard { static get variant() { return variant; } };
     customElements.define(tag, cls);
-    window.customCards.push({ type: tag, name: variant.name, description: variant.description, preview: true });
+    // The picker offers the Play cards (vibrator, stroker) and Together;
+    // the other cards still work where they are already used.
+    if (variant.simple && !variant.modes || variant.together) window.customCards.push({ type: tag, name: variant.name, description: variant.description, preview: true });
   }
 }

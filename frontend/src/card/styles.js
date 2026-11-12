@@ -201,9 +201,57 @@ ha-card.simple #videobox{padding:8px}
 #aubox.fromvideo #ausrcbox,#aubox.fromvideo #aufilebox,#aubox.fromvideo #augo{display:none!important}
 #aubox.fromvideo{margin-top:8px;padding:10px;border-radius:14px;border:1px solid #293552;background:#0e1730}
 #aubox.fromvideo>label:first-of-type{margin-top:0}
+:host{font-family:var(--primary-font-family,Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif);color-scheme:dark;--line:rgba(174,194,246,.13);--muted:#9aa7c4;--ink:#f5f6ff}
+ha-card{border-radius:26px;padding:20px;box-shadow:0 20px 55px rgba(0,0,0,.22);background:radial-gradient(circle at calc(100% + 60px) -60px,rgba(105,100,240,.24),transparent 230px),radial-gradient(circle at -40px 300px,rgba(44,199,191,.09),transparent 220px),#0a1122}
+.head{gap:12px;margin-bottom:4px;align-items:center}
+.brand{flex:none;width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:15px;background:linear-gradient(155deg,#6adfd4,#667ee8);box-shadow:0 8px 25px rgba(74,169,210,.2);color:#091929}
+.brand svg{width:24px;height:24px}
+.htext{flex:1;min-width:0}
+.eyebrow{font-size:10px;font-weight:850;letter-spacing:.19em;color:#9ce2d9;text-transform:uppercase;margin-bottom:2px}
+.head h2{font-size:22px;letter-spacing:-.045em;line-height:1.07;font-weight:750;color:#f6f8ff}
+.head button.stop{min-height:34px;padding:0 12px;border-radius:30px;font-size:11.5px;font-weight:780;color:#ffbcc2;background:rgba(244,100,118,.09);border-color:rgba(239,115,134,.26)}
+.sub{font-size:12px;color:var(--muted);margin:2px 0 14px 56px;line-height:1.35}
+section{border:1px solid var(--line);border-radius:19px;padding:14px;background:linear-gradient(145deg,rgba(255,255,255,.056),rgba(255,255,255,.025))}
+h3{font-size:14px;letter-spacing:-.01em;color:#e8edff;font-weight:760}
+label{font-size:10.5px;font-weight:620;color:#99a9c5;letter-spacing:.01em;margin:8px 3px 5px}
+select{appearance:none;-webkit-appearance:none;min-height:40px;border-radius:12px;background:#17233c url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a6b5d7' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center/13px;border:1px solid #364563;color:#fff;font-weight:650;padding:8px 30px 8px 11px}
+button{border-radius:13px;font-weight:760;background:#24395a;border-color:rgba(118,200,239,.35);color:#bef2ff;transition:transform .12s ease,filter .15s ease}
+button:active:not(:disabled){transform:scale(.98)}
+button.go{border:0;border-radius:15px;color:#081b23;background:linear-gradient(115deg,#80f3d7,#7bccfa);box-shadow:0 5px 23px rgba(66,223,214,.14)}
+button.stop{color:#ffbcc2;background:rgba(244,100,118,.09);border-color:rgba(239,115,134,.26)}
+button.rec{border-radius:15px;min-height:54px;font-size:15px;font-weight:780;color:#ffc9d1;background:rgba(244,100,118,.14);border:1px solid rgba(239,115,134,.38)}
+button.rec.on{border-color:transparent;color:#2a0710;background:linear-gradient(115deg,#ff8aa0,#ffb38a);box-shadow:0 5px 23px rgba(255,120,140,.2)}
+input[type=checkbox]{appearance:none;-webkit-appearance:none;position:relative;flex:none;width:40px;height:24px;margin:0;border-radius:99px;border:1px solid #505e76;background:#2a3550;cursor:pointer;transition:.18s ease}
+input[type=checkbox]::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#d4daed;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .18s ease,background .18s ease}
+input[type=checkbox]:checked{background:linear-gradient(110deg,#31c6b8,#54d4bc);border-color:transparent}
+input[type=checkbox]:checked::after{transform:translateX(16px);background:#072a2d}
+.check{font-size:12px;font-weight:650;color:#d2dcf3;gap:9px}
+.pad,.strail,.stlane{border-radius:19px;border-color:#364563;background:#17243e}
+.pad .fill{background:linear-gradient(0deg,#31c6b8,#7bccfa)}
+.outbox{padding:10px 12px;border-radius:19px;background:rgba(255,255,255,.045)}
+ha-card.simple #ctlbox{padding:12px;border-radius:21px;border:1px solid rgba(142,123,250,.24);background:linear-gradient(125deg,rgba(112,95,217,.16),rgba(42,136,157,.065));margin-top:10px}
+.ctltabs button,ha-card.simple .ctltabs button{min-height:42px;border-radius:13px;background:rgba(255,255,255,.045);border:1px solid rgba(143,163,200,.2);color:#c5d2f0;font-weight:760}
+.ctltabs button.on{background:linear-gradient(110deg,#31c6b8,#54d4bc);color:#072a2d;border-color:transparent}
+.lsw{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;margin:0;padding:6px 10px;border-radius:15px;border:1px solid #364563;background:#17243e;color:#d2dcf3;font-size:11px;font-weight:720;cursor:pointer}
+ha-card.simple #liverow,ha-card.simple #stliverow{display:none!important}
+.ptgrid button.ptbtn,.moodgrid button.moodbtn{background:rgba(255,255,255,.045);border-color:rgba(143,163,200,.2);color:#d2dcf3}
+.ptgrid button.ptbtn.on,.moodgrid button.moodbtn.on{background:linear-gradient(110deg,#8f7dff,#b49cff);color:#140c3a;border-color:transparent}
+.vside button{border-radius:12px;background:rgba(255,255,255,.045);border-color:rgba(143,163,200,.2)}
+.vside button.on{background:linear-gradient(110deg,#31c6b8,#54d4bc)}
+.toast{color:#ffcf8a}
+/* Video controls: a slim line on each side of the video, faint while it plays */
 .vst{position:absolute;inset:0;pointer-events:none;z-index:2;opacity:.85;transition:opacity .6s}
 .vst.idle{opacity:.28}
-.vstrail{position:absolute;left:max(2px,env(safe-area-inset-left));top:calc(10% - 22px);bottom:calc(28% - 22px);width:40px;pointer-events:auto;touch-action:none;cursor:ns-resize}
+.vstspd{position:absolute;left:max(4px,env(safe-area-inset-left));top:8%;bottom:24%;width:40px;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:auto}
+.vstspd b{font-size:9.5px;font-weight:700;color:rgba(255,255,255,.85);text-shadow:0 1px 3px rgba(0,0,0,.9);white-space:nowrap}
+.vstline{position:relative;flex:1;width:40px;touch-action:none;cursor:ns-resize}
+.vstline::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.3);box-shadow:0 0 2px rgba(0,0,0,.6)}
+.vstline .dot{position:absolute;left:50%;width:12px;height:12px;margin:0 0 -6px -6px;border-radius:50%;background:rgba(255,255,255,.8);box-shadow:0 0 0 1px rgba(0,0,0,.45)}
+.vstline.active .dot{width:18px;height:18px;margin:0 0 -9px -9px;background:#fff}
+.vstline.dim .dot{background:rgba(255,255,255,.45)}
+.vstspd button{min-height:24px;width:30px;padding:0;font-size:12px;border-radius:9px;color:rgba(255,255,255,.85);background:rgba(0,0,0,.3);border-color:rgba(255,255,255,.25)}
+.vstspd button.on{background:rgba(255,255,255,.35);color:#fff;border-color:rgba(255,255,255,.5)}
+.vstrail{position:absolute;right:max(2px,env(safe-area-inset-right));top:calc(8% - 22px);bottom:calc(24% - 22px);width:40px;pointer-events:auto;touch-action:none;cursor:ns-resize}
 .vstrail .trk{position:absolute;left:0;right:0;top:22px;bottom:22px;pointer-events:none}
 .vstrail .trk::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.3);box-shadow:0 0 2px rgba(0,0,0,.6)}
 .vstrail .band{position:absolute;left:50%;width:6px;margin-left:-3px;border-radius:3px;background:rgba(255,255,255,.28);box-shadow:0 0 2px rgba(0,0,0,.5)}
@@ -215,14 +263,5 @@ ha-card.simple #videobox{padding:8px}
 .vstrail.active .hu{top:-7px}
 .vstrail.active .hl{bottom:-7px}
 .vstrail .dot{position:absolute;left:50%;width:10px;height:10px;margin:0 0 -5px -5px;border-radius:50%;background:rgba(255,255,255,.75);box-shadow:0 0 0 1px rgba(0,0,0,.45)}
-.vstspd{position:absolute;left:40px;right:40%;bottom:58px;display:flex;align-items:center;gap:6px;pointer-events:auto}
-.vstspd button{min-height:20px;padding:0 6px;font-size:10px;border-radius:8px;color:rgba(255,255,255,.85);background:rgba(0,0,0,.3);border-color:rgba(255,255,255,.25)}
-.vstspd button.on{background:rgba(255,255,255,.35);color:#fff;border-color:rgba(255,255,255,.5)}
-.vstline{position:relative;flex:1;height:24px;touch-action:none;cursor:ew-resize}
-.vstline::before{content:'';position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(255,255,255,.3);box-shadow:0 0 2px rgba(0,0,0,.6)}
-.vstline .dot{position:absolute;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;background:rgba(255,255,255,.75);box-shadow:0 0 0 1px rgba(0,0,0,.45)}
-.vstline.active .dot{width:14px;height:14px;margin:-7px 0 0 -7px}
-.vstline.dim .dot{background:rgba(255,255,255,.4)}
-.vstspd b{min-width:34px;font-size:9.5px;font-weight:700;color:rgba(255,255,255,.8);text-shadow:0 1px 3px rgba(0,0,0,.9)}
 [hidden],.off{display:none!important}
 `;

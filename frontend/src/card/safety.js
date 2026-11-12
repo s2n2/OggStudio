@@ -218,7 +218,7 @@ export class SafetyPart {
     cardEl.classList.toggle('locked', locked);
     $('cover').hidden = !locked;
     const neutral = p.discreet || locked;
-    const title = neutral ? (p.name || 'Studio') : (this._config.title || this._variant.name);
+    const title = neutral ? (p.name || 'Studio') : (this._config.title || this._variant.name.replace(/^OggStudio\s*/, '') || 'Studio');
     if ($('title').textContent !== title) $('title').textContent = title;
     if ($('covername').textContent !== (p.name || 'Studio')) $('covername').textContent = p.name || 'Studio';
     $('sub').hidden = Boolean(p.discreet);

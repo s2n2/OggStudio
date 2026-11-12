@@ -543,6 +543,7 @@ export class VideoPart {
       event.preventDefault();
       active = true;
       this._padActive[index] = true;
+      if (this._simple && this._el('ulive').checked && !this._live && !this._recording) { this._livePad = true; this._setLive(true); }
       pad.classList.add('active');
       capture(pad, event);
       fromEvent(event);
@@ -554,6 +555,7 @@ export class VideoPart {
       this._padActive[index] = false;
       pad.classList.remove('active');
       if (this._el('spring').checked && !(this._rp && this._rp.playing)) this._setPad(index, 0);
+      if (this._livePad && this._el('spring').checked && !this._padActive.some(Boolean)) { this._livePad = false; if (!this._recording) this._setLive(false); }
     };
     for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) pad.addEventListener(type, release);
     pad.addEventListener('contextmenu', (event) => event.preventDefault());

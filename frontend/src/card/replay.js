@@ -96,7 +96,7 @@ export class ReplayPart {
     this._outRender();
     for (const id of ['rec', 'timer', 'strec', 'liverow', 'stliverow']) $(id).hidden = ctl !== 'record' || (simple && id !== 'liverow' && id !== 'stliverow');
     this._rpShow();
-    if (simple) { this._vsideShow(); this._urecShow(); }
+    if (simple) { $('stlive').checked = $('ulive').checked; this._vsideShow(); this._urecShow(); }
   }
 
   _rpPicker(open) {

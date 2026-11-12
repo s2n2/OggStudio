@@ -8,6 +8,7 @@ import { STROKE_LIMIT_KEY, STROKE_PCT_MIN, strokeStep, strokeVel } from '../lib/
 
 const PATTERN_KEY = 'oggstudio_pattern';
 const VSTROKE_KEY = 'oggstudio_video_stroke';
+const LIVE_KEY = 'oggstudio_play_live';
 const VVIBE_KEY = 'oggstudio_video_vibe';
 const PATTERN_HINT = 'Ogg\'s patterns, played from here: they show on the pads, stay inside your limits and can be recorded.';
 
@@ -20,6 +21,17 @@ export class PlayPart {
   _bindPlay() {
     const $ = this._el;
     $('urec').addEventListener('click', () => this._urecToggle());
+    // Live: devices follow the pads or the stroke bar while touched (on by default).
+    let live = true;
+    try { live = localStorage.getItem(LIVE_KEY) !== 'off'; } catch (_) { /* private mode */ }
+    $('ulive').checked = live;
+    $('stlive').checked = this._simple && live;
+    $('ulive').addEventListener('change', () => {
+      const on = $('ulive').checked;
+      try { localStorage.setItem(LIVE_KEY, on ? 'on' : 'off'); } catch (_) { /* private mode */ }
+      $('stlive').checked = on;
+      if (!on && this._live) { $('live').checked = false; this._setLive(false); }
+    });
     // Patterns.
     for (const b of this.shadowRoot.querySelectorAll('.ptbtn')) b.addEventListener('click', () => this._ptStart(b.dataset.pt));
     let kept = {};
@@ -406,12 +418,7 @@ export class PlayPart {
   // vibrator's least and most intensity (kept apart).
   get _vsRange() {
     if (this._strokeKind) return this._st;
-    if (!this._vvLim) {
-      let kept = {};
-      try { kept = JSON.parse(localStorage.getItem(VVIBE_KEY) || '{}') || {}; } catch (_) { /* private mode */ }
-      const ok = Number.isFinite(kept.lower) && Number.isFinite(kept.upper) && kept.upper - kept.lower >= 5;
-      this._vvLim = { lower: ok ? kept.lower : 0, upper: ok ? kept.upper : 100, pos: ok ? kept.lower : 0, dir: 1, last: null };
-    }
+    if (!this._vvLim) this._vvLim = { lower: 0, upper: 100, pos: 0, dir: 1, last: null };   // a vibrator: just its strength
     return this._vvLim;
   }
 
@@ -545,6 +552,7 @@ export class PlayPart {
     if (!on) return;
     const stroke = this._strokeKind;
     $('vst').classList.toggle('vib', !stroke);
+    $('vstrail').hidden = !stroke;
     const band = $('vstrail').querySelector('.band');
     band.style.bottom = r.lower + '%';
     band.style.height = (r.upper - r.lower) + '%';
@@ -582,7 +590,7 @@ export class PlayPart {
       if (!held && !sound && !script && r.pos <= 0) pct = 0;
       text = `${Math.round(r.pos)}%`;
     }
-    line.querySelector('.dot').style.left = Math.min(100, Math.max(0, pct)) + '%';
+    line.querySelector('.dot').style.bottom = Math.min(100, Math.max(0, pct)) + '%';
     line.setAttribute('aria-valuenow', String(pct));
     if ($('vstspdv').textContent !== text) $('vstspdv').textContent = text;
   }
@@ -650,7 +658,7 @@ export class PlayPart {
     let sliding = false;
     const setLine = (e) => {
       const r = line.getBoundingClientRect();
-      const v = Math.min(100, Math.max(0, ((e.clientX - r.left) / r.width) * 100));
+      const v = Math.min(100, Math.max(0, ((r.bottom - e.clientY) / r.height) * 100));
       if (this._strokeKind) {
         const cfg = this._vsLoad();
         cfg.speed = Math.round(v / 5) * 5;
@@ -670,7 +678,7 @@ export class PlayPart {
         this._vsWake();
       });
     }
-    $('vstbeat').textContent = '♪ Sound';
+    $('vstbeat').textContent = '♪';
     $('vstbeat').title = 'The sound drives it, the way chosen in Feel';
     $('vstbeat').addEventListener('click', () => { const cfg = this._vsLoad(); cfg.beat = !cfg.beat; this._vsSave(); this._vlimShow(); this._vsWake(); });
     // Faint while the video plays; back on a touch or a pause.
