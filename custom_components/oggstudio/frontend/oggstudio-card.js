@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.21.11";
+  var VERSION = "0.21.12";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -1700,6 +1700,16 @@ ha-card.simple section[data-part="record"] .hint,ha-card.simple section[data-par
 #libsavebox{margin-top:8px}
 ha-card.simple #takebox{display:none!important}
 ha-card.simple #ctlbox > section{margin:4px 0 10px;padding:0;border:0;background:none}
+#outbody > #ukind{display:flex;margin:6px 0 8px}
+#outbody > #ukind button{flex:1;min-height:40px;font-size:12.5px}
+.urecslot{align-items:center}
+.urecslot .gpslot{display:none}
+ha-card.simple .urecslot > label.check{margin-left:auto;flex:0 0 auto;flex-direction:row-reverse}
+ha-card.simple .urecslot > button.rec{flex:0 0 auto;width:auto;min-height:42px;padding:0 18px;font-size:13px;border-radius:13px}
+ha-card.simple .urecslot > #utimer{flex:0 0 auto;margin:0;text-align:left}
+ha-card.simple .stside.urecslot{align-items:stretch}
+ha-card.simple .stside.urecslot > button.rec{width:100%}
+ha-card.simple .stside.urecslot > #utimer{text-align:center}
 [hidden],.off{display:none!important}
 `;
 
@@ -1950,7 +1960,7 @@ ${STYLES}
             <button type="button" class="outhead mhead" id="ctlhead" aria-expanded="true"><span class="outtitle">🎛 Controls</span><span class="outcount zero" id="ctlbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button>
             <div class="ctltabs" role="tablist"${this._variant.modes && this._variant.modes.length < 2 ? " hidden" : ""}>${(simple ? [["record", "✋ Manual"], ["pattern", "〰 Pattern"], ["mood", "◎ Mood"], ["library", "📚 Library"]].map(([k, t]) => [k, `<span class="ti">${t.split(" ")[0]}</span><span>${t.split(" ").slice(1).join(" ")}</span>`]) : [["record", "● Record"], ["replay", "▶ Replay"], ["mood", "◎ Mood"], ["audio", "♪ Audio"], ["together", "🤝 Together"]]).filter(([k]) => !this._variant.modes || this._variant.modes.includes(k)).map(([k, t]) => `<button type="button" data-ctl="${k}">${t}</button>`).join("")}</div>
             <div id="urecrow" hidden>
-              <div class="urechead"><div class="kind" role="group" aria-label="Vibrate or stroke"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div><button id="urec" class="rec" type="button">● Rec</button></div>
+              <div class="urechead"><div class="kind" id="ukind" role="group" aria-label="Vibrate or stroke"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div><button id="urec" class="rec" type="button">● Rec</button></div>
               <div class="val" id="utimer"></div>
             </div>
             <div id="ptbox" hidden>
@@ -4364,11 +4374,19 @@ ${STYLES}
         if ($("aubox").parentElement !== home) home.appendChild($("aubox"));
       }
       $("tgbox").hidden = ctl !== "together";
-      $("urecrow").hidden = !simple;
+      $("urecrow").hidden = true;
       if (simple) {
         for (const sec of this.shadowRoot.querySelectorAll('[data-part="record"],[data-part="stroke"]')) {
           sec.classList.toggle("off", !this._parts.includes(sec.dataset.part));
           if (sec.parentElement !== $("ctlbox")) $("ctlbox").insertBefore(sec, $("ctlhead").nextSibling);
+        }
+        const kind = $("ukind");
+        if (kind.parentElement !== $("outbody")) $("outbody").insertBefore(kind, $("outbody").firstChild);
+        const recHome = this._strokeKind ? this.shadowRoot.querySelector('[data-part="stroke"] .stside') : $("spring").closest(".row");
+        if (recHome) {
+          recHome.classList.add("urecslot");
+          if ($("urec").parentElement !== recHome) recHome.insertBefore($("urec"), this._strokeKind ? null : recHome.firstChild);
+          if ($("utimer").parentElement !== recHome) recHome.insertBefore($("utimer"), $("urec").nextSibling);
         }
         const gslot = $("xgpslot");
         const lib = this.shadowRoot.querySelector('section[data-part="library"]');

@@ -89,13 +89,23 @@ export class ReplayPart {
       if ($('aubox').parentElement !== home) home.appendChild($('aubox'));
     }
     $('tgbox').hidden = ctl !== 'together';
-    $('urecrow').hidden = !simple;
+    $('urecrow').hidden = true;      // its parts sit elsewhere on the Play card
     if (simple) {
       // Controls (pads or stroke bar), Video and Sound are all there; the
       // pads or stroke bar sit at the top of Controls, above the tabs.
       for (const sec of this.shadowRoot.querySelectorAll('[data-part="record"],[data-part="stroke"]')) {
         sec.classList.toggle('off', !this._parts.includes(sec.dataset.part));
         if (sec.parentElement !== $('ctlbox')) $('ctlbox').insertBefore(sec, $('ctlhead').nextSibling);
+      }
+      // Vibrate / Stroke sits with the devices.
+      const kind = $('ukind');
+      if (kind.parentElement !== $('outbody')) $('outbody').insertBefore(kind, $('outbody').firstChild);
+      // Rec (and its time): left of "Drop to 0" under the pads, or under a stroker's speeds.
+      const recHome = this._strokeKind ? this.shadowRoot.querySelector('[data-part="stroke"] .stside') : $('spring').closest('.row');
+      if (recHome) {
+        recHome.classList.add('urecslot');
+        if ($('urec').parentElement !== recHome) recHome.insertBefore($('urec'), this._strokeKind ? null : recHome.firstChild);
+        if ($('utimer').parentElement !== recHome) recHome.insertBefore($('utimer'), $('urec').nextSibling);
       }
       // The controller and Import live under Extras; the Library is a Controls tab.
       const gslot = $('xgpslot');

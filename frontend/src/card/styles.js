@@ -326,5 +326,15 @@ ha-card.simple section[data-part="record"] .hint,ha-card.simple section[data-par
 #libsavebox{margin-top:8px}
 ha-card.simple #takebox{display:none!important}
 ha-card.simple #ctlbox > section{margin:4px 0 10px;padding:0;border:0;background:none}
+#outbody > #ukind{display:flex;margin:6px 0 8px}
+#outbody > #ukind button{flex:1;min-height:40px;font-size:12.5px}
+.urecslot{align-items:center}
+.urecslot .gpslot{display:none}
+ha-card.simple .urecslot > label.check{margin-left:auto;flex:0 0 auto;flex-direction:row-reverse}
+ha-card.simple .urecslot > button.rec{flex:0 0 auto;width:auto;min-height:42px;padding:0 18px;font-size:13px;border-radius:13px}
+ha-card.simple .urecslot > #utimer{flex:0 0 auto;margin:0;text-align:left}
+ha-card.simple .stside.urecslot{align-items:stretch}
+ha-card.simple .stside.urecslot > button.rec{width:100%}
+ha-card.simple .stside.urecslot > #utimer{text-align:center}
 [hidden],.off{display:none!important}
 `;
