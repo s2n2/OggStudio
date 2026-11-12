@@ -263,5 +263,15 @@ ha-card.simple #liverow,ha-card.simple #stliverow{display:none!important}
 .vstrail.active .hu{top:-7px}
 .vstrail.active .hl{bottom:-7px}
 .vstrail .dot{position:absolute;left:50%;width:10px;height:10px;margin:0 0 -5px -5px;border-radius:50%;background:rgba(255,255,255,.75);box-shadow:0 0 0 1px rgba(0,0,0,.45)}
+.outrow{grid-template-columns:auto minmax(0,1fr) minmax(0,1fr)}
+.outrow.solo{grid-template-columns:auto minmax(0,1fr)}
+.outrow.solo.take{grid-template-columns:auto minmax(0,1fr) auto}
+.outrow .outai,.outrow .outtake{grid-column:2/-1}
+.urechead{justify-content:space-between;align-items:center}
+.urechead .kind{flex:0 1 auto}
+.urechead .kind button{min-height:42px;padding:0 12px;font-size:12px}
+.urechead button.rec{flex:0 0 auto;width:auto;min-height:42px;padding:0 18px;font-size:13px;border-radius:13px}
+ha-card.simple .hbar{margin-top:10px;border-radius:15px;border-color:#364563;background:#17243e}
+ha-card.simple .hbar .fill{background:linear-gradient(90deg,rgba(49,198,184,.55),rgba(123,204,250,.75))}
 [hidden],.off{display:none!important}
 `;

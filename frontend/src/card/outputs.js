@@ -14,18 +14,32 @@ export class OutputsPart {
     try { saved = JSON.parse(localStorage.getItem(OUT_KEY) || 'null'); } catch (_) { /* private mode */ }
     const t = saved && Array.isArray(saved.t) ? saved.t : [];
     const m = saved && Array.isArray(saved.m) ? saved.m : [];
-    this._outs = [0, 1].map((i) => ({ t: typeof t[i] === 'string' ? t[i] : (i ? 'off' : null), m: typeof m[i] === 'string' ? m[i] : 'position' }));
+    const on = saved && Array.isArray(saved.on) ? saved.on : [];
+    this._outs = [0, 1].map((i) => ({ t: typeof t[i] === 'string' ? t[i] : (i ? 'off' : null), m: typeof m[i] === 'string' ? m[i] : 'position', on: on[i] !== false }));
     for (const row of this.shadowRoot.querySelectorAll('.outrow')) {
       const i = Number(row.dataset.row);
       row.querySelector('.outt').addEventListener('change', (e) => { this._outSwitch(i, { t: e.target.value }); });
       row.querySelector('.outm').addEventListener('change', (e) => { this._outSwitch(i, { m: e.target.value }); });
       row.querySelector('.outtake').addEventListener('click', () => this._outTake(i));
+      // Active: this device follows (on by default). Off, it is left alone.
+      const sw = row.querySelector('.outon');
+      sw.checked = this._outs[i].on;
+      sw.addEventListener('change', () => {
+        this._outStop();
+        this._outs[i].on = sw.checked;
+        this._outSave();
+        if (this._simple) this._el('stlive').checked = this._anyActive;
+        this._outRender();
+      });
     }
     this._outRender();
   }
 
+  // Any device switched on (and chosen)?
+  get _anyActive() { return Boolean(this._outs) && this._outs.some((o, i) => o.on !== false && parseTarget(this._outTargetValue(i))); }
+
   _outSave() {
-    try { localStorage.setItem(OUT_KEY, JSON.stringify({ t: this._outs.map((o) => o.t), m: this._outs.map((o) => o.m) })); } catch (_) { /* private mode */ }
+    try { localStorage.setItem(OUT_KEY, JSON.stringify({ t: this._outs.map((o) => o.t), m: this._outs.map((o) => o.m), on: this._outs.map((o) => o.on !== false) })); } catch (_) { /* private mode */ }
   }
 
   _outSwitch(i, change) {
@@ -100,6 +114,7 @@ export class OutputsPart {
     const now = performance.now();
     if (now < (this._holdUntil || 0)) return;       // Stop all was just pressed
     const targets = this._outs.map((o, i) => this._outTargetValue(i));
+    values = values.map((v, i) => (this._outs[i] && this._outs[i].on === false ? null : v));   // a device switched off is left alone
     let blocked = false;
     for (const e of outLevels(targets, values, this._devices)) {
       if (!this._outClaim(e.dev)) { blocked = true; continue; }
@@ -111,7 +126,14 @@ export class OutputsPart {
           this._sendLive(e.dev, lv, seconds);
         }
       }
-      if (e.linear !== null) this._outLinear(e.dev, typeof e.linear === 'object' ? e.linear : { goal: e.linear, dur: 150 }, now);
+      if (e.linear !== null) {
+        let move = typeof e.linear === 'object' ? e.linear : { goal: e.linear, dur: 150 };
+        // On the Play cards a stroker always keeps inside its stroke limits;
+        // on Stroke the level is already a place in them, on Vibrate it is
+        // scaled into them here.
+        if (this._simple && !this._strokeKind) move = { ...move, goal: this._lim(move.goal) };
+        this._outLinear(e.dev, move, now);
+      }
     }
     if (blocked !== Boolean(this._outBlocked)) { this._outBlocked = blocked; this._outRender(); }
   }
@@ -188,6 +210,7 @@ export class OutputsPart {
       if (owner) take.textContent = `Take control (${owner.label || 'in use'})`;
       // How it follows applies to everything played or recorded; not for "no second device".
       msel.hidden = value === 'off' || Boolean(owner);
+      row.querySelector('.outon').style.visibility = value === 'off' || value === 'none' ? 'hidden' : '';
       row.classList.toggle('solo', msel.hidden);
       row.classList.toggle('take', Boolean(owner));
     }

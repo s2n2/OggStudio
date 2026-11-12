@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.17.0";
+  var VERSION = "0.18.0";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -59,7 +59,6 @@
       sub: "Manual, pattern, mood, audio or video: record any of them",
       parts: ["record", "video", "take"],
       simple: true,
-      kind: "vibrate",
       size: 8,
       description: "One simple card: play by hand, a pattern, a mood, to sound or to a video, with one Record button for all of them."
     },
@@ -68,7 +67,6 @@
       sub: "For a stroker: manual, pattern, mood, audio or video, and record any of them",
       parts: ["stroke", "video", "take"],
       simple: true,
-      kind: "stroke",
       size: 8,
       description: "The Play card for a stroker (a Handy): stroke by hand, a pattern, a mood, to sound or to a video, inside your limits, with one Record button for all of them."
     },
@@ -1635,6 +1633,16 @@ ha-card.simple #liverow,ha-card.simple #stliverow{display:none!important}
 .vstrail.active .hu{top:-7px}
 .vstrail.active .hl{bottom:-7px}
 .vstrail .dot{position:absolute;left:50%;width:10px;height:10px;margin:0 0 -5px -5px;border-radius:50%;background:rgba(255,255,255,.75);box-shadow:0 0 0 1px rgba(0,0,0,.45)}
+.outrow{grid-template-columns:auto minmax(0,1fr) minmax(0,1fr)}
+.outrow.solo{grid-template-columns:auto minmax(0,1fr)}
+.outrow.solo.take{grid-template-columns:auto minmax(0,1fr) auto}
+.outrow .outai,.outrow .outtake{grid-column:2/-1}
+.urechead{justify-content:space-between;align-items:center}
+.urechead .kind{flex:0 1 auto}
+.urechead .kind button{min-height:42px;padding:0 12px;font-size:12px}
+.urechead button.rec{flex:0 0 auto;width:auto;min-height:42px;padding:0 18px;font-size:13px;border-radius:13px}
+ha-card.simple .hbar{margin-top:10px;border-radius:15px;border-color:#364563;background:#17243e}
+ha-card.simple .hbar .fill{background:linear-gradient(90deg,rgba(49,198,184,.55),rgba(123,204,250,.75))}
 [hidden],.off{display:none!important}
 `;
 
@@ -1882,7 +1890,7 @@ ${STYLES}
           <div id="ctlbox">
             <div class="ctltabs" role="tablist"${this._variant.modes && this._variant.modes.length < 2 ? " hidden" : ""}>${(simple ? [["record", "✋ Manual"], ["pattern", "〰 Pattern"], ["mood", "◎ Mood"], ["audio", "♪ Audio"], ["video", "🎬 Video"]] : [["record", "● Record"], ["replay", "▶ Replay"], ["mood", "◎ Mood"], ["audio", "♪ Audio"], ["together", "🤝 Together"]]).filter(([k]) => !this._variant.modes || this._variant.modes.includes(k)).map(([k, t]) => `<button type="button" data-ctl="${k}">${t}</button>`).join("")}</div>
             <div id="urecrow" hidden>
-              <div class="urechead"><button id="urec" class="rec" type="button">● Record</button><label class="lsw" title="Devices follow the pads or the stroke bar while you touch them"><input id="ulive" type="checkbox" role="switch"><span>Live</span></label><div class="kind" role="group" aria-label="Vibrate or stroke"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div></div>
+              <div class="urechead"><div class="kind" role="group" aria-label="Vibrate or stroke"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div><button id="urec" class="rec" type="button">● Rec</button></div>
               <div class="val" id="utimer"></div>
             </div>
             <div id="ptbox" hidden>
@@ -1950,8 +1958,8 @@ ${STYLES}
           </div>
           <div class="outbox" id="outbox">
             <label>Devices, and how each follows (used for recording, replay, library and video)</label>
-            <div class="outrow" data-row="0"><select class="outt" aria-label="First device"></select><select class="outm" aria-label="How the first device follows"></select><div class="outai" hidden></div><button class="outtake" type="button" hidden>Take control</button></div>
-            <div class="outrow" data-row="1"><select class="outt" aria-label="Second device"></select><select class="outm" aria-label="How the second device follows"></select><div class="outai" hidden></div><button class="outtake" type="button" hidden>Take control</button></div>
+            <div class="outrow" data-row="0"><input class="outon" type="checkbox" role="switch" title="Active: this device follows" aria-label="First device active"><select class="outt" aria-label="First device"></select><select class="outm" aria-label="How the first device follows"></select><div class="outai" hidden></div><button class="outtake" type="button" hidden>Take control</button></div>
+            <div class="outrow" data-row="1"><input class="outon" type="checkbox" role="switch" title="Active: this device follows" aria-label="Second device active"><select class="outt" aria-label="Second device"></select><select class="outm" aria-label="How the second device follows"></select><div class="outai" hidden></div><button class="outtake" type="button" hidden>Take control</button></div>
             <div class="outnote" id="outnote"></div>
             <button id="limbtn" type="button" class="limbtn">⚙ Limits</button>
             <div class="subbox" id="limbox" hidden><div id="limlist"></div><div class="hint">Nothing goes past these, whatever is driving: pads, scripts, moods, audio or a partner. They are kept in Home Assistant for every card.</div></div>
@@ -3098,17 +3106,17 @@ ${STYLES}
       const video = this._el("video");
       const ms = video.currentTime * 1e3 + Number(this._el("voff").value || 0);
       const script = !this._vHeld && this._vraw && isStroke(this._vraw);
-      if (this._vsOn && (!this._vraw || this._vvHand !== null && this._vvHand !== void 0 && !this._strokeKind)) return;
+      if (this._vsOn && (!this._vraw || this._vvHand !== null && this._vvHand !== void 0 && !this._strokeKind || this._vsHand !== null && this._vsHand !== void 0 && this._strokeKind)) return;
       if (this._strokeKindRec) {
         const values = this._outs.map((o, i) => {
           const p = parseTarget(this._outTargetValue(i));
           if (!p) return null;
           const cache = this._vconvs || (this._vconvs = {});
           if (p.motor === "l") {
-            return script && this._goalFrom(i, this._vraw, ms, video.playbackRate, cache) || { goal: value, dur: 120 };
+            return script && this._goalFrom(i, this._vraw, ms, video.playbackRate, cache) || { goal: this._simple ? this._lim(value) : value, dur: 120 };
           }
           if (o.m === FOLLOW_AI) return script ? this._mapScript(this._vraw, ms, cache)[i] : this._aiStroke(i, value, this._vVel);
-          if (o.m === FOLLOW_STROKER) return value;
+          if (o.m === FOLLOW_STROKER) return this._simple ? this._lim(value) : value;
           return Math.min(100, Math.max(0, liveIntensity(o.m, value, this._vVel)));
         });
         this._outApply(values, 0.6);
@@ -3126,7 +3134,10 @@ ${STYLES}
           return;
         }
         let vals = this._mapScript(this._vraw || { actions: [] }, ms, this._vconvs || (this._vconvs = {}));
-        if (this._simple && this._vraw) vals = vals.map((v) => this._vvScale(v));
+        if (this._simple && this._vraw) {
+          vals = vals.map((v) => this._vvScale(v));
+          if (this._vsRange) this._vsRange.pos = vals[0];
+        }
         for (const i of [0, 1]) if (!this._padActive || !this._padActive[i]) this._setPad(i, vals[i]);
         const out = [0, 1].map((i) => {
           if (i && !this._twoPads) return null;
@@ -3193,7 +3204,21 @@ ${STYLES}
         const rect = bar.getBoundingClientRect();
         this._setHBar(index, bar.classList.contains("vert") ? (rect.bottom - event.clientY) / rect.height * 100 : (event.clientX - rect.left) / rect.width * 100);
       };
+      const pct = (event) => {
+        const rect = bar.getBoundingClientRect();
+        return Math.min(100, Math.max(0, (event.clientX - rect.left) / rect.width * 100));
+      };
       bar.addEventListener("pointerdown", (event) => {
+        if (this._vsOn) {
+          event.preventDefault();
+          active = true;
+          bar.classList.add("active");
+          capture(bar, event);
+          this._vsHandSet(pct(event));
+          this._showHBar(index, pct(event));
+          if (this._vsWake) this._vsWake();
+          return;
+        }
         const playing = Boolean(this._vsyncTimer && this._vscript);
         const tapping = Boolean(this._tap && this._tap.video);
         if (this._simple && !this._vurl) {
@@ -3213,12 +3238,20 @@ ${STYLES}
         this._hbKeep();
       });
       bar.addEventListener("pointermove", (event) => {
-        if (active) fromEvent(event);
+        if (!active) return;
+        if (this._vsOn) {
+          this._vsHandSet(pct(event));
+          this._showHBar(index, pct(event));
+        } else fromEvent(event);
       });
       const release = () => {
         if (!active) return;
         active = false;
         bar.classList.remove("active");
+        if (this._vsOn) {
+          this._vsHandSet(null);
+          return;
+        }
         this._hbKeep(true);
         if (this._hbActive) {
           this._hbActive = false;
@@ -3554,7 +3587,7 @@ ${STYLES}
         event.preventDefault();
         active = true;
         this._padActive[index] = true;
-        if (this._simple && this._el("ulive").checked && !this._live && !this._recording) {
+        if (this._simple && this._anyActive && !this._live && !this._recording) {
           this._livePad = true;
           this._setLive(true);
         }
@@ -4260,7 +4293,7 @@ ${STYLES}
       for (const id of ["rec", "timer", "strec", "liverow", "stliverow"]) $(id).hidden = ctl !== "record" || simple && id !== "liverow" && id !== "stliverow";
       this._rpShow();
       if (simple) {
-        $("stlive").checked = $("ulive").checked;
+        $("stlive").checked = this._anyActive;
         this._vsideShow();
         this._urecShow();
       }
@@ -4383,7 +4416,7 @@ ${STYLES}
     }
     _goalFrom(i, raw, ms, rate, cache) {
       const g = this._goalFromRaw(i, raw, ms, rate, cache);
-      return g && this._simple ? { ...g, goal: this._lim(g.goal) } : g;
+      return g && this._simple && this._strokeKind ? { ...g, goal: this._lim(g.goal) } : g;
     }
     _goalFromRaw(i, raw, ms, rate, cache) {
       if (raw.mood) {
@@ -4684,7 +4717,8 @@ ${STYLES}
       }
       const t = saved && Array.isArray(saved.t) ? saved.t : [];
       const m = saved && Array.isArray(saved.m) ? saved.m : [];
-      this._outs = [0, 1].map((i) => ({ t: typeof t[i] === "string" ? t[i] : i ? "off" : null, m: typeof m[i] === "string" ? m[i] : "position" }));
+      const on = saved && Array.isArray(saved.on) ? saved.on : [];
+      this._outs = [0, 1].map((i) => ({ t: typeof t[i] === "string" ? t[i] : i ? "off" : null, m: typeof m[i] === "string" ? m[i] : "position", on: on[i] !== false }));
       for (const row of this.shadowRoot.querySelectorAll(".outrow")) {
         const i = Number(row.dataset.row);
         row.querySelector(".outt").addEventListener("change", (e) => {
@@ -4694,12 +4728,25 @@ ${STYLES}
           this._outSwitch(i, { m: e.target.value });
         });
         row.querySelector(".outtake").addEventListener("click", () => this._outTake(i));
+        const sw = row.querySelector(".outon");
+        sw.checked = this._outs[i].on;
+        sw.addEventListener("change", () => {
+          this._outStop();
+          this._outs[i].on = sw.checked;
+          this._outSave();
+          if (this._simple) this._el("stlive").checked = this._anyActive;
+          this._outRender();
+        });
       }
       this._outRender();
     }
+    // Any device switched on (and chosen)?
+    get _anyActive() {
+      return Boolean(this._outs) && this._outs.some((o, i) => o.on !== false && parseTarget(this._outTargetValue(i)));
+    }
     _outSave() {
       try {
-        localStorage.setItem(OUT_KEY, JSON.stringify({ t: this._outs.map((o) => o.t), m: this._outs.map((o) => o.m) }));
+        localStorage.setItem(OUT_KEY, JSON.stringify({ t: this._outs.map((o) => o.t), m: this._outs.map((o) => o.m), on: this._outs.map((o) => o.on !== false) }));
       } catch (_) {
       }
     }
@@ -4771,6 +4818,7 @@ ${STYLES}
       const now = performance.now();
       if (now < (this._holdUntil || 0)) return;
       const targets = this._outs.map((o, i) => this._outTargetValue(i));
+      values = values.map((v, i) => this._outs[i] && this._outs[i].on === false ? null : v);
       let blocked = false;
       for (const e of outLevels(targets, values, this._devices)) {
         if (!this._outClaim(e.dev)) {
@@ -4785,7 +4833,11 @@ ${STYLES}
             this._sendLive(e.dev, lv, seconds);
           }
         }
-        if (e.linear !== null) this._outLinear(e.dev, typeof e.linear === "object" ? e.linear : { goal: e.linear, dur: 150 }, now);
+        if (e.linear !== null) {
+          let move = typeof e.linear === "object" ? e.linear : { goal: e.linear, dur: 150 };
+          if (this._simple && !this._strokeKind) move = { ...move, goal: this._lim(move.goal) };
+          this._outLinear(e.dev, move, now);
+        }
       }
       if (blocked !== Boolean(this._outBlocked)) {
         this._outBlocked = blocked;
@@ -4867,6 +4919,7 @@ ${STYLES}
         take.hidden = !owner;
         if (owner) take.textContent = `Take control (${owner.label || "in use"})`;
         msel.hidden = value === "off" || Boolean(owner);
+        row.querySelector(".outon").style.visibility = value === "off" || value === "none" ? "hidden" : "";
         row.classList.toggle("solo", msel.hidden);
         row.classList.toggle("take", Boolean(owner));
       }
@@ -6091,7 +6144,7 @@ ${STYLES}
           au.pos = pos;
           au.posAt = now;
           this._strokeOut(pos, vel);
-        } else this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._isLinear(i) ? { goal: this._lim(r.levels[0]), dur: 180 } : this._mapLevel(i, r.levels[i])), 0.6);
+        } else this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._isLinear(i) ? { goal: r.levels[0], dur: 180 } : this._mapLevel(i, r.levels[i])), 0.6);
         if (this._ctl === "video" && !this._hbActive && !this._vrec) this._showHBar(0, this._strokeKind ? this._lim(r.levels[0]) : r.levels[0]);
       } else this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._mapLevel(i, r.levels[i])), 0.6);
       if (now - (au.shownAt || 0) > 1e3) {
@@ -6391,7 +6444,6 @@ ${STYLES}
   // frontend/src/card/play.js
   var PATTERN_KEY = "oggstudio_pattern";
   var VSTROKE_KEY = "oggstudio_video_stroke";
-  var LIVE_KEY = "oggstudio_play_live";
   var VVIBE_KEY = "oggstudio_video_vibe";
   var PATTERN_HINT = "Ogg's patterns, played from here: they show on the pads, stay inside your limits and can be recorded.";
   var PlayPart = class {
@@ -6404,25 +6456,7 @@ ${STYLES}
     _bindPlay() {
       const $ = this._el;
       $("urec").addEventListener("click", () => this._urecToggle());
-      let live = true;
-      try {
-        live = localStorage.getItem(LIVE_KEY) !== "off";
-      } catch (_) {
-      }
-      $("ulive").checked = live;
-      $("stlive").checked = this._simple && live;
-      $("ulive").addEventListener("change", () => {
-        const on = $("ulive").checked;
-        try {
-          localStorage.setItem(LIVE_KEY, on ? "on" : "off");
-        } catch (_) {
-        }
-        $("stlive").checked = on;
-        if (!on && this._live) {
-          $("live").checked = false;
-          this._setLive(false);
-        }
-      });
+      $("stlive").checked = this._simple && this._anyActive;
       for (const b of this.shadowRoot.querySelectorAll(".ptbtn")) b.addEventListener("click", () => this._ptStart(b.dataset.pt));
       let kept = {};
       try {
@@ -6518,7 +6552,7 @@ ${STYLES}
       if (!this._el || !this._simple) return;
       const $ = this._el;
       const on = this._urecOn;
-      $("urec").textContent = on ? "■ Stop recording" : "● Record";
+      $("urec").textContent = on ? "■ Stop" : "● Rec";
       $("urec").classList.toggle("on", on);
       $("utimer").textContent = on ? fmt(this._urecTime()) : "";
       $("takebox").hidden = !this._take && !on;
@@ -6786,6 +6820,12 @@ ${STYLES}
       const stage = this.shadowRoot.querySelector(".vstage");
       const on = this.shadowRoot.fullscreenElement === stage || document.webkitFullscreenElement && this.shadowRoot.webkitFullscreenElement === stage;
       const bar = $("hb1");
+      if (this._simple) {
+        stage.classList.toggle("full", on);
+        $("vsfull").classList.toggle("on", on);
+        this._vlimShow();
+        return;
+      }
       if (on === bar.classList.contains("ovl")) return;
       if (on) {
         this._hbHome = bar.nextSibling;
@@ -6966,6 +7006,16 @@ ${STYLES}
         this._vvTick();
         return;
       }
+      const hand = this._vsHand;
+      if (hand !== null && hand !== void 0) {
+        const p = Math.min(r.upper, Math.max(r.lower, hand));
+        const vel2 = dt > 0 ? (p - r.pos) / dt * 1e3 : 0;
+        if (p !== r.pos || this._vsLastPos !== p) this._strokeOut(p, vel2);
+        r.pos = p;
+        this._vsLastPos = p;
+        this._vlimShow();
+        return;
+      }
       if (this._vraw) {
         this._vlimShow();
         return;
@@ -6987,6 +7037,26 @@ ${STYLES}
       if (vel > 0 || this._vsLastPos !== goal) this._strokeOut(goal, vel * 1e3 * r.dir);
       this._vsLastPos = goal;
       this._vlimShow();
+    }
+    // The slider under the video, held (value 0-100) or let go (null).
+    _vsHandSet(v) {
+      if (!this._strokeKind) {
+        this._vvHand = v === null ? null : Math.round(v);
+        if (v !== null) this._vvKept = this._vvHand;
+        this._vvTick();
+        if (v === null && this._vraw) this._videoSend(true);
+        return;
+      }
+      this._vsHand = v === null ? null : Math.round(v);
+      if (v === null) {
+        const r = this._vsRange;
+        if (r && this._el("vspring").checked && !this._vraw && !this._vsBeatOn && !this._vsLoad().speed) {
+          r.pos = r.lower;
+          this._strokeOut(r.lower, 0);
+        }
+        if (this._vraw) this._videoSend(true);
+      }
+      this._vsTick();
     }
     // A vibrator: an intensity, inside its least and most. A finger on the
     // line along the bottom sets it (over sound or a script, while held);
@@ -7020,7 +7090,13 @@ ${STYLES}
       const r = this._vsOn ? this._vsRange : null;
       const on = Boolean(r);
       $("vst").hidden = !on;
-      if (this._simple) $("hb1").hidden = this._ctl === "video";
+      if (this._simple) {
+        $("hb1").hidden = false;
+        const lab = this._strokeKind ? "Position" : "Intensity";
+        const labEl = $("hb1").querySelector(".lab");
+        if (labEl.textContent !== lab) labEl.textContent = lab;
+        if (!$("hb1").classList.contains("active")) this._showHBar(0, r ? r.pos : 0);
+      }
       if (!on) return;
       const stroke = this._strokeKind;
       $("vst").classList.toggle("vib", !stroke);

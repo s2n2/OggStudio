@@ -134,17 +134,17 @@ export class VideoPart {
     const video = this._el('video');
     const ms = video.currentTime * 1000 + Number(this._el('voff').value || 0);
     const script = !this._vHeld && this._vraw && isStroke(this._vraw);
-    if (this._vsOn && (!this._vraw || (this._vvHand !== null && this._vvHand !== undefined && !this._strokeKind))) return;    // the range and speed (or a finger) drive it
+    if (this._vsOn && (!this._vraw || (this._vvHand !== null && this._vvHand !== undefined && !this._strokeKind) || (this._vsHand !== null && this._vsHand !== undefined && this._strokeKind))) return;    // the range and speed (or a finger) drive it
     if (this._strokeKindRec) {
       const values = this._outs.map((o, i) => {
         const p = parseTarget(this._outTargetValue(i));
         if (!p) return null;
         const cache = this._vconvs || (this._vconvs = {});
         if (p.motor === 'l') {
-          return (script && this._goalFrom(i, this._vraw, ms, video.playbackRate, cache)) || { goal: value, dur: 120 };
+          return (script && this._goalFrom(i, this._vraw, ms, video.playbackRate, cache)) || { goal: this._simple ? this._lim(value) : value, dur: 120 };
         }
         if (o.m === FOLLOW_AI) return script ? this._mapScript(this._vraw, ms, cache)[i] : this._aiStroke(i, value, this._vVel);
-        if (o.m === FOLLOW_STROKER) return value;
+        if (o.m === FOLLOW_STROKER) return this._simple ? this._lim(value) : value;
         return Math.min(100, Math.max(0, liveIntensity(o.m, value, this._vVel)));
       });
       this._outApply(values, 0.6);
@@ -161,7 +161,7 @@ export class VideoPart {
         return;
       }
       let vals = this._mapScript(this._vraw || { actions: [] }, ms, this._vconvs || (this._vconvs = {}));
-      if (this._simple && this._vraw) vals = vals.map((v) => this._vvScale(v));
+      if (this._simple && this._vraw) { vals = vals.map((v) => this._vvScale(v)); if (this._vsRange) this._vsRange.pos = vals[0]; }
       for (const i of [0, 1]) if (!this._padActive || !this._padActive[i]) this._setPad(i, vals[i]);
       const out = [0, 1].map((i) => {
         if (i && !this._twoPads) return null;
@@ -225,7 +225,19 @@ export class VideoPart {
       const rect = bar.getBoundingClientRect();
       this._setHBar(index, bar.classList.contains('vert') ? ((rect.bottom - event.clientY) / rect.height) * 100 : ((event.clientX - rect.left) / rect.width) * 100);
     };
+    const pct = (event) => { const rect = bar.getBoundingClientRect(); return Math.min(100, Math.max(0, ((event.clientX - rect.left) / rect.width) * 100)); };
     bar.addEventListener('pointerdown', (event) => {
+      if (this._vsOn) {
+        // The Play cards: hold to set the position or intensity by hand.
+        event.preventDefault();
+        active = true;
+        bar.classList.add('active');
+        capture(bar, event);
+        this._vsHandSet(pct(event));
+        this._showHBar(index, pct(event));
+        if (this._vsWake) this._vsWake();
+        return;
+      }
       // Record with it, or take over a script that is playing (until let go).
       const playing = Boolean(this._vsyncTimer && this._vscript);
       const tapping = Boolean(this._tap && this._tap.video);
@@ -240,11 +252,15 @@ export class VideoPart {
       fromEvent(event);
       this._hbKeep();
     });
-    bar.addEventListener('pointermove', (event) => { if (active) fromEvent(event); });
+    bar.addEventListener('pointermove', (event) => {
+      if (!active) return;
+      if (this._vsOn) { this._vsHandSet(pct(event)); this._showHBar(index, pct(event)); } else fromEvent(event);
+    });
     const release = () => {
       if (!active) return;
       active = false;
       bar.classList.remove('active');
+      if (this._vsOn) { this._vsHandSet(null); return; }
       this._hbKeep(true);
       if (this._hbActive) {
         this._hbActive = false;
@@ -543,7 +559,7 @@ export class VideoPart {
       event.preventDefault();
       active = true;
       this._padActive[index] = true;
-      if (this._simple && this._el('ulive').checked && !this._live && !this._recording) { this._livePad = true; this._setLive(true); }
+      if (this._simple && this._anyActive && !this._live && !this._recording) { this._livePad = true; this._setLive(true); }
       pad.classList.add('active');
       capture(pad, event);
       fromEvent(event);

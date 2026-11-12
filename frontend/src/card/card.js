@@ -229,7 +229,7 @@ ${STYLES}
               : [['record', '● Record'], ['replay', '▶ Replay'], ['mood', '◎ Mood'], ['audio', '♪ Audio'], ['together', '🤝 Together']]
             ).filter(([k]) => !this._variant.modes || this._variant.modes.includes(k)).map(([k, t]) => `<button type="button" data-ctl="${k}">${t}</button>`).join('')}</div>
             <div id="urecrow" hidden>
-              <div class="urechead"><button id="urec" class="rec" type="button">● Record</button><label class="lsw" title="Devices follow the pads or the stroke bar while you touch them"><input id="ulive" type="checkbox" role="switch"><span>Live</span></label><div class="kind" role="group" aria-label="Vibrate or stroke"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div></div>
+              <div class="urechead"><div class="kind" role="group" aria-label="Vibrate or stroke"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div><button id="urec" class="rec" type="button">● Rec</button></div>
               <div class="val" id="utimer"></div>
             </div>
             <div id="ptbox" hidden>
@@ -297,8 +297,8 @@ ${STYLES}
           </div>
           <div class="outbox" id="outbox">
             <label>Devices, and how each follows (used for recording, replay, library and video)</label>
-            <div class="outrow" data-row="0"><select class="outt" aria-label="First device"></select><select class="outm" aria-label="How the first device follows"></select><div class="outai" hidden></div><button class="outtake" type="button" hidden>Take control</button></div>
-            <div class="outrow" data-row="1"><select class="outt" aria-label="Second device"></select><select class="outm" aria-label="How the second device follows"></select><div class="outai" hidden></div><button class="outtake" type="button" hidden>Take control</button></div>
+            <div class="outrow" data-row="0"><input class="outon" type="checkbox" role="switch" title="Active: this device follows" aria-label="First device active"><select class="outt" aria-label="First device"></select><select class="outm" aria-label="How the first device follows"></select><div class="outai" hidden></div><button class="outtake" type="button" hidden>Take control</button></div>
+            <div class="outrow" data-row="1"><input class="outon" type="checkbox" role="switch" title="Active: this device follows" aria-label="Second device active"><select class="outt" aria-label="Second device"></select><select class="outm" aria-label="How the second device follows"></select><div class="outai" hidden></div><button class="outtake" type="button" hidden>Take control</button></div>
             <div class="outnote" id="outnote"></div>
             <button id="limbtn" type="button" class="limbtn">⚙ Limits</button>
             <div class="subbox" id="limbox" hidden><div id="limlist"></div><div class="hint">Nothing goes past these, whatever is driving: pads, scripts, moods, audio or a partner. They are kept in Home Assistant for every card.</div></div>

@@ -96,7 +96,7 @@ export class ReplayPart {
     this._outRender();
     for (const id of ['rec', 'timer', 'strec', 'liverow', 'stliverow']) $(id).hidden = ctl !== 'record' || (simple && id !== 'liverow' && id !== 'stliverow');
     this._rpShow();
-    if (simple) { $('stlive').checked = $('ulive').checked; this._vsideShow(); this._urecShow(); }
+    if (simple) { $('stlive').checked = this._anyActive; this._vsideShow(); this._urecShow(); }
   }
 
   _rpPicker(open) {
@@ -191,7 +191,7 @@ export class ReplayPart {
 
   _goalFrom(i, raw, ms, rate, cache) {
     const g = this._goalFromRaw(i, raw, ms, rate, cache);
-    return g && this._simple ? { ...g, goal: this._lim(g.goal) } : g;
+    return g && this._simple && this._strokeKind ? { ...g, goal: this._lim(g.goal) } : g;
   }
 
   _goalFromRaw(i, raw, ms, rate, cache) {

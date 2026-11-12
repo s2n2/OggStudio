@@ -1,7 +1,7 @@
 // Part of the OggStudio card. Built into custom_components/oggstudio/frontend/oggstudio-card.js (npm run build).
 
 export const TAG = 'oggstudio-card';
-export const VERSION = '0.17.0';
+export const VERSION = '0.18.0';
 export const DEVICE_KEY = 'oggstudio_device';
 export const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
 export const SAMPLE_MS = 100;
@@ -27,9 +27,9 @@ export const VARIANTS = {
     description: 'Sync a video on this device with a script, and record a funscript for it.' },
   'oggstudio-stroke-card': { name: 'OggStudio Stroke', sub: 'Record stroke scripts (for a Handy) between two limits', parts: ['stroke', 'take'], kind: 'stroke', size: 8,
     description: 'Stroke recorder: set an upper and lower limit, hold a speed to stroke between them, record a stroke funscript.' },
-  'oggstudio-play-card': { name: 'OggStudio Play', sub: 'Manual, pattern, mood, audio or video: record any of them', parts: ['record', 'video', 'take'], simple: true, kind: 'vibrate', size: 8,
+  'oggstudio-play-card': { name: 'OggStudio Play', sub: 'Manual, pattern, mood, audio or video: record any of them', parts: ['record', 'video', 'take'], simple: true, size: 8,
     description: 'One simple card: play by hand, a pattern, a mood, to sound or to a video, with one Record button for all of them.' },
-  'oggstudio-play-stroke-card': { name: 'OggStudio Play Stroke', sub: 'For a stroker: manual, pattern, mood, audio or video, and record any of them', parts: ['stroke', 'video', 'take'], simple: true, kind: 'stroke', size: 8,
+  'oggstudio-play-stroke-card': { name: 'OggStudio Play Stroke', sub: 'For a stroker: manual, pattern, mood, audio or video, and record any of them', parts: ['stroke', 'video', 'take'], simple: true, size: 8,
     description: 'The Play card for a stroker (a Handy): stroke by hand, a pattern, a mood, to sound or to a video, inside your limits, with one Record button for all of them.' },
   'oggstudio-video-stroke-card': { name: 'OggStudio Video Stroke', sub: 'A video with stroke range and speed: record a stroke script for it', parts: ['stroke', 'video', 'take'], simple: true, kind: 'stroke', modes: ['video'], size: 8,
     description: 'Play a local video with a stroke range and speed (or a script, or its sound) driving a stroker, and record a stroke script in time with it.' },

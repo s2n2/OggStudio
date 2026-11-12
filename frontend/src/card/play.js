@@ -8,7 +8,6 @@ import { STROKE_LIMIT_KEY, STROKE_PCT_MIN, strokeStep, strokeVel } from '../lib/
 
 const PATTERN_KEY = 'oggstudio_pattern';
 const VSTROKE_KEY = 'oggstudio_video_stroke';
-const LIVE_KEY = 'oggstudio_play_live';
 const VVIBE_KEY = 'oggstudio_video_vibe';
 const PATTERN_HINT = 'Ogg\'s patterns, played from here: they show on the pads, stay inside your limits and can be recorded.';
 
@@ -21,17 +20,8 @@ export class PlayPart {
   _bindPlay() {
     const $ = this._el;
     $('urec').addEventListener('click', () => this._urecToggle());
-    // Live: devices follow the pads or the stroke bar while touched (on by default).
-    let live = true;
-    try { live = localStorage.getItem(LIVE_KEY) !== 'off'; } catch (_) { /* private mode */ }
-    $('ulive').checked = live;
-    $('stlive').checked = this._simple && live;
-    $('ulive').addEventListener('change', () => {
-      const on = $('ulive').checked;
-      try { localStorage.setItem(LIVE_KEY, on ? 'on' : 'off'); } catch (_) { /* private mode */ }
-      $('stlive').checked = on;
-      if (!on && this._live) { $('live').checked = false; this._setLive(false); }
-    });
+    // The devices switched on follow the pads or the stroke bar while touched.
+    $('stlive').checked = this._simple && this._anyActive;
     // Patterns.
     for (const b of this.shadowRoot.querySelectorAll('.ptbtn')) b.addEventListener('click', () => this._ptStart(b.dataset.pt));
     let kept = {};
@@ -110,7 +100,7 @@ export class PlayPart {
     if (!this._el || !this._simple) return;
     const $ = this._el;
     const on = this._urecOn;
-    $('urec').textContent = on ? '■ Stop recording' : '● Record';
+    $('urec').textContent = on ? '■ Stop' : '● Rec';
     $('urec').classList.toggle('on', on);
     $('utimer').textContent = on ? fmt(this._urecTime()) : '';
     // The take shows from the moment recording starts.
@@ -355,6 +345,12 @@ export class PlayPart {
     const stage = this.shadowRoot.querySelector('.vstage');
     const on = this.shadowRoot.fullscreenElement === stage || (document.webkitFullscreenElement && this.shadowRoot.webkitFullscreenElement === stage);
     const bar = $('hb1');
+    if (this._simple) {
+      stage.classList.toggle('full', on);
+      $('vsfull').classList.toggle('on', on);
+      this._vlimShow();
+      return;
+    }
     if (on === bar.classList.contains('ovl')) return;
     if (on) {
       this._hbHome = bar.nextSibling;
@@ -503,6 +499,17 @@ export class PlayPart {
     this._vsAt = now;
     if (!r) return;
     if (!this._strokeKind) { this._vvTick(); return; }
+    const hand = this._vsHand;
+    if (hand !== null && hand !== undefined) {
+      // A finger on the slider under the video: the position, inside the range.
+      const p = Math.min(r.upper, Math.max(r.lower, hand));
+      const vel = dt > 0 ? (p - r.pos) / dt * 1000 : 0;
+      if (p !== r.pos || this._vsLastPos !== p) this._strokeOut(p, vel);
+      r.pos = p;
+      this._vsLastPos = p;
+      this._vlimShow();
+      return;
+    }
     if (this._vraw) { this._vlimShow(); return; }      // the script moves it
     const vel = this._vsVel();
     if (vel === null) { this._vsWasLive = false; this._vlimShow(); return; }    // stays where it is
@@ -516,6 +523,24 @@ export class PlayPart {
     if (vel > 0 || this._vsLastPos !== goal) this._strokeOut(goal, vel * 1000 * r.dir);
     this._vsLastPos = goal;
     this._vlimShow();
+  }
+
+  // The slider under the video, held (value 0-100) or let go (null).
+  _vsHandSet(v) {
+    if (!this._strokeKind) {
+      this._vvHand = v === null ? null : Math.round(v);
+      if (v !== null) this._vvKept = this._vvHand;
+      this._vvTick();
+      if (v === null && this._vraw) this._videoSend(true);
+      return;
+    }
+    this._vsHand = v === null ? null : Math.round(v);
+    if (v === null) {
+      const r = this._vsRange;
+      if (r && this._el('vspring').checked && !this._vraw && !this._vsBeatOn && !this._vsLoad().speed) { r.pos = r.lower; this._strokeOut(r.lower, 0); }
+      if (this._vraw) this._videoSend(true);
+    }
+    this._vsTick();
   }
 
   // A vibrator: an intensity, inside its least and most. A finger on the
@@ -548,7 +573,14 @@ export class PlayPart {
     const r = this._vsOn ? this._vsRange : null;
     const on = Boolean(r);
     $('vst').hidden = !on;
-    if (this._simple) $('hb1').hidden = this._ctl === 'video';
+    if (this._simple) {
+      $('hb1').hidden = false;
+      // Under the video: a stroker's position, a vibrator's intensity.
+      const lab = this._strokeKind ? 'Position' : 'Intensity';
+      const labEl = $('hb1').querySelector('.lab');
+      if (labEl.textContent !== lab) labEl.textContent = lab;
+      if (!$('hb1').classList.contains('active')) this._showHBar(0, r ? r.pos : 0);
+    }
     if (!on) return;
     const stroke = this._strokeKind;
     $('vst').classList.toggle('vib', !stroke);
