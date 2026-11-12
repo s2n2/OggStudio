@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.21.12";
+  var VERSION = "0.21.13";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -1703,6 +1703,8 @@ ha-card.simple #ctlbox > section{margin:4px 0 10px;padding:0;border:0;background
 #outbody > #ukind{display:flex;margin:6px 0 8px}
 #outbody > #ukind button{flex:1;min-height:40px;font-size:12.5px}
 .urecslot{align-items:center}
+.row.urecslot{flex-wrap:nowrap;gap:10px}
+ha-card.simple .row.urecslot > label.check{min-width:0;flex:0 1 auto;white-space:nowrap;overflow:hidden;font-size:12px}
 .urecslot .gpslot{display:none}
 ha-card.simple .urecslot > label.check{margin-left:auto;flex:0 0 auto;flex-direction:row-reverse}
 ha-card.simple .urecslot > button.rec{flex:0 0 auto;width:auto;min-height:42px;padding:0 18px;font-size:13px;border-radius:13px}
@@ -1952,7 +1954,7 @@ ${STYLES}
           <div class="ctlslot"></div>
           <button id="rec" class="rec">● Record</button><div class="val" id="timer" style="text-align:center;margin-top:4px"></div>
           <div class="outslot"></div>
-          <div class="row" style="margin-top:6px"><label class="check" id="liverow"><input id="live" type="checkbox"> Live pads</label><label class="check"><input id="spring" type="checkbox"> Drop to 0 when released</label><span class="gpslot"></span></div>
+          <div class="row" style="margin-top:6px"><label class="check" id="liverow"><input id="live" type="checkbox"> Live pads</label><label class="check"><input id="spring" type="checkbox"> Drop to 0 on release</label><span class="gpslot"></span></div>
           <div class="hint">Touch a pad and slide up or down: the level follows your finger. While recording, the pads drive the devices below live; tick "Live pads" to play with them without recording. Choose a second device (or a device's other motor) to get a second pad.</div>
         </section>
         <section data-part="outputs" id="outhome" class="off">

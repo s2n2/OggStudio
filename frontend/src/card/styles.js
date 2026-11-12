@@ -329,6 +329,8 @@ ha-card.simple #ctlbox > section{margin:4px 0 10px;padding:0;border:0;background
 #outbody > #ukind{display:flex;margin:6px 0 8px}
 #outbody > #ukind button{flex:1;min-height:40px;font-size:12.5px}
 .urecslot{align-items:center}
+.row.urecslot{flex-wrap:nowrap;gap:10px}
+ha-card.simple .row.urecslot > label.check{min-width:0;flex:0 1 auto;white-space:nowrap;overflow:hidden;font-size:12px}
 .urecslot .gpslot{display:none}
 ha-card.simple .urecslot > label.check{margin-left:auto;flex:0 0 auto;flex-direction:row-reverse}
 ha-card.simple .urecslot > button.rec{flex:0 0 auto;width:auto;min-height:42px;padding:0 18px;font-size:13px;border-radius:13px}
