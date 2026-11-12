@@ -599,6 +599,10 @@ export class PlayPart {
     const r = this._vsOn ? this._vsRange : null;
     const on = Boolean(r);
     $('vst').hidden = !on;
+    // A vibrator's strength is what the pads show (whatever drives them:
+    // a pattern, a mood, sound, a script or a finger), so both places agree.
+    const held = this._vvHand !== null && this._vvHand !== undefined;
+    if (r && !this._strokeKind && !held && this._vals) r.pos = this._vals[0];
     if (this._simple) {
       $('hb1').hidden = false;
       // Under the video: a stroker's position, a vibrator's intensity.

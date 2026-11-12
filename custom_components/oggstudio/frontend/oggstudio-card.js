@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.21.0";
+  var VERSION = "0.21.1";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -7259,6 +7259,8 @@ ${STYLES}
       const r = this._vsOn ? this._vsRange : null;
       const on = Boolean(r);
       $("vst").hidden = !on;
+      const held = this._vvHand !== null && this._vvHand !== void 0;
+      if (r && !this._strokeKind && !held && this._vals) r.pos = this._vals[0];
       if (this._simple) {
         $("hb1").hidden = false;
         const lab = this._strokeKind ? "Position" : "Intensity";
@@ -7300,11 +7302,11 @@ ${STYLES}
         } else if (sound) text = "♪";
       } else {
         line.setAttribute("aria-label", "Intensity");
-        const held = this._vvHand !== null && this._vvHand !== void 0;
-        line.classList.toggle("dim", !held && (sound || script));
+        const held2 = this._vvHand !== null && this._vvHand !== void 0;
+        line.classList.toggle("dim", !held2 && (sound || script));
         const span = r.upper - r.lower;
-        pct = held ? this._vvHand : span > 0 ? Math.round((r.pos - r.lower) / span * 100) : 0;
-        if (!held && !sound && !script && r.pos <= 0) pct = 0;
+        pct = held2 ? this._vvHand : span > 0 ? Math.round((r.pos - r.lower) / span * 100) : 0;
+        if (!held2 && !sound && !script && r.pos <= 0) pct = 0;
         text = `${Math.round(r.pos)}%`;
       }
       line.querySelector(".dot").style.bottom = Math.min(100, Math.max(0, pct)) + "%";
