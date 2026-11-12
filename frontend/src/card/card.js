@@ -88,6 +88,8 @@ export class OggStudioCard extends HTMLElement {
       sec.classList.toggle('off', !parts.includes(sec.dataset.part));
       sec.style.order = String(parts.indexOf(sec.dataset.part) + 1);   // sections follow the card's own order
     }
+    // Sound comes straight after the video (Play cards).
+    this._el('sndbox').style.order = this._el('videobox').style.order;
     for (const tog of this.shadowRoot.querySelectorAll('.kind')) {
       tog.hidden = !this._canToggleKind;
       for (const b of tog.querySelectorAll('button')) b.classList.toggle('on', b.dataset.kind === this._recKind);
@@ -224,8 +226,9 @@ ${STYLES}
         </section>
         <section data-part="outputs" id="outhome" class="off">
           <div id="ctlbox">
+            <button type="button" class="outhead mhead" id="ctlhead" aria-expanded="true"><span class="outtitle">🎛 Controls</span><span class="outcount zero" id="ctlbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button>
             <div class="ctltabs" role="tablist"${this._variant.modes && this._variant.modes.length < 2 ? ' hidden' : ''}>${(simple
-              ? [['record', '✋ Manual'], ['pattern', '〰 Pattern'], ['mood', '◎ Mood'], ['video', '🎬 Media']].map(([k, t]) => [k, `<span class="ti">${t.split(' ')[0]}</span><span>${t.split(' ').slice(1).join(' ')}</span>`])
+              ? [['record', '✋ Manual'], ['pattern', '〰 Pattern'], ['mood', '◎ Mood']].map(([k, t]) => [k, `<span class="ti">${t.split(' ')[0]}</span><span>${t.split(' ').slice(1).join(' ')}</span>`])
               : [['record', '● Record'], ['replay', '▶ Replay'], ['mood', '◎ Mood'], ['audio', '♪ Audio'], ['together', '🤝 Together']]
             ).filter(([k]) => !this._variant.modes || this._variant.modes.includes(k)).map(([k, t]) => `<button type="button" data-ctl="${k}">${t}</button>`).join('')}</div>
             <div id="urecrow" hidden>
@@ -357,10 +360,10 @@ ${STYLES}
           <input id="voff" type="range" min="-1000" max="1000" step="25" value="150">
           <div class="hint">Positive values send each moment slightly early to make up for Bluetooth delay. Pause, seek and playback speed all stay in sync.</div></div>
           <div id="vaubox"></div>
-          <div id="sndbox"><button type="button" class="outhead mhead" id="sndhead" aria-expanded="true"><span class="outtitle">♪ Sound</span><span class="outcount zero" id="sndbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button></div>
           <div class="hint vhide">To make a script for this video: press ● Rec, play the video and drag the slider (position in the Stroke view, intensity in Vibrate). You can pause, scrub back and record a section again; the newer pass replaces it. While a script plays, the slider shows it; hold the slider to take over until you let go.</div>
-          <div class="hint vshow">Media: a video, music, the microphone or another tab. The slider under the video works with or without one: hold it to take over. On the video, the line on the left is the strength (a vibrator) or the speed (a stroker), and a stroker's range is on the right; ⛶ makes it full screen. ● Rec follows the video: play it and use the controls, or let a script (📂) or the sound of the video (♪) do the playing. Pause and it waits; go back and the new pass replaces what came after.</div>
+          <div class="hint vshow">The slider under the video works with or without a video: hold it to take over. Patterns and moods (Controls) and sound (Sound) can play with the video; the newest one started has the devices. On the video, the line on the left is the strength (a vibrator) or the speed (a stroker), and a stroker's range is on the right; ⛶ makes it full screen. ● Rec follows the video: play it and use the controls, or let a script (📂) or the sound of the video (♪) do the playing. Pause and it waits; go back and the new pass replaces what came after.</div>
         </section>
+        <section id="sndbox"><button type="button" class="outhead mhead" id="sndhead" aria-expanded="true"><span class="outtitle">♪ Sound</span><span class="outcount zero" id="sndbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button></section>
         <section data-part="import">
           <h3>Import</h3>
           <textarea id="paste" placeholder="Paste a funscript, an ogg1: code, or JSON"></textarea>

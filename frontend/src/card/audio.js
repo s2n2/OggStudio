@@ -38,6 +38,7 @@ export class AudioPart {
 
   async _auStart() {
     const $ = this._el;
+    if (this._simple) { this._ptStop(); if (this._rp && this._rp.playing) this._rpStop(); }   // the newest one started has the devices
     const src = $('ausrc').value;
     let stream = null;
     try {

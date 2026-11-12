@@ -17,8 +17,7 @@ export class ReplayPart {
     this._rp = { raw: null, conv: null, name: '', lib: null, playing: false, t: 0, len: 0, last: 0, outAt: 0 };
     let ctl = null;
     try { ctl = localStorage.getItem(`oggstudio_ctl:${this.localName}`); } catch (_) { /* private mode */ }
-    if (this._simple && ctl === 'audio') ctl = 'video';        // Audio and Video are one Media tab here
-    const kept = this._simple ? ['pattern', 'mood', 'video'] : ['replay', 'mood', 'audio', 'together'];
+    const kept = this._simple ? ['pattern', 'mood'] : ['replay', 'mood', 'audio', 'together'];
     const modes = this._variant.modes;
     this._ctl = this._togetherOnly ? 'together' : modes ? (modes.includes(ctl) ? ctl : modes[0]) : kept.includes(ctl) ? ctl : 'record';
     for (const b of this.shadowRoot.querySelectorAll('.ctltabs button')) b.addEventListener('click', () => this._setCtl(b.dataset.ctl));
@@ -64,7 +63,7 @@ export class ReplayPart {
     } else {
       this._plOff();
       this._rpStop();
-      this._auStop();
+      if (!this._simple) this._auStop();     // the Play card's sound is its own section
       this._ptStop();
       if (from === 'video') { this._hbKeep(true); const video = this._el('video'); if (!video.paused) video.pause(); this._vaSet(false); }
     }
@@ -82,30 +81,25 @@ export class ReplayPart {
     $('rpbox').hidden = !(ctl === 'replay' || (simple && ctl === 'pattern'));
     $('ptbox').hidden = ctl !== 'pattern';
     $('moodbox').hidden = ctl !== 'mood';
-    $('aubox').hidden = simple ? ctl !== 'video' : !(ctl === 'audio' || (ctl === 'video' && this._vaudio));
-    // Media: the sound settings sit under the video.
+    $('aubox').hidden = simple ? false : !(ctl === 'audio' || (ctl === 'video' && this._vaudio));
     if (simple) {
-      // The video's sound sits under the video; any other sound in its own section.
-      const home = ctl !== 'video' ? null : this._vaudio ? $('vaubox') : $('sndbox');
-      if (home && $('aubox').parentElement !== home) home.appendChild($('aubox'));
-      if (!home && $('aubox').parentElement !== $('ctlbox')) $('ctlbox').insertBefore($('aubox'), $('tgbox'));
-      $('sndbox').hidden = ctl !== 'video' || this._vaudio;
+      // The video's sound sits under the video; any other sound in the Sound section.
+      const home = this._vaudio ? $('vaubox') : $('sndbox');
+      if ($('aubox').parentElement !== home) home.appendChild($('aubox'));
     }
     $('tgbox').hidden = ctl !== 'together';
     $('urecrow').hidden = !simple;
     if (simple) {
-      // One thing at a time: the pads or stroke bar, or the video.
-      const hands = ['record', 'pattern', 'mood', 'audio'].includes(ctl);
-      for (const sec of this.shadowRoot.querySelectorAll('[data-part="record"],[data-part="stroke"]')) sec.classList.toggle('off', !hands || !this._parts.includes(sec.dataset.part));
-      $('videobox').classList.toggle('off', ctl !== 'video');
-      const gslot = ctl === 'video' ? $('videobox').querySelector('.gpslot') : this.shadowRoot.querySelector('[data-part="record"]:not(.off) .gpslot,[data-part="stroke"]:not(.off) .gpslot');
+      // Controls (pads or stroke bar), Video and Sound are all there.
+      for (const sec of this.shadowRoot.querySelectorAll('[data-part="record"],[data-part="stroke"]')) sec.classList.toggle('off', !this._parts.includes(sec.dataset.part));
+      const gslot = this.shadowRoot.querySelector('[data-part="record"]:not(.off) .gpslot,[data-part="stroke"]:not(.off) .gpslot');
       if (gslot) gslot.appendChild($('gp'));
       $('gp').hidden = !gslot;
     }
     this._outRender();
     for (const id of ['rec', 'timer', 'strec', 'liverow', 'stliverow']) $(id).hidden = ctl !== 'record' || (simple && id !== 'liverow' && id !== 'stliverow');
     this._rpShow();
-    if (simple) { $('stlive').checked = this._anyActive; this._vsideShow(); this._urecShow(); }
+    if (simple) { $('stlive').checked = this._anyActive; this._vsideShow(); this._urecShow(); this._mediaShow(); }
   }
 
   _rpPicker(open) {
@@ -340,8 +334,9 @@ export class ReplayPart {
     if (!rp.raw) { this._rpPicker(true); return; }
     if (rp.t >= rp.len) rp.t = 0;
     this._ptStop();
+    if (this._simple) this._soundOff();
     const video = this._el('video');
-    if (video && !video.paused) video.pause();     // one thing drives the devices at a time
+    if (video && !video.paused && !this._simple) video.pause();     // one thing drives the devices at a time (the Play card's video plays on)
     if (rp.lib && isStroke(rp.raw) && RUN_MODES[this._outAt(0).m]) this._setMode(rp.lib, this._outAt(0).m);
     rp.playing = true;
     this._outRender();
@@ -417,6 +412,7 @@ export class ReplayPart {
   }
 
   _rpShow() {
+    if (this._simple && this._mediaShow) this._mediaShow();
     if (!this._el || !this._rp) return;
     const $ = this._el;
     const rp = this._rp;

@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.20.2";
+  var VERSION = "0.21.0";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -1659,7 +1659,7 @@ button.outhead{display:flex;align-items:center;gap:8px;width:100%;min-height:36p
 .outbtns{display:flex;gap:8px;margin-top:8px}
 .outbtns button{flex:1;min-height:38px;margin:0;font-size:12.5px}
 .outbtns button[hidden]{display:none}
-ha-card.simple #vaubox #aubox,ha-card.simple #sndbox{margin-top:10px;padding:12px;border-radius:15px;border:1px solid #364563;background:#17243e}
+ha-card.simple #vaubox #aubox{margin-top:10px;padding:12px;border-radius:15px;border:1px solid #364563;background:#17243e}
 ha-card.simple #vaubox #aubox>label:first-of-type,ha-card.simple #sndbox #aubox>label:first-of-type{margin-top:0}
 #sndbox #aubox{margin:0;padding:0;border:0;background:none}
 ha-card.simple button.vempty{min-height:160px}
@@ -1667,13 +1667,20 @@ ha-card.simple .ctltabs button{display:flex;flex-direction:column;align-items:ce
 ha-card.simple .ctltabs button .ti{font-size:15px;line-height:1}
 ha-card.simple .ctltabs button span:last-child{font-size:11.5px;white-space:nowrap}
 ha-card:not(.simple) .mhead{display:none}
-#videobox.mfold > :not(.mhead):not(#sndbox){display:none!important}
+#videobox.mfold > :not(.mhead){display:none!important}
 #sndbox.mfold > :not(.mhead){display:none!important}
 .mfold > .mhead .chev{transform:rotate(-90deg)}
-ha-card.simple #sndbox{padding:8px 12px}
 #sndbox > .mhead{margin-bottom:2px}
 #sndbox #aubox{margin-top:6px}
 .mhead .outcount b{max-width:150px;overflow:hidden;text-overflow:ellipsis}
+ha-card:not(.simple) #sndbox{display:none}
+ha-card.simple section#sndbox{margin-top:10px}
+ha-card.cfold #ctlbox > :not(#ctlhead),ha-card.cfold section[data-part="record"],ha-card.cfold section[data-part="stroke"]{display:none!important}
+ha-card.cfold #ctlhead .chev{transform:rotate(-90deg)}
+#ctlhead{margin-bottom:6px}
+ha-card.simple .moodgrid{grid-template-columns:repeat(auto-fill,minmax(98px,1fr));gap:5px}
+ha-card.simple .moodgrid button.moodbtn{flex-direction:row;justify-content:flex-start;gap:6px;min-height:38px;padding:0 9px;font-size:12px;border-radius:11px}
+ha-card.simple .moodgrid button.moodbtn span{font-size:15px}
 [hidden],.off{display:none!important}
 `;
 
@@ -1775,6 +1782,7 @@ ha-card.simple #sndbox{padding:8px 12px}
         sec.classList.toggle("off", !parts.includes(sec.dataset.part));
         sec.style.order = String(parts.indexOf(sec.dataset.part) + 1);
       }
+      this._el("sndbox").style.order = this._el("videobox").style.order;
       for (const tog of this.shadowRoot.querySelectorAll(".kind")) {
         tog.hidden = !this._canToggleKind;
         for (const b of tog.querySelectorAll("button")) b.classList.toggle("on", b.dataset.kind === this._recKind);
@@ -1919,7 +1927,8 @@ ${STYLES}
         </section>
         <section data-part="outputs" id="outhome" class="off">
           <div id="ctlbox">
-            <div class="ctltabs" role="tablist"${this._variant.modes && this._variant.modes.length < 2 ? " hidden" : ""}>${(simple ? [["record", "✋ Manual"], ["pattern", "〰 Pattern"], ["mood", "◎ Mood"], ["video", "🎬 Media"]].map(([k, t]) => [k, `<span class="ti">${t.split(" ")[0]}</span><span>${t.split(" ").slice(1).join(" ")}</span>`]) : [["record", "● Record"], ["replay", "▶ Replay"], ["mood", "◎ Mood"], ["audio", "♪ Audio"], ["together", "🤝 Together"]]).filter(([k]) => !this._variant.modes || this._variant.modes.includes(k)).map(([k, t]) => `<button type="button" data-ctl="${k}">${t}</button>`).join("")}</div>
+            <button type="button" class="outhead mhead" id="ctlhead" aria-expanded="true"><span class="outtitle">🎛 Controls</span><span class="outcount zero" id="ctlbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button>
+            <div class="ctltabs" role="tablist"${this._variant.modes && this._variant.modes.length < 2 ? " hidden" : ""}>${(simple ? [["record", "✋ Manual"], ["pattern", "〰 Pattern"], ["mood", "◎ Mood"]].map(([k, t]) => [k, `<span class="ti">${t.split(" ")[0]}</span><span>${t.split(" ").slice(1).join(" ")}</span>`]) : [["record", "● Record"], ["replay", "▶ Replay"], ["mood", "◎ Mood"], ["audio", "♪ Audio"], ["together", "🤝 Together"]]).filter(([k]) => !this._variant.modes || this._variant.modes.includes(k)).map(([k, t]) => `<button type="button" data-ctl="${k}">${t}</button>`).join("")}</div>
             <div id="urecrow" hidden>
               <div class="urechead"><div class="kind" role="group" aria-label="Vibrate or stroke"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div><button id="urec" class="rec" type="button">● Rec</button></div>
               <div class="val" id="utimer"></div>
@@ -2049,10 +2058,10 @@ ${STYLES}
           <input id="voff" type="range" min="-1000" max="1000" step="25" value="150">
           <div class="hint">Positive values send each moment slightly early to make up for Bluetooth delay. Pause, seek and playback speed all stay in sync.</div></div>
           <div id="vaubox"></div>
-          <div id="sndbox"><button type="button" class="outhead mhead" id="sndhead" aria-expanded="true"><span class="outtitle">♪ Sound</span><span class="outcount zero" id="sndbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button></div>
           <div class="hint vhide">To make a script for this video: press ● Rec, play the video and drag the slider (position in the Stroke view, intensity in Vibrate). You can pause, scrub back and record a section again; the newer pass replaces it. While a script plays, the slider shows it; hold the slider to take over until you let go.</div>
-          <div class="hint vshow">Media: a video, music, the microphone or another tab. The slider under the video works with or without one: hold it to take over. On the video, the line on the left is the strength (a vibrator) or the speed (a stroker), and a stroker's range is on the right; ⛶ makes it full screen. ● Rec follows the video: play it and use the controls, or let a script (📂) or the sound of the video (♪) do the playing. Pause and it waits; go back and the new pass replaces what came after.</div>
+          <div class="hint vshow">The slider under the video works with or without a video: hold it to take over. Patterns and moods (Controls) and sound (Sound) can play with the video; the newest one started has the devices. On the video, the line on the left is the strength (a vibrator) or the speed (a stroker), and a stroker's range is on the right; ⛶ makes it full screen. ● Rec follows the video: play it and use the controls, or let a script (📂) or the sound of the video (♪) do the playing. Pause and it waits; go back and the new pass replaces what came after.</div>
         </section>
+        <section id="sndbox"><button type="button" class="outhead mhead" id="sndhead" aria-expanded="true"><span class="outtitle">♪ Sound</span><span class="outcount zero" id="sndbadge"><i></i><b></b></span><span class="chev" aria-hidden="true">▾</span></button></section>
         <section data-part="import">
           <h3>Import</h3>
           <textarea id="paste" placeholder="Paste a funscript, an ogg1: code, or JSON"></textarea>
@@ -3131,6 +3140,7 @@ ${STYLES}
     // Drive the follow-along devices from the video (outputs on this card).
     _videoOut() {
       if (this._au) return;
+      if (this._simple && this._ctlBusy && this._vsHand == null && this._vvHand == null) return;
       const now = performance.now();
       const value = this._videoValue();
       const dt = now - (this._vOutAt || now);
@@ -4208,8 +4218,7 @@ ${STYLES}
         ctl = localStorage.getItem(`oggstudio_ctl:${this.localName}`);
       } catch (_) {
       }
-      if (this._simple && ctl === "audio") ctl = "video";
-      const kept = this._simple ? ["pattern", "mood", "video"] : ["replay", "mood", "audio", "together"];
+      const kept = this._simple ? ["pattern", "mood"] : ["replay", "mood", "audio", "together"];
       const modes = this._variant.modes;
       this._ctl = this._togetherOnly ? "together" : modes ? modes.includes(ctl) ? ctl : modes[0] : kept.includes(ctl) ? ctl : "record";
       for (const b of this.shadowRoot.querySelectorAll(".ctltabs button")) b.addEventListener("click", () => this._setCtl(b.dataset.ctl));
@@ -4289,7 +4298,7 @@ ${STYLES}
       } else {
         this._plOff();
         this._rpStop();
-        this._auStop();
+        if (!this._simple) this._auStop();
         this._ptStop();
         if (from === "video") {
           this._hbKeep(true);
@@ -4314,20 +4323,16 @@ ${STYLES}
       $("rpbox").hidden = !(ctl === "replay" || simple && ctl === "pattern");
       $("ptbox").hidden = ctl !== "pattern";
       $("moodbox").hidden = ctl !== "mood";
-      $("aubox").hidden = simple ? ctl !== "video" : !(ctl === "audio" || ctl === "video" && this._vaudio);
+      $("aubox").hidden = simple ? false : !(ctl === "audio" || ctl === "video" && this._vaudio);
       if (simple) {
-        const home = ctl !== "video" ? null : this._vaudio ? $("vaubox") : $("sndbox");
-        if (home && $("aubox").parentElement !== home) home.appendChild($("aubox"));
-        if (!home && $("aubox").parentElement !== $("ctlbox")) $("ctlbox").insertBefore($("aubox"), $("tgbox"));
-        $("sndbox").hidden = ctl !== "video" || this._vaudio;
+        const home = this._vaudio ? $("vaubox") : $("sndbox");
+        if ($("aubox").parentElement !== home) home.appendChild($("aubox"));
       }
       $("tgbox").hidden = ctl !== "together";
       $("urecrow").hidden = !simple;
       if (simple) {
-        const hands = ["record", "pattern", "mood", "audio"].includes(ctl);
-        for (const sec of this.shadowRoot.querySelectorAll('[data-part="record"],[data-part="stroke"]')) sec.classList.toggle("off", !hands || !this._parts.includes(sec.dataset.part));
-        $("videobox").classList.toggle("off", ctl !== "video");
-        const gslot = ctl === "video" ? $("videobox").querySelector(".gpslot") : this.shadowRoot.querySelector('[data-part="record"]:not(.off) .gpslot,[data-part="stroke"]:not(.off) .gpslot');
+        for (const sec of this.shadowRoot.querySelectorAll('[data-part="record"],[data-part="stroke"]')) sec.classList.toggle("off", !this._parts.includes(sec.dataset.part));
+        const gslot = this.shadowRoot.querySelector('[data-part="record"]:not(.off) .gpslot,[data-part="stroke"]:not(.off) .gpslot');
         if (gslot) gslot.appendChild($("gp"));
         $("gp").hidden = !gslot;
       }
@@ -4338,6 +4343,7 @@ ${STYLES}
         $("stlive").checked = this._anyActive;
         this._vsideShow();
         this._urecShow();
+        this._mediaShow();
       }
     }
     _rpPicker(open) {
@@ -4616,8 +4622,9 @@ ${STYLES}
       }
       if (rp.t >= rp.len) rp.t = 0;
       this._ptStop();
+      if (this._simple) this._soundOff();
       const video = this._el("video");
-      if (video && !video.paused) video.pause();
+      if (video && !video.paused && !this._simple) video.pause();
       if (rp.lib && isStroke(rp.raw) && RUN_MODES[this._outAt(0).m]) this._setMode(rp.lib, this._outAt(0).m);
       rp.playing = true;
       this._outRender();
@@ -4702,6 +4709,7 @@ ${STYLES}
       }
     }
     _rpShow() {
+      if (this._simple && this._mediaShow) this._mediaShow();
       if (!this._el || !this._rp) return;
       const $ = this._el;
       const rp = this._rp;
@@ -6166,6 +6174,10 @@ ${STYLES}
     }
     async _auStart() {
       const $ = this._el;
+      if (this._simple) {
+        this._ptStop();
+        if (this._rp && this._rp.playing) this._rpStop();
+      }
       const src = $("ausrc").value;
       let stream = null;
       try {
@@ -6634,13 +6646,15 @@ ${STYLES}
       document.addEventListener("fullscreenchange", onFull);
       document.addEventListener("webkitfullscreenchange", onFull);
       for (const type of ["play", "pause", "ended", "emptied", "loadedmetadata"]) video.addEventListener(type, () => this._vsideShow());
-      let mf = { v: false, s: true };
+      let mf = { c: false, v: true, s: true };
       try {
         mf = { ...mf, ...JSON.parse(localStorage.getItem(MEDIA_FOLD_KEY) || "{}") || {} };
       } catch (_) {
       }
+      this._mediaFold("c", Boolean(mf.c));
       this._mediaFold("v", Boolean(mf.v));
       this._mediaFold("s", Boolean(mf.s));
+      $("ctlhead").addEventListener("click", () => this._mediaFold("c", !this._mfold.c, true));
       $("vidhead").addEventListener("click", () => this._mediaFold("v", !this._mfold.v, true));
       $("sndhead").addEventListener("click", () => this._mediaFold("s", !this._mfold.s, true));
       if (this._simple) {
@@ -6721,7 +6735,7 @@ ${STYLES}
     // what came after.
     _tapStart() {
       if (this._tap) return;
-      const video = this._ctl === "video" && Boolean(this._vurl);
+      const video = Boolean(this._vurl && this._el && !this._el("video").paused);
       this._tap = { video, stroke: this._strokeKind, t0: performance.now(), tracks: [[], []], last: [null, null], seen: [null, null], lastT: -1, end: 0 };
       if (video) {
         this._hvals[0] = 0;
@@ -6794,11 +6808,12 @@ ${STYLES}
         return;
       }
       this._ptStop();
+      if (this._simple) this._soundOff();
       this._plOff();
       this._rpStop();
       this._auStop();
       const video = this._el("video");
-      if (video && !video.paused) video.pause();
+      if (video && !video.paused && !this._simple) video.pause();
       const now = performance.now();
       this._pt = {
         key,
@@ -6876,6 +6891,7 @@ ${STYLES}
       }), 0.6);
     }
     _ptShow() {
+      if (this._mediaShow) this._mediaShow();
       if (!this._el) return;
       const $ = this._el;
       const pt = this._pt;
@@ -7019,7 +7035,18 @@ ${STYLES}
     // does the moving instead, inside the same limits.
     // Media (with or without a video or a sound playing).
     get _vsOn() {
-      return Boolean(this._simple && this._ctl === "video");
+      return Boolean(this._simple && this._parts.includes("video"));
+    }
+    // Controls are driving (a pattern, a mood or a script, a pad or the stroke
+    // bar): the video then just plays; it does not drive the devices.
+    get _ctlBusy() {
+      const st = this._st;
+      return Boolean(this._pt || this._rp && this._rp.playing || this._padActive && this._padActive.some(Boolean) || this._strokeKind && st && (st.drag !== null || this._stSpeed && this._stSpeed() !== null));
+    }
+    // Sound off (the video's or any other).
+    _soundOff() {
+      if (this._vaudio) this._vaSet(false);
+      else if (this._au) this._auStop();
     }
     _vsLoad() {
       if (this._vsCfg) return this._vsCfg;
@@ -7157,7 +7184,7 @@ ${STYLES}
         this._vlimShow();
         return;
       }
-      if (this._vraw) {
+      if (this._vraw || this._ctlBusy) {
         this._vlimShow();
         return;
       }
@@ -7206,7 +7233,8 @@ ${STYLES}
       const r = this._vsRange;
       const hand = this._vvHand;
       const held = hand !== null && hand !== void 0;
-      if (!held && (this._vraw || this._vsBeatOn)) {
+      if (!held && (this._vraw || this._vsBeatOn || this._ctlBusy)) {
+        if (this._ctlBusy) this._vsWasLive = false;
         this._vlimShow();
         return;
       }
@@ -7417,11 +7445,11 @@ ${STYLES}
     // Video and Sound fold like Devices: Video open, Sound folded at first.
     _mediaFold(which, folded, save) {
       const $ = this._el;
-      this._mfold = this._mfold || { v: false, s: true };
+      this._mfold = this._mfold || { c: false, v: true, s: true };
       this._mfold[which] = folded;
-      const box = which === "v" ? $("videobox") : $("sndbox");
-      box.classList.toggle("mfold", folded);
-      $(which === "v" ? "vidhead" : "sndhead").setAttribute("aria-expanded", String(!folded));
+      const box = { c: this.shadowRoot.querySelector("ha-card"), v: $("videobox"), s: $("sndbox") }[which];
+      box.classList.toggle(which === "c" ? "cfold" : "mfold", folded);
+      $({ c: "ctlhead", v: "vidhead", s: "sndhead" }[which]).setAttribute("aria-expanded", String(!folded));
       if (save) {
         try {
           localStorage.setItem(MEDIA_FOLD_KEY, JSON.stringify(this._mfold));
@@ -7443,6 +7471,9 @@ ${STYLES}
       badge("vidbadge", Boolean(this._vurl), this._vurl ? `${(this._vname || "video").slice(0, 18)}${video.paused ? "" : " · playing"}` : "none");
       const au = this._au;
       const src = { mic: "microphone", file: "music", tab: "tab", video: "from the video" };
+      const tab = { record: "manual", pattern: "pattern", mood: "mood" }[this._ctl] || "";
+      const playing = this._pt ? this._pt.key === PATTERN_RANDOM ? "random" : PATTERNS[this._pt.key] || PATTERNS_DUAL[this._pt.key] || "pattern" : this._rp && this._rp.playing ? this._rp.name || "playing" : "";
+      badge("ctlbadge", Boolean(playing), (playing || tab).toString().toLowerCase().slice(0, 18));
       badge("sndbadge", Boolean(au && au.src !== "video"), au && au.src !== "video" ? src[au.src] || "on" : "off");
     }
     // The video's own sound drives the devices: its settings sit under the

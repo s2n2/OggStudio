@@ -125,6 +125,7 @@ export class VideoPart {
   // Drive the follow-along devices from the video (outputs on this card).
   _videoOut() {
     if (this._au) return;          // Audio mode has the devices (the video's own sound drives them)
+    if (this._simple && this._ctlBusy && this._vsHand == null && this._vvHand == null) return;   // the controls have the devices
     const now = performance.now();
     const value = this._videoValue();
     const dt = now - (this._vOutAt || now);

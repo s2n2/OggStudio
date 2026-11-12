@@ -57,10 +57,12 @@ export class PlayPart {
     document.addEventListener('webkitfullscreenchange', onFull);
     for (const type of ['play', 'pause', 'ended', 'emptied', 'loadedmetadata']) video.addEventListener(type, () => this._vsideShow());
     // Video and Sound headers.
-    let mf = { v: false, s: true };
+    let mf = { c: false, v: true, s: true };
     try { mf = { ...mf, ...(JSON.parse(localStorage.getItem(MEDIA_FOLD_KEY) || '{}') || {}) }; } catch (_) { /* private mode */ }
+    this._mediaFold('c', Boolean(mf.c));
     this._mediaFold('v', Boolean(mf.v));
     this._mediaFold('s', Boolean(mf.s));
+    $('ctlhead').addEventListener('click', () => this._mediaFold('c', !this._mfold.c, true));
     $('vidhead').addEventListener('click', () => this._mediaFold('v', !this._mfold.v, true));
     $('sndhead').addEventListener('click', () => this._mediaFold('s', !this._mfold.s, true));
     if (this._simple) {
@@ -134,7 +136,7 @@ export class PlayPart {
   // what came after.
   _tapStart() {
     if (this._tap) return;
-    const video = this._ctl === 'video' && Boolean(this._vurl);
+    const video = Boolean(this._vurl && this._el && !this._el('video').paused);
     this._tap = { video, stroke: this._strokeKind, t0: performance.now(), tracks: [[], []], last: [null, null], seen: [null, null], lastT: -1, end: 0 };
     if (video) {
       this._hvals[0] = 0;
@@ -209,11 +211,12 @@ export class PlayPart {
   _ptStart(key) {
     if (this._pt && this._pt.key === key) { this._ptStop(); return; }
     this._ptStop();
+    if (this._simple) this._soundOff();          // the newest one started has the devices
     this._plOff();
     this._rpStop();
     this._auStop();
     const video = this._el('video');
-    if (video && !video.paused) video.pause();     // one thing drives the devices at a time
+    if (video && !video.paused && !this._simple) video.pause();     // one thing drives the devices at a time (the Play card's video plays on)
     const now = performance.now();
     this._pt = { key, phase: 0, last: now, outAt: 0, prev: null,
       prog: key === PATTERN_RANDOM ? new RandomProgram(this._twoPads && !this._strokeKind ? 2 : 1) : null };
@@ -283,6 +286,7 @@ export class PlayPart {
   }
 
   _ptShow() {
+    if (this._mediaShow) this._mediaShow();
     if (!this._el) return;
     const $ = this._el;
     const pt = this._pt;
@@ -409,7 +413,18 @@ export class PlayPart {
   // range (drag the range to set it by hand). A script, when there is one,
   // does the moving instead, inside the same limits.
   // Media (with or without a video or a sound playing).
-  get _vsOn() { return Boolean(this._simple && this._ctl === 'video'); }
+  get _vsOn() { return Boolean(this._simple && this._parts.includes('video')); }
+
+  // Controls are driving (a pattern, a mood or a script, a pad or the stroke
+  // bar): the video then just plays; it does not drive the devices.
+  get _ctlBusy() {
+    const st = this._st;
+    return Boolean(this._pt || (this._rp && this._rp.playing) || (this._padActive && this._padActive.some(Boolean))
+      || (this._strokeKind && st && (st.drag !== null || (this._stSpeed && this._stSpeed() !== null))));
+  }
+
+  // Sound off (the video's or any other).
+  _soundOff() { if (this._vaudio) this._vaSet(false); else if (this._au) this._auStop(); }
 
   _vsLoad() {
     if (this._vsCfg) return this._vsCfg;
@@ -521,7 +536,7 @@ export class PlayPart {
       this._vlimShow();
       return;
     }
-    if (this._vraw) { this._vlimShow(); return; }      // the script moves it
+    if (this._vraw || this._ctlBusy) { this._vlimShow(); return; }      // the script (or the controls) moves it
     const vel = this._vsVel();
     if (vel === null) { this._vsWasLive = false; this._vlimShow(); return; }    // stays where it is
     if (vel > 0) { const m = strokeStep(r.pos, r.dir || 1, r.lower, r.upper, vel, dt); r.pos = m.pos; r.dir = m.dir; }
@@ -561,7 +576,7 @@ export class PlayPart {
     const r = this._vsRange;
     const hand = this._vvHand;
     const held = hand !== null && hand !== undefined;
-    if (!held && (this._vraw || this._vsBeatOn)) { this._vlimShow(); return; }
+    if (!held && (this._vraw || this._vsBeatOn || this._ctlBusy)) { if (this._ctlBusy) this._vsWasLive = false; this._vlimShow(); return; }
     let v = 0;
     if (held) v = this._vvScale(hand);
     else if (!this._el('vspring').checked && this._vvKept) v = this._vvScale(this._vvKept);
@@ -737,11 +752,11 @@ export class PlayPart {
   // Video and Sound fold like Devices: Video open, Sound folded at first.
   _mediaFold(which, folded, save) {
     const $ = this._el;
-    this._mfold = this._mfold || { v: false, s: true };
+    this._mfold = this._mfold || { c: false, v: true, s: true };
     this._mfold[which] = folded;
-    const box = which === 'v' ? $('videobox') : $('sndbox');
-    box.classList.toggle('mfold', folded);
-    $(which === 'v' ? 'vidhead' : 'sndhead').setAttribute('aria-expanded', String(!folded));
+    const box = { c: this.shadowRoot.querySelector('ha-card'), v: $('videobox'), s: $('sndbox') }[which];
+    box.classList.toggle(which === 'c' ? 'cfold' : 'mfold', folded);
+    $({ c: 'ctlhead', v: 'vidhead', s: 'sndhead' }[which]).setAttribute('aria-expanded', String(!folded));
     if (save) { try { localStorage.setItem(MEDIA_FOLD_KEY, JSON.stringify(this._mfold)); } catch (_) { /* private mode */ } }
   }
 
@@ -754,6 +769,11 @@ export class PlayPart {
     badge('vidbadge', Boolean(this._vurl), this._vurl ? `${(this._vname || 'video').slice(0, 18)}${video.paused ? '' : ' · playing'}` : 'none');
     const au = this._au;
     const src = { mic: 'microphone', file: 'music', tab: 'tab', video: 'from the video' };
+    // Controls: what they are doing.
+    const tab = { record: 'manual', pattern: 'pattern', mood: 'mood' }[this._ctl] || '';
+    const playing = this._pt ? (this._pt.key === PATTERN_RANDOM ? 'random' : (PATTERNS[this._pt.key] || PATTERNS_DUAL[this._pt.key] || 'pattern'))
+      : this._rp && this._rp.playing ? (this._rp.name || 'playing') : '';
+    badge('ctlbadge', Boolean(playing), (playing || tab).toString().toLowerCase().slice(0, 18));
     badge('sndbadge', Boolean(au && au.src !== 'video'), au && au.src !== 'video' ? src[au.src] || 'on' : 'off');
   }
 

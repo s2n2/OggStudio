@@ -288,7 +288,7 @@ button.outhead{display:flex;align-items:center;gap:8px;width:100%;min-height:36p
 .outbtns{display:flex;gap:8px;margin-top:8px}
 .outbtns button{flex:1;min-height:38px;margin:0;font-size:12.5px}
 .outbtns button[hidden]{display:none}
-ha-card.simple #vaubox #aubox,ha-card.simple #sndbox{margin-top:10px;padding:12px;border-radius:15px;border:1px solid #364563;background:#17243e}
+ha-card.simple #vaubox #aubox{margin-top:10px;padding:12px;border-radius:15px;border:1px solid #364563;background:#17243e}
 ha-card.simple #vaubox #aubox>label:first-of-type,ha-card.simple #sndbox #aubox>label:first-of-type{margin-top:0}
 #sndbox #aubox{margin:0;padding:0;border:0;background:none}
 ha-card.simple button.vempty{min-height:160px}
@@ -296,12 +296,19 @@ ha-card.simple .ctltabs button{display:flex;flex-direction:column;align-items:ce
 ha-card.simple .ctltabs button .ti{font-size:15px;line-height:1}
 ha-card.simple .ctltabs button span:last-child{font-size:11.5px;white-space:nowrap}
 ha-card:not(.simple) .mhead{display:none}
-#videobox.mfold > :not(.mhead):not(#sndbox){display:none!important}
+#videobox.mfold > :not(.mhead){display:none!important}
 #sndbox.mfold > :not(.mhead){display:none!important}
 .mfold > .mhead .chev{transform:rotate(-90deg)}
-ha-card.simple #sndbox{padding:8px 12px}
 #sndbox > .mhead{margin-bottom:2px}
 #sndbox #aubox{margin-top:6px}
 .mhead .outcount b{max-width:150px;overflow:hidden;text-overflow:ellipsis}
+ha-card:not(.simple) #sndbox{display:none}
+ha-card.simple section#sndbox{margin-top:10px}
+ha-card.cfold #ctlbox > :not(#ctlhead),ha-card.cfold section[data-part="record"],ha-card.cfold section[data-part="stroke"]{display:none!important}
+ha-card.cfold #ctlhead .chev{transform:rotate(-90deg)}
+#ctlhead{margin-bottom:6px}
+ha-card.simple .moodgrid{grid-template-columns:repeat(auto-fill,minmax(98px,1fr));gap:5px}
+ha-card.simple .moodgrid button.moodbtn{flex-direction:row;justify-content:flex-start;gap:6px;min-height:38px;padding:0 9px;font-size:12px;border-radius:11px}
+ha-card.simple .moodgrid button.moodbtn span{font-size:15px}
 [hidden],.off{display:none!important}
 `;
