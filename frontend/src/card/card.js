@@ -322,7 +322,7 @@ ${STYLES}
           <select id="saved"></select>
           <div id="libmodebox" hidden><label>Run as vibration using (remembered for this script)</label><select id="libmode">${runModeOptions()}</select></div>
           <div class="row" style="margin-top:8px"><select id="speed"></select><label class="check"><input id="loop" type="checkbox"> Loop</label></div>
-          <div id="libsavebox" hidden><label>Save the take as</label><div class="row"><input id="libname" type="text" placeholder="Name"><button id="libsave" type="button" style="flex:0 0 auto">💾 Save</button></div></div>
+          <div id="libsavebox" hidden><label>Save the take as</label><div class="row"><input id="libname" type="text" placeholder="Name"><button id="libsave" type="button" style="flex:0 0 auto">💾 Save</button></div><div class="row" style="margin-top:6px"><button id="libdl" type="button">⬇ Download</button><button id="libdiscard" type="button" class="stop">✕ Discard</button></div></div>
           <div class="row" style="margin-top:8px"><button id="play">▶ Play</button><button id="stop" class="stop">■ Stop</button><button id="code">Copy code</button><button id="delete">Delete</button></div>
         </section>
         <section id="videobox" data-part="video">

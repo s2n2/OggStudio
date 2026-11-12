@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.21.8";
+  var VERSION = "0.21.9";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -1698,6 +1698,7 @@ ha-card.simple section[data-part="record"] .hint,ha-card.simple section[data-par
 .ptpick select{min-height:46px;font-size:14px}
 .ptpick button{min-height:46px}
 #libsavebox{margin-top:8px}
+ha-card.simple #takebox{display:none!important}
 [hidden],.off{display:none!important}
 `;
 
@@ -2037,7 +2038,7 @@ ${STYLES}
           <select id="saved"></select>
           <div id="libmodebox" hidden><label>Run as vibration using (remembered for this script)</label><select id="libmode">${runModeOptions()}</select></div>
           <div class="row" style="margin-top:8px"><select id="speed"></select><label class="check"><input id="loop" type="checkbox"> Loop</label></div>
-          <div id="libsavebox" hidden><label>Save the take as</label><div class="row"><input id="libname" type="text" placeholder="Name"><button id="libsave" type="button" style="flex:0 0 auto">💾 Save</button></div></div>
+          <div id="libsavebox" hidden><label>Save the take as</label><div class="row"><input id="libname" type="text" placeholder="Name"><button id="libsave" type="button" style="flex:0 0 auto">💾 Save</button></div><div class="row" style="margin-top:6px"><button id="libdl" type="button">⬇ Download</button><button id="libdiscard" type="button" class="stop">✕ Discard</button></div></div>
           <div class="row" style="margin-top:8px"><button id="play">▶ Play</button><button id="stop" class="stop">■ Stop</button><button id="code">Copy code</button><button id="delete">Delete</button></div>
         </section>
         <section id="videobox" data-part="video">
@@ -6726,6 +6727,19 @@ ${STYLES}
       });
       $("libname").addEventListener("keydown", (e) => {
         if (e.key === "Enter") $("libsave").click();
+      });
+      $("libdl").addEventListener("click", () => $("takedl").click());
+      $("libdiscard").addEventListener("click", () => {
+        $("takediscard").click();
+        if (!this._take) {
+          this._libPick = null;
+          if (this._rp.name === "Current take" && !this._rp.playing) {
+            this._rp.raw = null;
+            this._rp.name = "";
+            this._rpShow();
+          }
+          this._update();
+        }
       });
       const video = $("video");
       $("vsfile").addEventListener("click", () => $("vfile").click());

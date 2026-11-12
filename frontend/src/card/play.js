@@ -55,6 +55,11 @@ export class PlayPart {
       }
     });
     $('libname').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('libsave').click(); });
+    $('libdl').addEventListener('click', () => $('takedl').click());
+    $('libdiscard').addEventListener('click', () => {
+      $('takediscard').click();
+      if (!this._take) { this._libPick = null; if (this._rp.name === 'Current take' && !this._rp.playing) { this._rp.raw = null; this._rp.name = ''; this._rpShow(); } this._update(); }
+    });
     // The video's side controls press the full controls they stand for.
     const video = $('video');
     $('vsfile').addEventListener('click', () => $('vfile').click());
