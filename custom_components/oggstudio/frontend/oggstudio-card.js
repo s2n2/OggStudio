@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.21.6";
+  var VERSION = "0.21.7";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -7008,15 +7008,15 @@ ${STYLES}
         sel.value = [...sel.options].some((o) => o.value === keep) ? keep : "wave";
       }
       if (pt && sel.value !== pt.key && this.shadowRoot.activeElement !== sel) sel.value = pt.key;
+      const random = pt ? Boolean(pt.prog) : sel.value === PATTERN_RANDOM;
       $("ptgo").textContent = pt ? "■ Stop" : "▶ Play";
       $("ptgo").classList.toggle("go", !pt);
       $("ptgo").classList.toggle("stop", Boolean(pt));
-      const random = Boolean(pt && pt.prog);
       $("ptspeedlab").textContent = random ? "How busy" : "Speed";
       $("ptspeedv").textContent = random ? `${$("ptspeed").value}%` : `${patternPeriod(Number($("ptspeed").value)).toFixed(1)} s`;
       $("ptstrv").textContent = `${$("ptstr").value}%`;
       const name = pt && (PATTERNS[pt.key] || PATTERNS_DUAL[pt.key] || "Random");
-      let text = PATTERN_HINT;
+      let text = this._simple ? "" : PATTERN_HINT;
       if (pt) {
         const bits = [name];
         if (random) bits.push(pt.prog.seg.rest ? "resting" : pt.prog.seg.key ? (PATTERNS[pt.prog.seg.key] || PATTERNS_DUAL[pt.prog.seg.key]).toLowerCase() : "steps");
