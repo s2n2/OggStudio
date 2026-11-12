@@ -35,6 +35,7 @@ export class VideoPart {
       video.hidden = !file;
       if (file) { video.src = this._vurl; video.load(); } else { video.removeAttribute('src'); }
       this._videoStatus();
+      if (file) this._matchVideoScript();
     });
     $('vsrc').addEventListener('change', () => this._loadVideoScript());
     $('vscriptfile').addEventListener('change', () => this._loadVideoScript());

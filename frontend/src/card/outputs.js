@@ -466,6 +466,34 @@ export class OutputsPart {
     } catch (e) { this._toast('Could not import: ' + (e.message || e)); }
   }
 
+  // A saved script named like the video (case, extension and punctuation
+  // aside) is chosen for it: in the video's script list and the Library.
+  _matchVideoScript() {
+    const norm = (s) => String(s || '').toLowerCase().replace(/\.(funscript|json)$/, '').replace(/[^a-z0-9]+/g, '');
+    const want = norm(this._vname);
+    if (!want) return;
+    const savedState = this._studio && this._studio.saved && this._hass && this._hass.states[this._studio.saved];
+    const names = ((savedState && savedState.attributes.options) || []).filter((n) => n && !/^\(.*\)$/.test(n));
+    const match = names.find((n) => norm(n) === want)
+      || names.find((n) => { const k = norm(n); return k.length >= 4 && (k.startsWith(want) || want.startsWith(k)); });
+    const sel = this._el('vsrc');
+    if (!match) {
+      // The last video's own script does not go with this one.
+      if (this._vAutoScript && sel.value === this._vAutoScript) { sel.value = ''; this._loadVideoScript(); }
+      this._vAutoScript = null;
+      return;
+    }
+    this._fillVideoScripts();
+    this._vAutoScript = match;
+    if (sel.value !== match) { sel.value = match; this._loadVideoScript(); }
+    if (this._simple) {
+      this._libPick = null;
+      this._hass.callService('select', 'select_option', { entity_id: this._studio.saved, option: match }).catch(() => {});
+      if (!this._rp.playing) this._libPreview(match);
+    }
+    this._toast(`Script "${match}" goes with this video.`);
+  }
+
   _fillVideoScripts() {
     const sel = this._el('vsrc');
     const savedState = this._studio && this._studio.saved && this._hass.states[this._studio.saved];
