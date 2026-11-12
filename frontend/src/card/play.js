@@ -375,7 +375,7 @@ export class PlayPart {
   // Vibrate / Stroke is chosen by hand; picking a device sets it to suit
   // (a stroker: stroke, anything else: vibrate), and can be switched back.
   _autoKind() {
-    if (!this._simple || !this._outs || this._autoKindBusy) return;
+    if (!this._simple || !this._outs || this._autoKindBusy || this._variant.kind) return;
     const kind = this._isLinear(0) ? 'stroke' : 'vibrate';
     if (kind === this._recKind) return;
     this._autoKindBusy = true;

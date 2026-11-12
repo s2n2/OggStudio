@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.15.13";
+  var VERSION = "0.16.0";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -27,6 +27,7 @@
       name: "OggStudio Recorder",
       sub: "Draw a pattern with your finger and save it",
       parts: ["record", "take"],
+      kind: "vibrate",
       size: 6,
       description: "Big touch pads to record (or just play live), then save the take."
     },
@@ -41,6 +42,7 @@
       name: "OggStudio Video",
       sub: "Play a local video with its script, or record one",
       parts: ["video", "take"],
+      kind: "vibrate",
       size: 7,
       description: "Sync a video on this device with a script, and record a funscript for it."
     },
@@ -48,6 +50,7 @@
       name: "OggStudio Stroke",
       sub: "Record stroke scripts (for a Handy) between two limits",
       parts: ["stroke", "take"],
+      kind: "stroke",
       size: 8,
       description: "Stroke recorder: set an upper and lower limit, hold a speed to stroke between them, record a stroke funscript."
     },
@@ -56,8 +59,28 @@
       sub: "Manual, pattern, mood, audio or video: record any of them",
       parts: ["record", "video", "take"],
       simple: true,
+      kind: "vibrate",
       size: 8,
       description: "One simple card: play by hand, a pattern, a mood, to sound or to a video, with one Record button for all of them."
+    },
+    "oggstudio-play-stroke-card": {
+      name: "OggStudio Play Stroke",
+      sub: "For a stroker: manual, pattern, mood, audio or video, and record any of them",
+      parts: ["stroke", "video", "take"],
+      simple: true,
+      kind: "stroke",
+      size: 8,
+      description: "The Play card for a stroker (a Handy): stroke by hand, a pattern, a mood, to sound or to a video, inside your limits, with one Record button for all of them."
+    },
+    "oggstudio-video-stroke-card": {
+      name: "OggStudio Video Stroke",
+      sub: "A video with stroke range and speed: record a stroke script for it",
+      parts: ["stroke", "video", "take"],
+      simple: true,
+      kind: "stroke",
+      modes: ["video"],
+      size: 8,
+      description: "Play a local video with a stroke range and speed (or a script, or its sound) driving a stroker, and record a stroke script in time with it."
     },
     "oggstudio-together-card": {
       name: "OggStudio Together",
@@ -1615,7 +1638,9 @@ ha-card.simple #videobox{padding:8px}
     }
     // A card with one recorder (pads or stroke) can switch between the two
     // with the Vibrate / Stroke toggle; the choice is kept per card type.
+    // A card made for one kind (vibrator or stroker) has no toggle.
     get _canToggleKind() {
+      if (this._variant.kind) return false;
       const b = this._baseParts;
       return b.includes("record") !== b.includes("stroke");
     }
@@ -1623,6 +1648,7 @@ ha-card.simple #videobox{padding:8px}
       return `oggstudio_rec_kind:${this.localName}`;
     }
     get _recKind() {
+      if (this._variant.kind) return this._variant.kind;
       if (this._kind) return this._kind;
       let saved = null;
       try {
@@ -1815,7 +1841,7 @@ ${STYLES}
         </section>
         <section data-part="outputs" id="outhome" class="off">
           <div id="ctlbox">
-            <div class="ctltabs" role="tablist">${(simple ? [["record", "✋ Manual"], ["pattern", "〰 Pattern"], ["mood", "◎ Mood"], ["audio", "♪ Audio"], ["video", "🎬 Video"]] : [["record", "● Record"], ["replay", "▶ Replay"], ["mood", "◎ Mood"], ["audio", "♪ Audio"], ["together", "🤝 Together"]]).map(([k, t]) => `<button type="button" data-ctl="${k}">${t}</button>`).join("")}</div>
+            <div class="ctltabs" role="tablist"${this._variant.modes && this._variant.modes.length < 2 ? " hidden" : ""}>${(simple ? [["record", "✋ Manual"], ["pattern", "〰 Pattern"], ["mood", "◎ Mood"], ["audio", "♪ Audio"], ["video", "🎬 Video"]] : [["record", "● Record"], ["replay", "▶ Replay"], ["mood", "◎ Mood"], ["audio", "♪ Audio"], ["together", "🤝 Together"]]).filter(([k]) => !this._variant.modes || this._variant.modes.includes(k)).map(([k, t]) => `<button type="button" data-ctl="${k}">${t}</button>`).join("")}</div>
             <div id="urecrow" hidden>
               <div class="urechead"><button id="urec" class="rec" type="button">● Record</button><div class="kind" role="group" aria-label="Vibrate or stroke"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div></div>
               <div class="val" id="utimer"></div>
@@ -4068,7 +4094,8 @@ ${STYLES}
       } catch (_) {
       }
       const kept = this._simple ? ["pattern", "mood", "audio", "video"] : ["replay", "mood", "audio", "together"];
-      this._ctl = this._togetherOnly ? "together" : kept.includes(ctl) ? ctl : "record";
+      const modes = this._variant.modes;
+      this._ctl = this._togetherOnly ? "together" : modes ? modes.includes(ctl) ? ctl : modes[0] : kept.includes(ctl) ? ctl : "record";
       for (const b of this.shadowRoot.querySelectorAll(".ctltabs button")) b.addEventListener("click", () => this._setCtl(b.dataset.ctl));
       $("rpspeed").replaceChildren(...SPEEDS.map((x) => new Option(x, x)));
       $("rpspeed").value = "1x";
@@ -6724,7 +6751,7 @@ ${STYLES}
     // Vibrate / Stroke is chosen by hand; picking a device sets it to suit
     // (a stroker: stroke, anything else: vibrate), and can be switched back.
     _autoKind() {
-      if (!this._simple || !this._outs || this._autoKindBusy) return;
+      if (!this._simple || !this._outs || this._autoKindBusy || this._variant.kind) return;
       const kind = this._isLinear(0) ? "stroke" : "vibrate";
       if (kind === this._recKind) return;
       this._autoKindBusy = true;

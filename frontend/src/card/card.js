@@ -45,9 +45,11 @@ export class OggStudioCard extends HTMLElement {
 
   // A card with one recorder (pads or stroke) can switch between the two
   // with the Vibrate / Stroke toggle; the choice is kept per card type.
-  get _canToggleKind() { const b = this._baseParts; return b.includes('record') !== b.includes('stroke'); }
+  // A card made for one kind (vibrator or stroker) has no toggle.
+  get _canToggleKind() { if (this._variant.kind) return false; const b = this._baseParts; return b.includes('record') !== b.includes('stroke'); }
   get _kindKey() { return `oggstudio_rec_kind:${this.localName}`; }
   get _recKind() {
+    if (this._variant.kind) return this._variant.kind;
     if (this._kind) return this._kind;
     let saved = null;
     try { saved = localStorage.getItem(this._kindKey); } catch (_) { /* private mode */ }
@@ -222,10 +224,10 @@ ${STYLES}
         </section>
         <section data-part="outputs" id="outhome" class="off">
           <div id="ctlbox">
-            <div class="ctltabs" role="tablist">${(simple
+            <div class="ctltabs" role="tablist"${this._variant.modes && this._variant.modes.length < 2 ? ' hidden' : ''}>${(simple
               ? [['record', '✋ Manual'], ['pattern', '〰 Pattern'], ['mood', '◎ Mood'], ['audio', '♪ Audio'], ['video', '🎬 Video']]
               : [['record', '● Record'], ['replay', '▶ Replay'], ['mood', '◎ Mood'], ['audio', '♪ Audio'], ['together', '🤝 Together']]
-            ).map(([k, t]) => `<button type="button" data-ctl="${k}">${t}</button>`).join('')}</div>
+            ).filter(([k]) => !this._variant.modes || this._variant.modes.includes(k)).map(([k, t]) => `<button type="button" data-ctl="${k}">${t}</button>`).join('')}</div>
             <div id="urecrow" hidden>
               <div class="urechead"><button id="urec" class="rec" type="button">● Record</button><div class="kind" role="group" aria-label="Vibrate or stroke"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div></div>
               <div class="val" id="utimer"></div>

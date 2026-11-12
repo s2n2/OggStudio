@@ -1,7 +1,7 @@
 // Part of the OggStudio card. Built into custom_components/oggstudio/frontend/oggstudio-card.js (npm run build).
 
 export const TAG = 'oggstudio-card';
-export const VERSION = '0.15.13';
+export const VERSION = '0.16.0';
 export const DEVICE_KEY = 'oggstudio_device';
 export const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
 export const SAMPLE_MS = 100;
@@ -19,16 +19,20 @@ export const TAKE_SRC = 'take';      // "Current take" in script lists (never a
 export const VARIANTS = {
   'oggstudio-card': { name: 'OggStudio', sub: 'Record, import, replay and sync to video', parts: PARTS.filter((p) => p !== 'stroke'), size: 9,
     description: 'Everything in one card: record, library, video sync and import.' },
-  'oggstudio-recorder-card': { name: 'OggStudio Recorder', sub: 'Draw a pattern with your finger and save it', parts: ['record', 'take'], size: 6,
+  'oggstudio-recorder-card': { name: 'OggStudio Recorder', sub: 'Draw a pattern with your finger and save it', parts: ['record', 'take'], kind: 'vibrate', size: 6,
     description: 'Big touch pads to record (or just play live), then save the take.' },
   'oggstudio-player-card': { name: 'OggStudio Player', sub: 'Play saved patterns and import scripts', parts: ['library', 'take', 'import'], size: 5,
     description: 'Pick a saved pattern and play it; paste or load funscripts and share codes.' },
-  'oggstudio-video-card': { name: 'OggStudio Video', sub: 'Play a local video with its script, or record one', parts: ['video', 'take'], size: 7,
+  'oggstudio-video-card': { name: 'OggStudio Video', sub: 'Play a local video with its script, or record one', parts: ['video', 'take'], kind: 'vibrate', size: 7,
     description: 'Sync a video on this device with a script, and record a funscript for it.' },
-  'oggstudio-stroke-card': { name: 'OggStudio Stroke', sub: 'Record stroke scripts (for a Handy) between two limits', parts: ['stroke', 'take'], size: 8,
+  'oggstudio-stroke-card': { name: 'OggStudio Stroke', sub: 'Record stroke scripts (for a Handy) between two limits', parts: ['stroke', 'take'], kind: 'stroke', size: 8,
     description: 'Stroke recorder: set an upper and lower limit, hold a speed to stroke between them, record a stroke funscript.' },
-  'oggstudio-play-card': { name: 'OggStudio Play', sub: 'Manual, pattern, mood, audio or video: record any of them', parts: ['record', 'video', 'take'], simple: true, size: 8,
+  'oggstudio-play-card': { name: 'OggStudio Play', sub: 'Manual, pattern, mood, audio or video: record any of them', parts: ['record', 'video', 'take'], simple: true, kind: 'vibrate', size: 8,
     description: 'One simple card: play by hand, a pattern, a mood, to sound or to a video, with one Record button for all of them.' },
+  'oggstudio-play-stroke-card': { name: 'OggStudio Play Stroke', sub: 'For a stroker: manual, pattern, mood, audio or video, and record any of them', parts: ['stroke', 'video', 'take'], simple: true, kind: 'stroke', size: 8,
+    description: 'The Play card for a stroker (a Handy): stroke by hand, a pattern, a mood, to sound or to a video, inside your limits, with one Record button for all of them.' },
+  'oggstudio-video-stroke-card': { name: 'OggStudio Video Stroke', sub: 'A video with stroke range and speed: record a stroke script for it', parts: ['stroke', 'video', 'take'], simple: true, kind: 'stroke', modes: ['video'], size: 8,
+    description: 'Play a local video with a stroke range and speed (or a script, or its sound) driving a stroker, and record a stroke script in time with it.' },
   'oggstudio-together-card': { name: 'OggStudio Together', sub: 'Play together from two places', parts: [], together: true, size: 4,
     description: 'Start or join a Together session: each of you drives the devices of the other, inside the limits each has set.' },
 };

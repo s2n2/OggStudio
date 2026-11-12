@@ -18,7 +18,8 @@ export class ReplayPart {
     let ctl = null;
     try { ctl = localStorage.getItem(`oggstudio_ctl:${this.localName}`); } catch (_) { /* private mode */ }
     const kept = this._simple ? ['pattern', 'mood', 'audio', 'video'] : ['replay', 'mood', 'audio', 'together'];
-    this._ctl = this._togetherOnly ? 'together' : kept.includes(ctl) ? ctl : 'record';
+    const modes = this._variant.modes;
+    this._ctl = this._togetherOnly ? 'together' : modes ? (modes.includes(ctl) ? ctl : modes[0]) : kept.includes(ctl) ? ctl : 'record';
     for (const b of this.shadowRoot.querySelectorAll('.ctltabs button')) b.addEventListener('click', () => this._setCtl(b.dataset.ctl));
     $('rpspeed').replaceChildren(...SPEEDS.map((x) => new Option(x, x)));
     $('rpspeed').value = '1x';
