@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.15.12";
+  var VERSION = "0.15.13";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -3033,7 +3033,7 @@ ${STYLES}
       const video = this._el("video");
       const ms = video.currentTime * 1e3 + Number(this._el("voff").value || 0);
       const script = !this._vHeld && this._vraw && isStroke(this._vraw);
-      if (this._vsOn && !this._vraw) return;
+      if (this._vsOn && (!this._vraw || this._vvHand !== null && this._vvHand !== void 0 && !this._strokeKind)) return;
       if (this._strokeKindRec) {
         const values = this._outs.map((o, i) => {
           const p = parseTarget(this._outTargetValue(i));
@@ -5992,7 +5992,7 @@ ${STYLES}
       if (!r.beat && now - au.outAt < 100) return;
       au.outAt = now;
       if (this._vsOn && !this._vraw) {
-        if (r.beat) this._vsOnBeat(r.gap);
+        this._vsSound(r);
         if (now - (au.shownAt || 0) > 1e3) {
           au.shownAt = now;
           this._auShow();
@@ -6793,8 +6793,16 @@ ${STYLES}
       const r = this._vsRange;
       return Math.round(r.lower + Math.min(100, Math.max(0, v)) / 100 * (r.upper - r.lower));
     }
+    // Sound drives it (♪ on and sound running), each Feel its own way.
     get _vsBeatOn() {
       return Boolean(this._vsLoad().beat && this._au);
+    }
+    get _vsFeel() {
+      const el = this._el && this._el("aumode");
+      return el && el.value || "beat";
+    }
+    get _vsPaced() {
+      return this._vsBeatOn && ["beat", "updown"].includes(this._vsFeel);
     }
     _vsSync() {
       const on = this._vsOn;
@@ -6812,21 +6820,50 @@ ${STYLES}
     _vsOnBeat(gap) {
       const r = this._vsRange;
       if (!r) return;
-      this._vsBeat = { at: performance.now(), gap: gap || this._vsBeat && this._vsBeat.gap || 0 };
+      this._vsBeat = { at: performance.now(), gap: gap || this._vsBeat && this._vsBeat.gap || 500 };
       r.dir = r.pos - r.lower < r.upper - r.pos ? 1 : -1;
     }
-    // Moving now? Units per ms (0 = held still), or null = stopped.
+    // A stroker's speed now: units per ms (0 = held still), or null = stopped.
     _vsVel() {
       const r = this._vsRange;
       const video = this._el("video");
-      if (this._vsBeatOn) {
+      if (this._vsPaced) {
         const b = this._vsBeat;
-        if (!b || !b.gap || performance.now() - b.at > Math.max(1500, b.gap * 2.5)) return null;
+        if (!b || performance.now() - b.at > Math.max(1500, b.gap * 2.5)) return null;
         return Math.min(strokeVel(100), (r.upper - r.lower) / b.gap);
       }
+      if (this._vsBeatOn) return null;
       if (video.paused) return null;
       const pct = this._vsLoad().speed;
       return pct > 0 ? strokeVel(Math.max(STROKE_PCT_MIN, pct)) : 0;
+    }
+    // The sound, each reading (from the audio part): a stroker on bass or
+    // volume goes to the level's place in its range; a vibrator takes the
+    // level (beat, up and down, bass or volume) inside its least and most.
+    _vsSound(r) {
+      const range = this._vsRange;
+      if (!range || !this._vsLoad().beat) return false;
+      if (r.beat) this._vsOnBeat(r.gap);
+      if (this._strokeKind) {
+        if (this._vsPaced) return true;
+        const now = performance.now();
+        const pos = range.lower + r.levels[0] / 100 * (range.upper - range.lower);
+        const dt = now - (this._vsSndAt || now);
+        const vel = dt > 0 ? (pos - range.pos) / dt * 1e3 : 0;
+        this._vsSndAt = now;
+        range.pos = pos;
+        this._strokeOut(pos, vel);
+        this._vlimShow();
+        return true;
+      }
+      if (this._vvHand !== null && this._vvHand !== void 0) return true;
+      const lv = r.levels.map((v) => this._vvScale(v));
+      range.pos = lv[0];
+      for (const i of [0, 1]) this._setPad(i, lv[i]);
+      this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._mapLevel(i, lv[i])), 0.6);
+      this._vsWasLive = true;
+      this._vlimShow();
+      return true;
     }
     _vsTick() {
       if (!this._el || !this._vsOn) {
@@ -6837,16 +6874,17 @@ ${STYLES}
       const now = performance.now();
       const dt = now - (this._vsAt || now);
       this._vsAt = now;
-      if (this._vraw || !r) {
+      if (!r) return;
+      if (!this._strokeKind) {
+        this._vvTick();
+        return;
+      }
+      if (this._vraw) {
         this._vlimShow();
         return;
       }
       const vel = this._vsVel();
       if (vel === null) {
-        if (this._vsWasLive && !this._strokeKind) {
-          this._outStop();
-          for (const i of [0, 1]) this._setPad(i, 0);
-        }
         this._vsWasLive = false;
         this._vlimShow();
         return;
@@ -6858,18 +6896,35 @@ ${STYLES}
       } else r.pos = Math.min(r.upper, Math.max(r.lower, r.pos));
       this._vsWasLive = true;
       const dropped = vel === 0 && this._el("vspring").checked && !this._el("vstrail").classList.contains("active");
-      if (this._strokeKind) {
-        const goal = dropped ? r.lower : r.pos;
-        if (vel > 0 || this._vsLastPos !== goal) this._strokeOut(goal, vel * 1e3 * r.dir);
-        this._vsLastPos = goal;
+      const goal = dropped ? r.lower : r.pos;
+      if (vel > 0 || this._vsLastPos !== goal) this._strokeOut(goal, vel * 1e3 * r.dir);
+      this._vsLastPos = goal;
+      this._vlimShow();
+    }
+    // A vibrator: an intensity, inside its least and most. A finger on the
+    // line along the bottom sets it (over sound or a script, while held);
+    // otherwise sound or the script sets it.
+    _vvTick() {
+      const r = this._vsRange;
+      const hand = this._vvHand;
+      const held = hand !== null && hand !== void 0;
+      if (!held && (this._vraw || this._vsBeatOn)) {
         this._vlimShow();
         return;
-      } else {
-        const v = dropped ? 0 : Math.round(r.pos);
+      }
+      let v = 0;
+      if (held) v = this._vvScale(hand);
+      else if (!this._el("vspring").checked && this._vvKept) v = this._vvScale(this._vvKept);
+      r.pos = v;
+      if (v > 0) {
         for (const i of [0, 1]) this._setPad(i, v);
         this._outApply([0, 1].map((i) => i && !this._twoPads ? null : this._mapLevel(i, v)), 0.6);
+        this._vsWasLive = true;
+      } else if (this._vsWasLive) {
+        this._vsWasLive = false;
+        for (const i of [0, 1]) this._setPad(i, 0);
+        this._outStop();
       }
-      this._vsLastPos = r.pos;
       this._vlimShow();
     }
     _vlimShow() {
@@ -6880,32 +6935,47 @@ ${STYLES}
       $("vst").hidden = !on;
       if (this._simple) $("hb1").hidden = this._ctl === "video";
       if (!on) return;
-      $("vst").classList.toggle("vib", !this._strokeKind);
+      const stroke = this._strokeKind;
+      $("vst").classList.toggle("vib", !stroke);
       const band = $("vstrail").querySelector(".band");
       band.style.bottom = r.lower + "%";
       band.style.height = r.upper - r.lower + "%";
       band.querySelector(".hu").textContent = String(r.upper);
       band.querySelector(".hl").textContent = String(r.lower);
       $("vstrail").querySelector(".dot").style.bottom = Math.round(r.pos) + "%";
-      $("vstrail").setAttribute("aria-label", this._strokeKind ? `Stroke range ${r.lower} to ${r.upper}: drag the ends to set the limits, the middle to move it` : `Intensity from ${r.lower}% to ${r.upper}%: drag the ends to set the least and most, the middle to move it`);
+      $("vstrail").setAttribute("aria-label", stroke ? `Stroke range ${r.lower} to ${r.upper}: drag the ends to set the limits, the middle to move it` : `Intensity from ${r.lower}% to ${r.upper}%: drag the ends to set the least and most, the middle to move it`);
       const cfg = this._vsLoad();
       const script = Boolean(this._vraw);
-      const beat = this._vsBeatOn && !script;
+      const sound = this._vsBeatOn && !script;
       $("vstbeat").hidden = !this._au || script;
-      $("vstbeat").classList.toggle("on", beat);
-      $("vstline").classList.toggle("dim", beat || script);
-      let pct = cfg.speed;
-      let text = cfg.speed ? `${cfg.speed}%` : "still";
-      if (script) text = "script";
-      else if (beat) {
-        const b = this._vsBeat;
-        if (b && b.gap) {
-          pct = Math.round(Math.min(100, (r.upper - r.lower) / b.gap / strokeVel(100) * 100));
-          text = `♪ ${Math.round(6e4 / b.gap)}`;
-        } else text = "♪ …";
+      $("vstbeat").classList.toggle("on", sound);
+      const line = $("vstline");
+      let pct;
+      let text;
+      if (stroke) {
+        line.setAttribute("aria-label", "Stroke speed");
+        line.classList.toggle("dim", sound || script);
+        pct = cfg.speed;
+        text = cfg.speed ? `${cfg.speed}%` : "still";
+        if (script) text = "script";
+        else if (sound && this._vsPaced) {
+          const b = this._vsBeat;
+          if (b && b.gap) {
+            pct = Math.round(Math.min(100, (r.upper - r.lower) / b.gap / strokeVel(100) * 100));
+            text = `♪ ${Math.round(6e4 / b.gap)}`;
+          } else text = "♪ …";
+        } else if (sound) text = "♪";
+      } else {
+        line.setAttribute("aria-label", "Intensity");
+        const held = this._vvHand !== null && this._vvHand !== void 0;
+        line.classList.toggle("dim", !held && (sound || script));
+        const span = r.upper - r.lower;
+        pct = held ? this._vvHand : span > 0 ? Math.round((r.pos - r.lower) / span * 100) : 0;
+        if (!held && !sound && !script && r.pos <= 0) pct = 0;
+        text = `${Math.round(r.pos)}%`;
       }
-      $("vstline").querySelector(".dot").style.left = pct + "%";
-      $("vstline").setAttribute("aria-valuenow", String(pct));
+      line.querySelector(".dot").style.left = Math.min(100, Math.max(0, pct)) + "%";
+      line.setAttribute("aria-valuenow", String(pct));
       if ($("vstspdv").textContent !== text) $("vstspdv").textContent = text;
     }
     // Out of the way: faint while the video plays and nothing is touched.
@@ -6977,11 +7047,18 @@ ${STYLES}
       for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) rail.addEventListener(type, done);
       const line = $("vstline");
       let sliding = false;
-      const setSpeed = (e) => {
+      const setLine = (e) => {
         const r = line.getBoundingClientRect();
-        const cfg = this._vsLoad();
-        cfg.speed = Math.round(Math.min(100, Math.max(0, (e.clientX - r.left) / r.width * 100)) / 5) * 5;
-        cfg.beat = false;
+        const v = Math.min(100, Math.max(0, (e.clientX - r.left) / r.width * 100));
+        if (this._strokeKind) {
+          const cfg = this._vsLoad();
+          cfg.speed = Math.round(v / 5) * 5;
+          cfg.beat = false;
+        } else {
+          this._vvHand = Math.round(v);
+          this._vvKept = this._vvHand;
+          this._vvTick();
+        }
         this._vlimShow();
       };
       line.addEventListener("pointerdown", (e) => {
@@ -6993,19 +7070,27 @@ ${STYLES}
           line.setPointerCapture(e.pointerId);
         } catch (_) {
         }
-        setSpeed(e);
+        setLine(e);
       });
       line.addEventListener("pointermove", (e) => {
-        if (sliding) setSpeed(e);
+        if (sliding) setLine(e);
       });
-      for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) line.addEventListener(type, () => {
-        if (sliding) {
+      for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) {
+        line.addEventListener(type, () => {
+          if (!sliding) return;
           sliding = false;
           line.classList.remove("active");
-          this._vsSave();
+          if (this._strokeKind) this._vsSave();
+          else {
+            this._vvHand = null;
+            this._vvTick();
+            if (this._vraw) this._videoSend(true);
+          }
           this._vsWake();
-        }
-      });
+        });
+      }
+      $("vstbeat").textContent = "♪ Sound";
+      $("vstbeat").title = "The sound drives it, the way chosen in Feel";
       $("vstbeat").addEventListener("click", () => {
         const cfg = this._vsLoad();
         cfg.beat = !cfg.beat;

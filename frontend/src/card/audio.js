@@ -104,7 +104,7 @@ export class AudioPart {
     if (!r.beat && now - au.outAt < 100) return;     // a beat goes out at once
     au.outAt = now;
     if (this._vsOn && !this._vraw) {
-      if (r.beat) this._vsOnBeat(r.gap);
+      this._vsSound(r);
       if (now - (au.shownAt || 0) > 1000) { au.shownAt = now; this._auShow(); }
       return;
     }
