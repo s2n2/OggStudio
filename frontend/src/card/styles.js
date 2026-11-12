@@ -325,5 +325,6 @@ ha-card.simple section[data-part="record"] .hint,ha-card.simple section[data-par
 .ptpick button{min-height:46px}
 #libsavebox{margin-top:8px}
 ha-card.simple #takebox{display:none!important}
+ha-card.simple #ctlbox > section{margin:4px 0 10px;padding:0;border:0;background:none}
 [hidden],.off{display:none!important}
 `;

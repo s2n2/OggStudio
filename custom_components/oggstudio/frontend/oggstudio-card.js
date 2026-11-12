@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.21.9";
+  var VERSION = "0.21.10";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -1699,6 +1699,7 @@ ha-card.simple section[data-part="record"] .hint,ha-card.simple section[data-par
 .ptpick button{min-height:46px}
 #libsavebox{margin-top:8px}
 ha-card.simple #takebox{display:none!important}
+ha-card.simple #ctlbox > section{margin:4px 0 10px;padding:0;border:0;background:none}
 [hidden],.off{display:none!important}
 `;
 
@@ -4364,7 +4365,10 @@ ${STYLES}
       $("tgbox").hidden = ctl !== "together";
       $("urecrow").hidden = !simple;
       if (simple) {
-        for (const sec of this.shadowRoot.querySelectorAll('[data-part="record"],[data-part="stroke"]')) sec.classList.toggle("off", !this._parts.includes(sec.dataset.part));
+        for (const sec of this.shadowRoot.querySelectorAll('[data-part="record"],[data-part="stroke"]')) {
+          sec.classList.toggle("off", !this._parts.includes(sec.dataset.part));
+          if (sec.parentElement !== $("ctlbox")) $("ctlbox").insertBefore(sec, $("ctlhead").nextSibling);
+        }
         const gslot = $("xgpslot");
         const lib = this.shadowRoot.querySelector('section[data-part="library"]');
         if (lib.parentElement !== $("libslot")) $("libslot").appendChild(lib);

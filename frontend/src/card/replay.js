@@ -91,8 +91,12 @@ export class ReplayPart {
     $('tgbox').hidden = ctl !== 'together';
     $('urecrow').hidden = !simple;
     if (simple) {
-      // Controls (pads or stroke bar), Video and Sound are all there.
-      for (const sec of this.shadowRoot.querySelectorAll('[data-part="record"],[data-part="stroke"]')) sec.classList.toggle('off', !this._parts.includes(sec.dataset.part));
+      // Controls (pads or stroke bar), Video and Sound are all there; the
+      // pads or stroke bar sit at the top of Controls, above the tabs.
+      for (const sec of this.shadowRoot.querySelectorAll('[data-part="record"],[data-part="stroke"]')) {
+        sec.classList.toggle('off', !this._parts.includes(sec.dataset.part));
+        if (sec.parentElement !== $('ctlbox')) $('ctlbox').insertBefore(sec, $('ctlhead').nextSibling);
+      }
       // The controller and Import live under Extras; the Library is a Controls tab.
       const gslot = $('xgpslot');
       const lib = this.shadowRoot.querySelector('section[data-part="library"]');
