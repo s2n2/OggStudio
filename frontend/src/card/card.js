@@ -402,7 +402,7 @@ ${STYLES}
     $('stop').addEventListener('click', () => this._stop());
     $('code').addEventListener('click', () => this._copySaved());
     $('delete').addEventListener('click', () => this._delete());
-    $('saved').addEventListener('change', () => this._hass.callService('select', 'select_option', { entity_id: this._studio.saved, option: $('saved').value }));
+    $('saved').addEventListener('change', () => this._libChange());
     $('speed').addEventListener('change', () => this._hass.callService('select', 'select_option', { entity_id: this._studio.speed, option: $('speed').value }));
     $('load').addEventListener('click', () => this._import());
     this._bindStroke();

@@ -347,6 +347,8 @@ export class OutputsPart {
   _play(script) { this._playScript(script, 'Current take', null); }
 
   async _playSaved() {
+    if (this._simple && this._libPick === 'take' && this._take) { this._play(this._take); return; }
+    if (this._simple && this._libPick === 'loaded' && this._rp.raw) { this._playScript(this._rp.raw, this._rp.name, null); return; }
     const name = this._el('saved').value;
     try { this._playScript(await this._getSaved(name), name, name); } catch (e) { this._toast('Could not load the script: ' + (e.message || e)); }
   }
@@ -403,6 +405,8 @@ export class OutputsPart {
   }
 
   async _copySaved() {
+    if (this._simple && this._libPick === 'take' && this._take) { await this._copy(this._take); return; }
+    if (this._simple && this._libPick === 'loaded' && this._rp.raw) { await this._copy(this._rp.raw); return; }
     try { await this._copy(await this._getSaved(this._el('saved').value)); } catch (e) { this._toast(e.message || String(e)); }
   }
 

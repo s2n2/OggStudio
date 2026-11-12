@@ -1,7 +1,7 @@
 // Part of the OggStudio card. Built into custom_components/oggstudio/frontend/oggstudio-card.js (npm run build).
 import { FOLLOW_AI } from '../lib/ai.js';
 import { liveIntensity } from '../lib/convert.js';
-import { SAMPLE_MS, duration, fmt } from '../lib/core.js';
+import { LIB_FILE, LIB_LOADED, LIB_TAKE, SAMPLE_MS, duration, fmt } from '../lib/core.js';
 import { FOLLOW_STROKER, parseTarget } from '../lib/outputs.js';
 import { PATTERNS, PATTERNS_DUAL, PATTERN_RANDOM, RandomProgram, patternDual, patternLevel, patternPeriod } from '../lib/patterns.js';
 import { STROKE_LIMIT_KEY, STROKE_PCT_MIN, strokeStep, strokeVel } from '../lib/stroke.js';
@@ -756,6 +756,38 @@ export class PlayPart {
 
   // The video's own sound drives the devices: the audio settings sit under
   // the video while it is on.
+  // The Library's list: a saved script, the current take, or a file from
+  // this device. Choosing one shows it (its preview bar) before it plays.
+  _libChange() {
+    const $ = this._el;
+    const v = $('saved').value;
+    const rp = this._rp;
+    if (v === LIB_FILE) {
+      this._libFileWait = true;
+      this._update();                      // the list goes back to what was chosen
+      $('rpfile').click();
+      return;
+    }
+    if (v === LIB_TAKE) {
+      this._libPick = 'take';
+      if (this._take && !rp.playing) this._rpLoad(this._take, 'Current take', null);
+      this._update();
+      return;
+    }
+    if (v === LIB_LOADED) { this._libPick = 'loaded'; this._update(); return; }
+    this._libPick = null;
+    this._update();
+    this._hass.callService('select', 'select_option', { entity_id: this._studio.saved, option: v });
+    this._libPreview(v);
+  }
+
+  async _libPreview(name) {
+    const rp = this._rp;
+    if (!name || rp.playing || /^\(.*\)$/.test(name)) return;
+    this._libWant = name;
+    try { const s = await this._getSaved(name); if (!rp.playing && this._libWant === name && !this._libPick) this._rpLoad(s, name, name); } catch (_) { /* not there */ }
+  }
+
   // Video and Sound fold like Devices: Video open, Sound folded at first.
   _mediaFold(which, folded, save) {
     const $ = this._el;

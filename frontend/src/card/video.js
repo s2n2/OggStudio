@@ -1,7 +1,7 @@
 // Part of the OggStudio card. Built into custom_components/oggstudio/frontend/oggstudio-card.js (npm run build).
 import { FOLLOW_AI } from '../lib/ai.js';
 import { RUN_MODE_DEFAULT, fileKind, isStroke, liveIntensity, normalise } from '../lib/convert.js';
-import { DEVICE_KEY, LIVE_MS, NO_DEVICE, SPEEDS, TAKE_SRC, VIDEO_OFFSET_KEY, VIDEO_TICK_MS, capture, decodeText, duration, fmt } from '../lib/core.js';
+import { DEVICE_KEY, LIB_FILE, LIB_LOADED, LIB_TAKE, LIVE_MS, NO_DEVICE, SPEEDS, TAKE_SRC, VIDEO_OFFSET_KEY, VIDEO_TICK_MS, capture, decodeText, duration, fmt } from '../lib/core.js';
 import { FOLLOW_STROKER, mergePasses, parseTarget, sampleAt } from '../lib/outputs.js';
 
 // Methods mixed into OggStudioCard.
@@ -519,11 +519,19 @@ export class VideoPart {
     $('takemodebox').hidden = true;     // each device has its own follow type now
     const saved = this._studio && this._hass.states[this._studio.saved];
     const opts = (saved && saved.attributes.options) || [];
-    const savedKey = JSON.stringify(opts);
-    if ($('saved').dataset.key !== savedKey) { $('saved').replaceChildren(...opts.map((o) => new Option(o, o))); $('saved').dataset.key = savedKey; }
-    if (saved && this.shadowRoot.activeElement !== $('saved')) $('saved').value = saved.state;
+    // The Play card's Library also offers the current take and a file from this device.
+    const extra = this._simple ? [...(this._take ? [[LIB_TAKE, '● Current take']] : []), ...(this._libLoaded ? [[LIB_LOADED, `📄 ${this._libLoaded}`]] : []), [LIB_FILE, '📂 From this device…']] : [];
+    const savedKey = JSON.stringify([opts, extra]);
+    if ($('saved').dataset.key !== savedKey) { $('saved').replaceChildren(...extra.map(([v, t]) => new Option(t, v)), ...opts.map((o) => new Option(o, o))); $('saved').dataset.key = savedKey; }
+    if (this.shadowRoot.activeElement !== $('saved')) {
+      const pick = this._libPick === 'take' && this._take ? LIB_TAKE : this._libPick === 'loaded' && this._libLoaded ? LIB_LOADED : null;
+      if (pick) $('saved').value = pick; else if (saved) $('saved').value = saved.state;
+    }
+    // The Library shows the chosen script's preview once the list is here.
+    if (this._simple && this._ctl === 'library' && this._rp && !this._rp.raw && !this._rp.playing && !this._libPick && saved && saved.state && this._libWant !== saved.state) this._libPreview(saved.state);
     const hasSaved = saved && saved.attributes.scripts && Object.keys(saved.attributes.scripts).length > 0;
     for (const id of ['code', 'delete']) $(id).disabled = !hasSaved;
+    if (this._simple && this._libPick) { $('delete').disabled = true; $('code').disabled = false; }
     $('play').disabled = !hasSaved;
     // Stroke scripts: show the run mode, set to the one last used for it.
     const info = this._scriptInfo($('saved').value);

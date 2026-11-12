@@ -1,7 +1,7 @@
 // Part of the OggStudio card. Built into custom_components/oggstudio/frontend/oggstudio-card.js (npm run build).
 
 export const TAG = 'oggstudio-card';
-export const VERSION = '0.21.3';
+export const VERSION = '0.21.4';
 export const DEVICE_KEY = 'oggstudio_device';
 export const SPEEDS = ['0.5x', '0.75x', '1x', '1.25x', '1.5x', '2x'];
 export const SAMPLE_MS = 100;
@@ -71,3 +71,8 @@ export const duration = (s) => Math.max(
   s.actions.length ? s.actions[s.actions.length - 1].at : 0,
   s.channels && s.channels.V1.actions.length ? s.channels.V1.actions[s.channels.V1.actions.length - 1].at : 0);
 export const fmt = (ms) => `${(ms / 1000).toFixed(1)} s`;
+
+// The Play card's Library list: entries that are not saved scripts.
+export const LIB_TAKE = '\u0001take';
+export const LIB_FILE = '\u0001file';
+export const LIB_LOADED = '\u0001loaded';

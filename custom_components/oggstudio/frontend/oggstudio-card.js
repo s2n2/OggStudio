@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.21.3";
+  var VERSION = "0.21.4";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -127,6 +127,9 @@
     s.channels && s.channels.V1.actions.length ? s.channels.V1.actions[s.channels.V1.actions.length - 1].at : 0
   );
   var fmt = (ms) => `${(ms / 1e3).toFixed(1)} s`;
+  var LIB_TAKE = "take";
+  var LIB_FILE = "file";
+  var LIB_LOADED = "loaded";
 
   // frontend/src/lib/convert.js
   var RUN_MODES = {
@@ -2113,7 +2116,7 @@ ${STYLES}
       $("stop").addEventListener("click", () => this._stop());
       $("code").addEventListener("click", () => this._copySaved());
       $("delete").addEventListener("click", () => this._delete());
-      $("saved").addEventListener("change", () => this._hass.callService("select", "select_option", { entity_id: this._studio.saved, option: $("saved").value }));
+      $("saved").addEventListener("change", () => this._libChange());
       $("speed").addEventListener("change", () => this._hass.callService("select", "select_option", { entity_id: this._studio.speed, option: $("speed").value }));
       $("load").addEventListener("click", () => this._import());
       this._bindStroke();
@@ -3604,14 +3607,24 @@ ${STYLES}
       $("takemodebox").hidden = true;
       const saved = this._studio && this._hass.states[this._studio.saved];
       const opts = saved && saved.attributes.options || [];
-      const savedKey = JSON.stringify(opts);
+      const extra = this._simple ? [...this._take ? [[LIB_TAKE, "● Current take"]] : [], ...this._libLoaded ? [[LIB_LOADED, `📄 ${this._libLoaded}`]] : [], [LIB_FILE, "📂 From this device…"]] : [];
+      const savedKey = JSON.stringify([opts, extra]);
       if ($("saved").dataset.key !== savedKey) {
-        $("saved").replaceChildren(...opts.map((o) => new Option(o, o)));
+        $("saved").replaceChildren(...extra.map(([v, t]) => new Option(t, v)), ...opts.map((o) => new Option(o, o)));
         $("saved").dataset.key = savedKey;
       }
-      if (saved && this.shadowRoot.activeElement !== $("saved")) $("saved").value = saved.state;
+      if (this.shadowRoot.activeElement !== $("saved")) {
+        const pick = this._libPick === "take" && this._take ? LIB_TAKE : this._libPick === "loaded" && this._libLoaded ? LIB_LOADED : null;
+        if (pick) $("saved").value = pick;
+        else if (saved) $("saved").value = saved.state;
+      }
+      if (this._simple && this._ctl === "library" && this._rp && !this._rp.raw && !this._rp.playing && !this._libPick && saved && saved.state && this._libWant !== saved.state) this._libPreview(saved.state);
       const hasSaved = saved && saved.attributes.scripts && Object.keys(saved.attributes.scripts).length > 0;
       for (const id of ["code", "delete"]) $(id).disabled = !hasSaved;
+      if (this._simple && this._libPick) {
+        $("delete").disabled = true;
+        $("code").disabled = false;
+      }
       $("play").disabled = !hasSaved;
       const info = this._scriptInfo($("saved").value);
       $("libmodebox").hidden = true;
@@ -4350,6 +4363,7 @@ ${STYLES}
         const lib = this.shadowRoot.querySelector('section[data-part="library"]');
         if (lib.parentElement !== $("libslot")) $("libslot").appendChild(lib);
         lib.classList.toggle("off", ctl !== "library");
+        if (ctl === "library" && !this._rp.raw && !this._rp.playing && !this._libPick) this._libPreview($("saved").value);
         const imp = this.shadowRoot.querySelector('section[data-part="import"]');
         if (imp.parentElement !== $("extrabox")) $("extrabox").appendChild(imp);
         imp.classList.remove("off");
@@ -4416,10 +4430,16 @@ ${STYLES}
         if (parsed[1]) first.channels = { V1: { actions: parsed[1].actions || [] } };
         this._plOff();
         this._rpLoad(normalise(first, fileKind(files[0].name, "auto"), Boolean(first.inverted)), fileTitle(files[0].name), null);
+        if (this._libFileWait) {
+          this._libPick = "loaded";
+          this._libLoaded = fileTitle(files[0].name);
+          this._update();
+        }
       } catch (e) {
         this._toast("Could not read the file: " + (e.message || e));
       }
       this._el("rpfile").value = "";
+      this._libFileWait = false;
     }
     _rpLoad(script, name, lib) {
       this._rpStop();
@@ -5136,6 +5156,14 @@ ${STYLES}
       this._playScript(script, "Current take", null);
     }
     async _playSaved() {
+      if (this._simple && this._libPick === "take" && this._take) {
+        this._play(this._take);
+        return;
+      }
+      if (this._simple && this._libPick === "loaded" && this._rp.raw) {
+        this._playScript(this._rp.raw, this._rp.name, null);
+        return;
+      }
       const name = this._el("saved").value;
       try {
         this._playScript(await this._getSaved(name), name, name);
@@ -5198,6 +5226,14 @@ ${STYLES}
       return res.response.script;
     }
     async _copySaved() {
+      if (this._simple && this._libPick === "take" && this._take) {
+        await this._copy(this._take);
+        return;
+      }
+      if (this._simple && this._libPick === "loaded" && this._rp.raw) {
+        await this._copy(this._rp.raw);
+        return;
+      }
       try {
         await this._copy(await this._getSaved(this._el("saved").value));
       } catch (e) {
@@ -7468,6 +7504,44 @@ ${STYLES}
     }
     // The video's own sound drives the devices: the audio settings sit under
     // the video while it is on.
+    // The Library's list: a saved script, the current take, or a file from
+    // this device. Choosing one shows it (its preview bar) before it plays.
+    _libChange() {
+      const $ = this._el;
+      const v = $("saved").value;
+      const rp = this._rp;
+      if (v === LIB_FILE) {
+        this._libFileWait = true;
+        this._update();
+        $("rpfile").click();
+        return;
+      }
+      if (v === LIB_TAKE) {
+        this._libPick = "take";
+        if (this._take && !rp.playing) this._rpLoad(this._take, "Current take", null);
+        this._update();
+        return;
+      }
+      if (v === LIB_LOADED) {
+        this._libPick = "loaded";
+        this._update();
+        return;
+      }
+      this._libPick = null;
+      this._update();
+      this._hass.callService("select", "select_option", { entity_id: this._studio.saved, option: v });
+      this._libPreview(v);
+    }
+    async _libPreview(name) {
+      const rp = this._rp;
+      if (!name || rp.playing || /^\(.*\)$/.test(name)) return;
+      this._libWant = name;
+      try {
+        const s = await this._getSaved(name);
+        if (!rp.playing && this._libWant === name && !this._libPick) this._rpLoad(s, name, name);
+      } catch (_) {
+      }
+    }
     // Video and Sound fold like Devices: Video open, Sound folded at first.
     _mediaFold(which, folded, save) {
       const $ = this._el;

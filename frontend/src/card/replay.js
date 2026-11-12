@@ -99,6 +99,8 @@ export class ReplayPart {
       const lib = this.shadowRoot.querySelector('section[data-part="library"]');
       if (lib.parentElement !== $('libslot')) $('libslot').appendChild(lib);
       lib.classList.toggle('off', ctl !== 'library');
+      // Opening the Library shows the chosen script's preview.
+      if (ctl === 'library' && !this._rp.raw && !this._rp.playing && !this._libPick) this._libPreview($('saved').value);
       const imp = this.shadowRoot.querySelector('section[data-part="import"]');
       if (imp.parentElement !== $('extrabox')) $('extrabox').appendChild(imp);
       imp.classList.remove('off');
@@ -140,8 +142,10 @@ export class ReplayPart {
       if (parsed[1]) first.channels = { V1: { actions: parsed[1].actions || [] } };
       this._plOff();
       this._rpLoad(normalise(first, fileKind(files[0].name, 'auto'), Boolean(first.inverted)), fileTitle(files[0].name), null);
+      if (this._libFileWait) { this._libPick = 'loaded'; this._libLoaded = fileTitle(files[0].name); this._update(); }
     } catch (e) { this._toast('Could not read the file: ' + (e.message || e)); }
     this._el('rpfile').value = '';
+    this._libFileWait = false;
   }
 
   _rpLoad(script, name, lib) {
