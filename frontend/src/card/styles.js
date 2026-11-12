@@ -288,5 +288,8 @@ button.outhead{display:flex;align-items:center;gap:8px;width:100%;min-height:36p
 .outbtns{display:flex;gap:8px;margin-top:8px}
 .outbtns button{flex:1;min-height:38px;margin:0;font-size:12.5px}
 .outbtns button[hidden]{display:none}
+ha-card.simple #vaubox #aubox{margin-top:10px;padding:12px;border-radius:15px;border:1px solid #364563;background:#17243e}
+ha-card.simple #vaubox #aubox>label:first-of-type{margin-top:0}
+ha-card.simple button.vempty{min-height:160px}
 [hidden],.off{display:none!important}
 `;

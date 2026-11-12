@@ -2,7 +2,7 @@
 (() => {
   // frontend/src/lib/core.js
   var TAG = "oggstudio-card";
-  var VERSION = "0.19.0";
+  var VERSION = "0.20.0";
   var DEVICE_KEY = "oggstudio_device";
   var SPEEDS = ["0.5x", "0.75x", "1x", "1.25x", "1.5x", "2x"];
   var SAMPLE_MS = 100;
@@ -67,6 +67,7 @@
       sub: "For a stroker: manual, pattern, mood, audio or video, and record any of them",
       parts: ["stroke", "video", "take"],
       simple: true,
+      hidden: true,
       size: 8,
       description: "The Play card for a stroker (a Handy): stroke by hand, a pattern, a mood, to sound or to a video, inside your limits, with one Record button for all of them."
     },
@@ -1658,6 +1659,9 @@ button.outhead{display:flex;align-items:center;gap:8px;width:100%;min-height:36p
 .outbtns{display:flex;gap:8px;margin-top:8px}
 .outbtns button{flex:1;min-height:38px;margin:0;font-size:12.5px}
 .outbtns button[hidden]{display:none}
+ha-card.simple #vaubox #aubox{margin-top:10px;padding:12px;border-radius:15px;border:1px solid #364563;background:#17243e}
+ha-card.simple #vaubox #aubox>label:first-of-type{margin-top:0}
+ha-card.simple button.vempty{min-height:160px}
 [hidden],.off{display:none!important}
 `;
 
@@ -1903,7 +1907,7 @@ ${STYLES}
         </section>
         <section data-part="outputs" id="outhome" class="off">
           <div id="ctlbox">
-            <div class="ctltabs" role="tablist"${this._variant.modes && this._variant.modes.length < 2 ? " hidden" : ""}>${(simple ? [["record", "✋ Manual"], ["pattern", "〰 Pattern"], ["mood", "◎ Mood"], ["audio", "♪ Audio"], ["video", "🎬 Video"]] : [["record", "● Record"], ["replay", "▶ Replay"], ["mood", "◎ Mood"], ["audio", "♪ Audio"], ["together", "🤝 Together"]]).filter(([k]) => !this._variant.modes || this._variant.modes.includes(k)).map(([k, t]) => `<button type="button" data-ctl="${k}">${t}</button>`).join("")}</div>
+            <div class="ctltabs" role="tablist"${this._variant.modes && this._variant.modes.length < 2 ? " hidden" : ""}>${(simple ? [["record", "✋ Manual"], ["pattern", "〰 Pattern"], ["mood", "◎ Mood"], ["video", "🎬 Media"]] : [["record", "● Record"], ["replay", "▶ Replay"], ["mood", "◎ Mood"], ["audio", "♪ Audio"], ["together", "🤝 Together"]]).filter(([k]) => !this._variant.modes || this._variant.modes.includes(k)).map(([k, t]) => `<button type="button" data-ctl="${k}">${t}</button>`).join("")}</div>
             <div id="urecrow" hidden>
               <div class="urechead"><div class="kind" role="group" aria-label="Vibrate or stroke"><button type="button" data-kind="vibrate">〰 Vibrate</button><button type="button" data-kind="stroke">↕ Stroke</button></div><button id="urec" class="rec" type="button">● Rec</button></div>
               <div class="val" id="utimer"></div>
@@ -2033,7 +2037,7 @@ ${STYLES}
           <div class="hint">Positive values send each moment slightly early to make up for Bluetooth delay. Pause, seek and playback speed all stay in sync.</div></div>
           <div id="vaubox"></div>
           <div class="hint vhide">To make a script for this video: press ● Rec, play the video and drag the slider (position in the Stroke view, intensity in Vibrate). You can pause, scrub back and record a section again; the newer pass replaces it. While a script plays, the slider shows it; hold the slider to take over until you let go.</div>
-          <div class="hint vshow">On the video: the line on the left is the strength (a vibrator) or the speed (a stroker); hold it to take over. A stroker's range is on the right. ⛶ makes it full screen. ● Record follows the video: play it and use the controls, or let a script (📂) or the sound of the video (♪) do the playing. Pause and it waits; go back and the new pass replaces what came after.</div>
+          <div class="hint vshow">Media: a video, music, the microphone or another tab. The slider under the video works with or without one: hold it to take over. On the video, the line on the left is the strength (a vibrator) or the speed (a stroker), and a stroker's range is on the right; ⛶ makes it full screen. ● Rec follows the video: play it and use the controls, or let a script (📂) or the sound of the video (♪) do the playing. Pause and it waits; go back and the new pass replaces what came after.</div>
         </section>
         <section data-part="import">
           <h3>Import</h3>
@@ -4190,7 +4194,8 @@ ${STYLES}
         ctl = localStorage.getItem(`oggstudio_ctl:${this.localName}`);
       } catch (_) {
       }
-      const kept = this._simple ? ["pattern", "mood", "audio", "video"] : ["replay", "mood", "audio", "together"];
+      if (this._simple && ctl === "audio") ctl = "video";
+      const kept = this._simple ? ["pattern", "mood", "video"] : ["replay", "mood", "audio", "together"];
       const modes = this._variant.modes;
       this._ctl = this._togetherOnly ? "together" : modes ? modes.includes(ctl) ? ctl : modes[0] : kept.includes(ctl) ? ctl : "record";
       for (const b of this.shadowRoot.querySelectorAll(".ctltabs button")) b.addEventListener("click", () => this._setCtl(b.dataset.ctl));
@@ -4295,7 +4300,12 @@ ${STYLES}
       $("rpbox").hidden = !(ctl === "replay" || simple && ctl === "pattern");
       $("ptbox").hidden = ctl !== "pattern";
       $("moodbox").hidden = ctl !== "mood";
-      $("aubox").hidden = !(ctl === "audio" || ctl === "video" && this._vaudio);
+      $("aubox").hidden = simple ? ctl !== "video" : !(ctl === "audio" || ctl === "video" && this._vaudio);
+      if (simple) {
+        if (ctl === "video") {
+          if ($("aubox").parentElement !== $("vaubox")) $("vaubox").appendChild($("aubox"));
+        } else if ($("aubox").parentElement !== $("ctlbox")) $("ctlbox").insertBefore($("aubox"), $("tgbox"));
+      }
       $("tgbox").hidden = ctl !== "together";
       $("urecrow").hidden = !simple;
       if (simple) {
@@ -6606,15 +6616,7 @@ ${STYLES}
       document.addEventListener("fullscreenchange", onFull);
       document.addEventListener("webkitfullscreenchange", onFull);
       for (const type of ["play", "pause", "ended", "emptied", "loadedmetadata"]) video.addEventListener(type, () => this._vsideShow());
-      if (this._simple) {
-        const opt = [...$("ausrc").options].find((o) => o.value === "video");
-        if (opt) {
-          opt.hidden = true;
-          opt.disabled = true;
-        }
-        if ($("ausrc").value === "video") $("ausrc").value = "mic";
-        this._auShow();
-      }
+      if (this._simple) this._auShow();
       this._ptShow();
       this._vsideShow();
       this._urecShow();
@@ -6872,7 +6874,7 @@ ${STYLES}
       $("vsplay").textContent = has && !video.paused ? "⏸" : "▶";
       $("vsplay").disabled = !has;
       $("vsaud").disabled = !has;
-      $("vsaud").classList.toggle("on", Boolean(this._vaudio));
+      $("vsaud").classList.toggle("on", Boolean(this._au && this._au.src === "video"));
       $("vscast").classList.toggle("on", Boolean(this._cast || this._castLink && this._castLink.connected));
       $("vscast").disabled = !has;
       $("vsscript").classList.toggle("on", $("vscriptbox").classList.contains("open"));
@@ -6979,8 +6981,9 @@ ${STYLES}
     // so the limits are its least and most. Speed 0 holds it still inside the
     // range (drag the range to set it by hand). A script, when there is one,
     // does the moving instead, inside the same limits.
+    // Media (with or without a video or a sound playing).
     get _vsOn() {
-      return Boolean(this._simple && this._ctl === "video" && this._vurl);
+      return Boolean(this._simple && this._ctl === "video");
     }
     _vsLoad() {
       if (this._vsCfg) return this._vsCfg;
@@ -7378,32 +7381,28 @@ ${STYLES}
     async _vaSet(on) {
       if (!this._el) return;
       const $ = this._el;
+      const fromVideo = Boolean(this._au && this._au.src === "video");
       if (on) {
-        if (this._vaudio) return;
+        if (fromVideo) return;
         if (!this._vurl) {
           this._toast("Choose a video first");
           return;
         }
+        if (this._au) this._auStop();
         this._vaPrev = $("ausrc").value;
         $("ausrc").value = "video";
         this._vaudio = true;
-        $("aubox").classList.add("fromvideo");
-        $("vaubox").appendChild($("aubox"));
-        this._ctlShow();
         await this._auStart();
         if (!this._au) {
-          this._vaSet(false);
-          return;
-        }
-        if (this._tap && !$("video").paused) this._videoRun();
+          this._vaudio = false;
+          $("ausrc").value = this._vaPrev && this._vaPrev !== "video" ? this._vaPrev : "mic";
+          this._auShow();
+        } else if (this._tap && !$("video").paused) this._videoRun();
       } else {
-        if (!this._vaudio) return;
+        if (!fromVideo && !this._vaudio) return;
         this._vaudio = false;
-        this._auStop();
-        $("aubox").classList.remove("fromvideo");
-        $("ctlbox").insertBefore($("aubox"), $("tgbox"));
+        if (fromVideo) this._auStop();
         $("ausrc").value = this._vaPrev && this._vaPrev !== "video" ? this._vaPrev : "mic";
-        this._ctlShow();
         this._auShow();
       }
       this._vsideShow();
@@ -7426,7 +7425,7 @@ ${STYLES}
         }
       };
       customElements.define(tag, cls);
-      if (variant.simple && !variant.modes || variant.together) window.customCards.push({ type: tag, name: variant.name, description: variant.description, preview: true });
+      if (variant.simple && !variant.modes && !variant.hidden || variant.together) window.customCards.push({ type: tag, name: variant.name, description: variant.description, preview: true });
     }
   }
 })();

@@ -55,13 +55,7 @@ export class PlayPart {
     document.addEventListener('fullscreenchange', onFull);
     document.addEventListener('webkitfullscreenchange', onFull);
     for (const type of ['play', 'pause', 'ended', 'emptied', 'loadedmetadata']) video.addEventListener(type, () => this._vsideShow());
-    if (this._simple) {
-      // Here the video's sound is switched on beside the video, not picked as a source.
-      const opt = [...$('ausrc').options].find((o) => o.value === 'video');
-      if (opt) { opt.hidden = true; opt.disabled = true; }
-      if ($('ausrc').value === 'video') $('ausrc').value = 'mic';
-      this._auShow();
-    }
+    if (this._simple) this._auShow();
     this._ptShow();
     this._vsideShow();
     this._urecShow();
@@ -309,7 +303,7 @@ export class PlayPart {
     $('vsplay').textContent = has && !video.paused ? '⏸' : '▶';
     $('vsplay').disabled = !has;
     $('vsaud').disabled = !has;
-    $('vsaud').classList.toggle('on', Boolean(this._vaudio));
+    $('vsaud').classList.toggle('on', Boolean(this._au && this._au.src === 'video'));
     $('vscast').classList.toggle('on', Boolean(this._cast || (this._castLink && this._castLink.connected)));
     $('vscast').disabled = !has;
     $('vsscript').classList.toggle('on', $('vscriptbox').classList.contains('open'));
@@ -399,7 +393,8 @@ export class PlayPart {
   // so the limits are its least and most. Speed 0 holds it still inside the
   // range (drag the range to set it by hand). A script, when there is one,
   // does the moving instead, inside the same limits.
-  get _vsOn() { return Boolean(this._simple && this._ctl === 'video' && this._vurl); }
+  // Media (with or without a video or a sound playing).
+  get _vsOn() { return Boolean(this._simple && this._ctl === 'video'); }
 
   _vsLoad() {
     if (this._vsCfg) return this._vsCfg;
@@ -727,28 +722,25 @@ export class PlayPart {
   async _vaSet(on) {
     if (!this._el) return;
     const $ = this._el;
+    const fromVideo = Boolean(this._au && this._au.src === 'video');
     if (on) {
-      if (this._vaudio) return;
+      if (fromVideo) return;
       if (!this._vurl) { this._toast('Choose a video first'); return; }
+      if (this._au) this._auStop();
       this._vaPrev = $('ausrc').value;
       $('ausrc').value = 'video';
       this._vaudio = true;
-      $('aubox').classList.add('fromvideo');
-      $('vaubox').appendChild($('aubox'));
-      this._ctlShow();
       await this._auStart();
-      if (!this._au) { this._vaSet(false); return; }
-      if (this._tap && !$('video').paused) this._videoRun();
+      if (!this._au) { this._vaudio = false; $('ausrc').value = this._vaPrev && this._vaPrev !== 'video' ? this._vaPrev : 'mic'; this._auShow(); }
+      else if (this._tap && !$('video').paused) this._videoRun();
     } else {
-      if (!this._vaudio) return;
+      if (!fromVideo && !this._vaudio) return;
       this._vaudio = false;
-      this._auStop();
-      $('aubox').classList.remove('fromvideo');
-      $('ctlbox').insertBefore($('aubox'), $('tgbox'));
+      if (fromVideo) this._auStop();
       $('ausrc').value = this._vaPrev && this._vaPrev !== 'video' ? this._vaPrev : 'mic';
-      this._ctlShow();
       this._auShow();
     }
     this._vsideShow();
   }
+
 }

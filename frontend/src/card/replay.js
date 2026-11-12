@@ -17,7 +17,8 @@ export class ReplayPart {
     this._rp = { raw: null, conv: null, name: '', lib: null, playing: false, t: 0, len: 0, last: 0, outAt: 0 };
     let ctl = null;
     try { ctl = localStorage.getItem(`oggstudio_ctl:${this.localName}`); } catch (_) { /* private mode */ }
-    const kept = this._simple ? ['pattern', 'mood', 'audio', 'video'] : ['replay', 'mood', 'audio', 'together'];
+    if (this._simple && ctl === 'audio') ctl = 'video';        // Audio and Video are one Media tab here
+    const kept = this._simple ? ['pattern', 'mood', 'video'] : ['replay', 'mood', 'audio', 'together'];
     const modes = this._variant.modes;
     this._ctl = this._togetherOnly ? 'together' : modes ? (modes.includes(ctl) ? ctl : modes[0]) : kept.includes(ctl) ? ctl : 'record';
     for (const b of this.shadowRoot.querySelectorAll('.ctltabs button')) b.addEventListener('click', () => this._setCtl(b.dataset.ctl));
@@ -81,7 +82,9 @@ export class ReplayPart {
     $('rpbox').hidden = !(ctl === 'replay' || (simple && ctl === 'pattern'));
     $('ptbox').hidden = ctl !== 'pattern';
     $('moodbox').hidden = ctl !== 'mood';
-    $('aubox').hidden = !(ctl === 'audio' || (ctl === 'video' && this._vaudio));
+    $('aubox').hidden = simple ? ctl !== 'video' : !(ctl === 'audio' || (ctl === 'video' && this._vaudio));
+    // Media: the sound settings sit under the video.
+    if (simple) { if (ctl === 'video') { if ($('aubox').parentElement !== $('vaubox')) $('vaubox').appendChild($('aubox')); } else if ($('aubox').parentElement !== $('ctlbox')) $('ctlbox').insertBefore($('aubox'), $('tgbox')); }
     $('tgbox').hidden = ctl !== 'together';
     $('urecrow').hidden = !simple;
     if (simple) {

@@ -30,7 +30,7 @@ depend on the dashboard or network.
 
 ## Cards
 
-Nine cards come with OggStudio. Pick one that fits the dashboard, or use several:
+Eight cards come with OggStudio. Pick one that fits the dashboard, or use several:
 
 | Card | Type | Shows |
 |---|---|---|
@@ -40,7 +40,6 @@ Nine cards come with OggStudio. Pick one that fits the dashboard, or use several
 | OggStudio Video | `custom:oggstudio-video-card` | Video sync and recording a funscript for a video |
 | OggStudio Stroke | `custom:oggstudio-stroke-card` | Stroke recorder with limits and three speeds (for a Handy) |
 | OggStudio Play | `custom:oggstudio-play-card` | One simple card: manual, Ogg patterns, mood, audio or video, with one Record button for all of them |
-| OggStudio Play Stroke | `custom:oggstudio-play-stroke-card` | The Play card for a stroker: manual, pattern, mood, audio or video inside your limits, with one Record button |
 | OggStudio Video Stroke | `custom:oggstudio-video-stroke-card` | A video with stroke range and speed (or a script, or its sound) driving a stroker; record a stroke script for it |
 | OggStudio Together | `custom:oggstudio-together-card` | Start or join a Together session from two places |
 
@@ -139,7 +138,7 @@ Position control, which moves over a fixed second, so following is coarse.
 ## Stroke recorder
 
 The **OggStudio Stroke** card records stroke funscripts, the kind a Handy plays, with two
-limits and three speeds (Play Stroke and Video Stroke are its Play and Video cards). On the full OggStudio card, the **〰 Vibrate / ↕ Stroke**
+limits and three speeds (Video Stroke is its Video card; the Play card does strokes with its ↕ Stroke toggle). On the full OggStudio card, the **〰 Vibrate / ↕ Stroke**
 toggle at the top of the Record section switches between the pads and this stroke recorder
 (remembered per card type):
 
